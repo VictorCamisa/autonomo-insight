@@ -15,13 +15,46 @@ export function useVehicles() {
     queryKey: ['vehicles'],
     queryFn: async (): Promise<Vehicle[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data: vehicles, error } = await (supabase as any)
         .from('vehicles')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []) as Vehicle[];
+
+      // Buscar imagens de todos os veículos
+      const vehicleIds = (vehicles || []).map((v: Vehicle) => v.id);
+      
+      if (vehicleIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: images } = await (supabase as any)
+          .from('vehicle_images')
+          .select('vehicle_id, image_url, is_cover, display_order')
+          .in('vehicle_id', vehicleIds)
+          .order('display_order', { ascending: true });
+
+        // Agrupar imagens por veículo
+        const imagesByVehicle: Record<string, string[]> = {};
+        (images || []).forEach((img: { vehicle_id: string; image_url: string; is_cover: boolean; display_order: number }) => {
+          if (!imagesByVehicle[img.vehicle_id]) {
+            imagesByVehicle[img.vehicle_id] = [];
+          }
+          // Se for capa, colocar primeiro
+          if (img.is_cover) {
+            imagesByVehicle[img.vehicle_id].unshift(img.image_url);
+          } else {
+            imagesByVehicle[img.vehicle_id].push(img.image_url);
+          }
+        });
+
+        // Adicionar imagens aos veículos
+        return (vehicles || []).map((vehicle: Vehicle) => ({
+          ...vehicle,
+          images: imagesByVehicle[vehicle.id] || vehicle.images || null,
+        }));
+      }
+
+      return (vehicles || []) as Vehicle[];
     },
     ...vehicleQueryOptions,
   });
@@ -32,14 +65,34 @@ export function useVehicle(id: string) {
     queryKey: ['vehicles', id],
     queryFn: async (): Promise<Vehicle | null> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data: vehicle, error } = await (supabase as any)
         .from('vehicles')
         .select('*')
         .eq('id', id)
         .maybeSingle();
 
       if (error) throw error;
-      return data as Vehicle | null;
+      if (!vehicle) return null;
+
+      // Buscar imagens do veículo
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: images } = await (supabase as any)
+        .from('vehicle_images')
+        .select('image_url, is_cover, display_order')
+        .eq('vehicle_id', id)
+        .order('display_order', { ascending: true });
+
+      // Ordenar com capa primeiro
+      const sortedImages = (images || [])
+        .sort((a: { is_cover: boolean }, b: { is_cover: boolean }) => 
+          (b.is_cover ? 1 : 0) - (a.is_cover ? 1 : 0)
+        )
+        .map((img: { image_url: string }) => img.image_url);
+
+      return {
+        ...vehicle,
+        images: sortedImages.length > 0 ? sortedImages : vehicle.images,
+      } as Vehicle;
     },
     enabled: !!id,
     ...vehicleQueryOptions,

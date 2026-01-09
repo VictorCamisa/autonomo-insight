@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export function WhatsAppConfig() {
+  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+  
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -66,14 +68,14 @@ export function WhatsAppConfig() {
               <Label>URL do Webhook</Label>
               <div className="flex gap-2">
                 <Input 
-                  value="https://ahfoixzdnpswuqavbmgf.supabase.co/functions/v1/whatsapp-webhook"
+                  value={webhookUrl}
                   readOnly
                   className="font-mono text-sm"
                 />
                 <Button 
                   variant="outline"
                   onClick={() => {
-                    navigator.clipboard.writeText('https://ahfoixzdnpswuqavbmgf.supabase.co/functions/v1/whatsapp-webhook');
+                    navigator.clipboard.writeText(webhookUrl);
                   }}
                 >
                   Copiar

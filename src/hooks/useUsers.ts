@@ -11,7 +11,7 @@ import type {
   PermissionType 
 } from '@/types/users';
 
-const SUPABASE_URL = 'https://ahfoixzdnpswuqavbmgf.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 // Fetch all users with their roles
 export function useUsersWithRoles() {

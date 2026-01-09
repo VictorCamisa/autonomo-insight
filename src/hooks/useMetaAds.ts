@@ -11,7 +11,7 @@ export function useMetaAdsSync() {
   return useMutation({
     mutationFn: async () => {
       const response = await fetch(
-        'https://ahfoixzdnpswuqavbmgf.supabase.co/functions/v1/meta-ads-sync',
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-ads-sync`,
         {
           method: 'POST',
           headers: {

@@ -35,9 +35,9 @@ export function useVehicles() {
           .in('vehicle_id', vehicleIds)
           .order('display_order', { ascending: true });
 
-        // Agrupar imagens por veículo (filtrando URLs inválidas)
+        // Agrupar imagens por veículo
         (images || []).forEach((img: { vehicle_id: string; image_url: string; is_cover: boolean; display_order: number }) => {
-          if (!img.image_url || !img.image_url.startsWith('http')) return;
+          if (!img.image_url) return;
           
           if (!imagesByVehicle[img.vehicle_id]) {
             imagesByVehicle[img.vehicle_id] = [];
@@ -85,9 +85,9 @@ export function useVehicle(id: string) {
         .eq('vehicle_id', id)
         .order('display_order', { ascending: true });
 
-      // Ordenar com capa primeiro, filtrar URLs inválidas
+      // Ordenar com capa primeiro
       const sortedImages = (images || [])
-        .filter((img: { image_url: string }) => img.image_url && img.image_url.startsWith('http'))
+        .filter((img: { image_url: string }) => img.image_url)
         .sort((a: { is_cover: boolean }, b: { is_cover: boolean }) => 
           (b.is_cover ? 1 : 0) - (a.is_cover ? 1 : 0)
         )

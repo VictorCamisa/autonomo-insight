@@ -31,7 +31,7 @@ export function usePublicVehicles() {
   return useQuery({
     queryKey: ['public-vehicles'],
     queryFn: async (): Promise<PublicVehicle[]> => {
-      // Buscar todos os veículos disponíveis e com featured = true (para o site público)
+      // Buscar TODOS os veículos disponíveis (não apenas featured)
       const { data, error: vehiclesError } = await supabase
         .from('vehicles')
         .select('*')
@@ -43,18 +43,12 @@ export function usePublicVehicles() {
         throw vehiclesError;
       }
       const vehicles = data as VehicleRow[] | null;
-      console.log('Raw vehicles from DB:', vehicles?.length, 'First vehicle images:', vehicles?.[0]?.images);
       
       if (!vehicles || vehicles.length === 0) return [];
 
-      // Filtrar apenas os featured (fallback caso RLS não permita ver todos)
-      const featuredVehicles = vehicles.filter(v => v.featured === true);
-      console.log('Featured vehicles:', featuredVehicles.length);
-      if (featuredVehicles.length === 0) return [];
+      const vehicleIds = vehicles.map(v => v.id);
 
-      const vehicleIds = featuredVehicles.map(v => v.id);
-
-      // Tentar buscar imagens da tabela vehicle_images (pode falhar por RLS)
+      // Tentar buscar imagens da tabela vehicle_images
       let images: ImageRow[] | null = null;
       try {
         const { data: imgData } = await supabase
@@ -67,18 +61,17 @@ export function usePublicVehicles() {
         // Ignorar erro - usar fallback do campo images
       }
 
-      return featuredVehicles.map(vehicle => {
-        // Usar imagens da tabela vehicle_images ou do campo images do veículo
+      return vehicles.map(vehicle => {
+        // Usar imagens da tabela vehicle_images
         const vehicleImages = (images || [])
           .filter(img => img.vehicle_id === vehicle.id)
           .map(img => ({ id: img.id, image_url: img.image_url, is_cover: img.is_cover, display_order: img.display_order }));
 
-        // Garantir que vehicle.images seja um array de strings
+        // Fallback: usar campo images (JSONB) do veículo
         const vehicleImagesArray = Array.isArray(vehicle.images) 
           ? (vehicle.images as string[]) 
           : [];
 
-        // Se não há imagens na tabela vehicle_images, usar o array images do veículo
         const finalImages = vehicleImages.length > 0 
           ? vehicleImages 
           : vehicleImagesArray.map((url, idx) => ({
@@ -87,9 +80,6 @@ export function usePublicVehicles() {
               is_cover: idx === 0,
               display_order: idx
             }));
-
-        // Debug log
-        console.log('Vehicle:', vehicle.brand, vehicle.model, 'Images from DB:', vehicleImagesArray.length, 'Final images:', finalImages.length);
 
         return {
           id: vehicle.id,

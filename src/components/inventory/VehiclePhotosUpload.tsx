@@ -116,22 +116,22 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
 
   const handleDeleteImage = async (imageUrl: string, index: number) => {
     try {
-      // Deletar da tabela vehicle_images
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: deleteError } = await (supabase as any)
-        .from('vehicle_images')
-        .delete()
-        .eq('vehicle_id', vehicleId)
-        .eq('image_url', imageUrl);
+      // Filtrar a imagem do array
+      const newImages = (images || []).filter((_, i) => i !== index);
 
-      if (deleteError) {
-        console.error('Delete error:', deleteError);
+      // Atualizar no banco
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('vehicles')
+        .update({ images: newImages })
+        .eq('id', vehicleId);
+
+      if (error) {
+        console.error('Delete error:', error);
         toast.error('Erro ao remover foto');
         return;
       }
 
-      // Atualizar lista local
-      const newImages = (images || []).filter((_, i) => i !== index);
       onImagesUpdate(newImages);
       toast.success('Foto removida com sucesso');
     } catch (error) {

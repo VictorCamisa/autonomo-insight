@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Store } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Store, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,7 +17,7 @@ import { VehicleTable } from '@/components/inventory/VehicleTable';
 import { CreateVehicleDialog } from '@/components/inventory/CreateVehicleDialog';
 import { MercadoLivreConfigDialog } from '@/components/inventory/MercadoLivreConfigDialog';
 import { BentoCard } from '@/components/ui/bento-card';
-import { useVehicles, useAllVehicleDRE, useCreateVehicle } from '@/hooks/useVehicles';
+import { useVehicles, useAllVehicleDRE, useCreateVehicle, useBulkUpdateVehiclesVisibility } from '@/hooks/useVehicles';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { Vehicle, VehicleStatus, VehicleDRE } from '@/types/inventory';
 import { vehicleStatusLabels } from '@/types/inventory';
@@ -39,6 +39,7 @@ export default function Inventory() {
   const { data: vehicles, isLoading } = useVehicles();
   const { data: dreData, isLoading: dreLoading } = useAllVehicleDRE();
   const createVehicle = useCreateVehicle();
+  const bulkUpdateVisibility = useBulkUpdateVehiclesVisibility();
 
   const isManager = role === 'gerente';
 
@@ -106,7 +107,17 @@ export default function Inventory() {
         </div>
 
         {isManager && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button 
+              variant="outline" 
+              size="lg"
+              onClick={() => bulkUpdateVisibility.mutate(true)}
+              disabled={bulkUpdateVisibility.isPending}
+              className="border-green-500/50 hover:bg-green-50 dark:hover:bg-green-900/20"
+            >
+              <Eye className="h-4 w-4 mr-2 text-green-600" />
+              {bulkUpdateVisibility.isPending ? 'Atualizando...' : 'Exibir Todos no Site'}
+            </Button>
             <Button 
               variant="outline" 
               size="lg"

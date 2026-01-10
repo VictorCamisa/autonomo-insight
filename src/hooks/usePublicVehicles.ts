@@ -67,15 +67,23 @@ export function usePublicVehicles() {
           .filter(img => img.vehicle_id === vehicle.id)
           .map(img => ({ id: img.id, image_url: img.image_url, is_cover: img.is_cover, display_order: img.display_order }));
 
-        // Se não há imagens na tabela, usar o array images do veículo
+        // Garantir que vehicle.images seja um array de strings
+        const vehicleImagesArray = Array.isArray(vehicle.images) 
+          ? (vehicle.images as string[]) 
+          : [];
+
+        // Se não há imagens na tabela vehicle_images, usar o array images do veículo
         const finalImages = vehicleImages.length > 0 
           ? vehicleImages 
-          : (vehicle.images || []).map((url, idx) => ({
+          : vehicleImagesArray.map((url, idx) => ({
               id: `img-${idx}`,
               image_url: url,
               is_cover: idx === 0,
               display_order: idx
             }));
+
+        // Debug log
+        console.log('Vehicle:', vehicle.brand, vehicle.model, 'Images from DB:', vehicleImagesArray.length, 'Final images:', finalImages.length);
 
         return {
           id: vehicle.id,

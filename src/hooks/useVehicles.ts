@@ -22,19 +22,17 @@ export function useVehicles() {
 
       if (error) throw error;
 
-      // Priorizar imagens do campo images da tabela vehicles
-      // Só buscar vehicle_images para veículos sem imagens no campo
-      const vehiclesWithoutImages = (vehicles || []).filter((v: Vehicle) => !v.images || v.images.length === 0);
-      const vehicleIdsWithoutImages = vehiclesWithoutImages.map((v: Vehicle) => v.id);
+      // Buscar imagens da tabela vehicle_images para todos os veículos
+      const vehicleIds = (vehicles || []).map((v: Vehicle) => v.id);
       
       let imagesByVehicle: Record<string, string[]> = {};
       
-      if (vehicleIdsWithoutImages.length > 0) {
+      if (vehicleIds.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: images } = await (supabase as any)
           .from('vehicle_images')
           .select('vehicle_id, image_url, is_cover, display_order')
-          .in('vehicle_id', vehicleIdsWithoutImages)
+          .in('vehicle_id', vehicleIds)
           .order('display_order', { ascending: true });
 
         // Agrupar imagens por veículo (filtrando URLs inválidas)
@@ -53,12 +51,12 @@ export function useVehicles() {
         });
       }
 
-      // Retornar veículos usando imagens do campo ou fallback para vehicle_images
+      // Priorizar imagens da tabela vehicle_images, fallback para campo images
       return (vehicles || []).map((vehicle: Vehicle) => ({
         ...vehicle,
-        images: vehicle.images && vehicle.images.length > 0 
-          ? vehicle.images 
-          : imagesByVehicle[vehicle.id] || null,
+        images: imagesByVehicle[vehicle.id]?.length > 0 
+          ? imagesByVehicle[vehicle.id] 
+          : vehicle.images || null,
       }));
     },
     ...vehicleQueryOptions,
@@ -79,13 +77,7 @@ export function useVehicle(id: string) {
       if (error) throw error;
       if (!vehicle) return null;
 
-      // Priorizar imagens do campo images da tabela vehicles
-      // Só usa vehicle_images se vehicle.images estiver vazio
-      if (vehicle.images && vehicle.images.length > 0) {
-        return vehicle as Vehicle;
-      }
-
-      // Fallback: buscar da tabela vehicle_images
+      // Buscar imagens da tabela vehicle_images
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: images } = await (supabase as any)
         .from('vehicle_images')
@@ -93,7 +85,7 @@ export function useVehicle(id: string) {
         .eq('vehicle_id', id)
         .order('display_order', { ascending: true });
 
-      // Ordenar com capa primeiro
+      // Ordenar com capa primeiro, filtrar URLs inválidas
       const sortedImages = (images || [])
         .filter((img: { image_url: string }) => img.image_url && img.image_url.startsWith('http'))
         .sort((a: { is_cover: boolean }, b: { is_cover: boolean }) => 
@@ -103,7 +95,7 @@ export function useVehicle(id: string) {
 
       return {
         ...vehicle,
-        images: sortedImages.length > 0 ? sortedImages : null,
+        images: sortedImages.length > 0 ? sortedImages : vehicle.images || null,
       } as Vehicle;
     },
     enabled: !!id,

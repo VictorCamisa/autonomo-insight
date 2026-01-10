@@ -75,9 +75,17 @@ export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
             >
               <TableCell>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Car className="h-4 w-4 text-primary" />
-                  </div>
+                  {vehicle.images && vehicle.images.length > 0 ? (
+                    <img 
+                      src={vehicle.images[0]} 
+                      alt={`${vehicle.brand} ${vehicle.model}`}
+                      className="w-12 h-12 object-cover rounded-lg"
+                    />
+                  ) : (
+                    <div className="p-2 bg-primary/10 rounded-lg w-12 h-12 flex items-center justify-center">
+                      <Car className="h-5 w-5 text-primary" />
+                    </div>
+                  )}
                   <div>
                     <p className="font-medium">{vehicle.brand} {vehicle.model}</p>
                     {vehicle.version && (

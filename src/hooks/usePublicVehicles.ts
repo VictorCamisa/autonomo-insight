@@ -48,14 +48,18 @@ export function usePublicVehicles() {
 
       const vehicleIds = featuredVehicles.map(v => v.id);
 
-      const { data: imgData, error: imagesError } = await supabase
-        .from('vehicle_images')
-        .select('*')
-        .in('vehicle_id', vehicleIds)
-        .order('display_order', { ascending: true });
-
-      if (imagesError) throw imagesError;
-      const images = imgData as ImageRow[] | null;
+      // Tentar buscar imagens da tabela vehicle_images (pode falhar por RLS)
+      let images: ImageRow[] | null = null;
+      try {
+        const { data: imgData } = await supabase
+          .from('vehicle_images')
+          .select('*')
+          .in('vehicle_id', vehicleIds)
+          .order('display_order', { ascending: true });
+        images = imgData as ImageRow[] | null;
+      } catch {
+        // Ignorar erro - usar fallback do campo images
+      }
 
       return featuredVehicles.map(vehicle => {
         // Usar imagens da tabela vehicle_images ou do campo images do veículo
@@ -115,8 +119,21 @@ export function usePublicVehicle(id: string) {
         .eq('vehicle_id', id)
         .order('display_order', { ascending: true });
 
-      if (imagesError) throw imagesError;
-      const images = imgData as ImageRow[] | null;
+      // Ignorar erro de imagens - pode não ter permissão
+      const images = !imagesError ? (imgData as ImageRow[] | null) : null;
+
+      const vehicleImages = (images || [])
+        .map(img => ({ id: img.id, image_url: img.image_url, is_cover: img.is_cover, display_order: img.display_order }));
+
+      // Fallback para campo images do veículo
+      const finalImages = vehicleImages.length > 0 
+        ? vehicleImages 
+        : (vehicle.images || []).map((url, idx) => ({
+            id: `img-${idx}`,
+            image_url: url,
+            is_cover: idx === 0,
+            display_order: idx
+          }));
 
       return {
         id: vehicle.id,
@@ -132,7 +149,7 @@ export function usePublicVehicle(id: string) {
         doors: vehicle.doors,
         sale_price: vehicle.sale_price,
         featured: vehicle.featured,
-        images: (images || []).map(img => ({ id: img.id, image_url: img.image_url, is_cover: img.is_cover, display_order: img.display_order }))
+        images: finalImages
       };
     },
     enabled: !!id,
@@ -160,14 +177,18 @@ export function useFeaturedVehicles(limit = 6) {
 
       const vehicleIds = featuredVehicles.map(v => v.id);
 
-      const { data: imgData, error: imagesError } = await supabase
-        .from('vehicle_images')
-        .select('*')
-        .in('vehicle_id', vehicleIds)
-        .order('display_order', { ascending: true });
-
-      if (imagesError) throw imagesError;
-      const images = imgData as ImageRow[] | null;
+      // Tentar buscar imagens da tabela vehicle_images (pode falhar por RLS)
+      let images: ImageRow[] | null = null;
+      try {
+        const { data: imgData } = await supabase
+          .from('vehicle_images')
+          .select('*')
+          .in('vehicle_id', vehicleIds)
+          .order('display_order', { ascending: true });
+        images = imgData as ImageRow[] | null;
+      } catch {
+        // Ignorar erro - usar fallback do campo images
+      }
 
       return featuredVehicles.map(vehicle => {
         const vehicleImages = (images || [])

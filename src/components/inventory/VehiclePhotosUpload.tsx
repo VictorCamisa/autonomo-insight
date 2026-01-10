@@ -143,31 +143,23 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
   const setMainImage = async (index: number) => {
     if (index === 0 || !images) return;
     
-    const selectedImageUrl = images[index];
-    
     try {
-      // Primeiro, remover is_cover de todas as imagens do veículo
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('vehicle_images')
-        .update({ is_cover: false })
-        .eq('vehicle_id', vehicleId);
-      
-      // Depois, definir a imagem selecionada como capa
+      // Reordenar array - mover imagem selecionada para primeira posição
+      const newImages = [...images];
+      const [selected] = newImages.splice(index, 1);
+      newImages.unshift(selected);
+
+      // Atualizar no banco
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
-        .from('vehicle_images')
-        .update({ is_cover: true, display_order: 0 })
-        .eq('vehicle_id', vehicleId)
-        .eq('image_url', selectedImageUrl);
+        .from('vehicles')
+        .update({ images: newImages })
+        .eq('id', vehicleId);
 
       if (error) {
+        console.error('Set main image error:', error);
         toast.error('Erro ao definir foto principal');
       } else {
-        // Atualizar lista local - mover para primeira posição
-        const newImages = [...images];
-        const [selected] = newImages.splice(index, 1);
-        newImages.unshift(selected);
         onImagesUpdate(newImages);
         toast.success('Foto principal atualizada');
       }

@@ -38,12 +38,18 @@ export function usePublicVehicles() {
         .eq('status', 'disponivel')
         .order('created_at', { ascending: false });
 
-      if (vehiclesError) throw vehiclesError;
+      if (vehiclesError) {
+        console.error('Error fetching vehicles:', vehiclesError);
+        throw vehiclesError;
+      }
       const vehicles = data as VehicleRow[] | null;
+      console.log('Raw vehicles from DB:', vehicles?.length, 'First vehicle images:', vehicles?.[0]?.images);
+      
       if (!vehicles || vehicles.length === 0) return [];
 
       // Filtrar apenas os featured (fallback caso RLS não permita ver todos)
       const featuredVehicles = vehicles.filter(v => v.featured === true);
+      console.log('Featured vehicles:', featuredVehicles.length);
       if (featuredVehicles.length === 0) return [];
 
       const vehicleIds = featuredVehicles.map(v => v.id);

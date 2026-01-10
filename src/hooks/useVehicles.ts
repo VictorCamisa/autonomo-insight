@@ -266,6 +266,35 @@ export function useUpdateVehicle() {
   });
 }
 
+export function useBulkUpdateVehiclesVisibility() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (showOnWebsite: boolean) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('vehicles')
+        .update({ show_on_website: showOnWebsite })
+        .neq('status', 'vendido');
+
+      if (error) throw error;
+    },
+    onSuccess: (_, showOnWebsite) => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['public-vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['featured-vehicles'] });
+      toast.success(
+        showOnWebsite 
+          ? 'Todos os veículos agora estão visíveis no site!' 
+          : 'Todos os veículos foram ocultados do site!'
+      );
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao atualizar visibilidade: ${error.message}`);
+    },
+  });
+}
+
 export function useDeleteVehicle() {
   const queryClient = useQueryClient();
 

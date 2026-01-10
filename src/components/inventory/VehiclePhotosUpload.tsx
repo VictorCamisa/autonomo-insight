@@ -116,37 +116,24 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
 
   const handleDeleteImage = async (imageUrl: string, index: number) => {
     try {
-      // Extract file path from URL
-      const urlParts = imageUrl.split('/vehicle-images/');
-      if (urlParts.length > 1) {
-        const filePath = urlParts[1];
-        
-        // Delete from storage
-        const { error: deleteError } = await supabase.storage
-          .from('vehicle-images')
-          .remove([filePath]);
-
-        if (deleteError) {
-          console.error('Delete error:', deleteError);
-        }
-      }
-
-      // Update vehicle images array
-      const newImages = (images || []).filter((_, i) => i !== index);
-      
+      // Deletar da tabela vehicle_images
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
-        .from('vehicles')
-        .update({ images: newImages.length > 0 ? newImages : null })
-        .eq('id', vehicleId);
+      const { error: deleteError } = await (supabase as any)
+        .from('vehicle_images')
+        .delete()
+        .eq('vehicle_id', vehicleId)
+        .eq('image_url', imageUrl);
 
-      if (updateError) {
-        console.error('Update error:', updateError);
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
         toast.error('Erro ao remover foto');
-      } else {
-        onImagesUpdate(newImages);
-        toast.success('Foto removida com sucesso');
+        return;
       }
+
+      // Atualizar lista local
+      const newImages = (images || []).filter((_, i) => i !== index);
+      onImagesUpdate(newImages);
+      toast.success('Foto removida com sucesso');
     } catch (error) {
       console.error('Delete error:', error);
       toast.error('Erro ao remover foto');
@@ -156,22 +143,37 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
   const setMainImage = async (index: number) => {
     if (index === 0 || !images) return;
     
-    // Move selected image to first position
-    const newImages = [...images];
-    const [selected] = newImages.splice(index, 1);
-    newImages.unshift(selected);
+    const selectedImageUrl = images[index];
     
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('vehicles')
-      .update({ images: newImages })
-      .eq('id', vehicleId);
+    try {
+      // Primeiro, remover is_cover de todas as imagens do veículo
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('vehicle_images')
+        .update({ is_cover: false })
+        .eq('vehicle_id', vehicleId);
+      
+      // Depois, definir a imagem selecionada como capa
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('vehicle_images')
+        .update({ is_cover: true, display_order: 0 })
+        .eq('vehicle_id', vehicleId)
+        .eq('image_url', selectedImageUrl);
 
-    if (error) {
+      if (error) {
+        toast.error('Erro ao definir foto principal');
+      } else {
+        // Atualizar lista local - mover para primeira posição
+        const newImages = [...images];
+        const [selected] = newImages.splice(index, 1);
+        newImages.unshift(selected);
+        onImagesUpdate(newImages);
+        toast.success('Foto principal atualizada');
+      }
+    } catch (error) {
+      console.error('Set main image error:', error);
       toast.error('Erro ao definir foto principal');
-    } else {
-      onImagesUpdate(newImages);
-      toast.success('Foto principal atualizada');
     }
   };
 

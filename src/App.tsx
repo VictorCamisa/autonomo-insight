@@ -27,6 +27,7 @@ const Leads = lazy(() => import("./pages/Leads"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const VehicleDetails = lazy(() => import("./pages/VehicleDetails"));
 const ImportVehicles = lazy(() => import("./pages/ImportVehicles"));
+const BulkPhotoUpload = lazy(() => import("./pages/BulkPhotoUpload"));
 const CRMHome = lazy(() => import("./pages/CRMHome"));
 const CRMAnalytics = lazy(() => import("./pages/CRMAnalytics"));
 const FollowUps = lazy(() => import("./pages/FollowUps"));
@@ -166,6 +167,11 @@ const App = () => (
                   <Route path="/estoque/importar" element={
                     <ProtectedRoute requiredModule="estoque">
                       <ImportVehicles />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/estoque/fotos" element={
+                    <ProtectedRoute requiredModule="estoque">
+                      <BulkPhotoUpload />
                     </ProtectedRoute>
                   } />
                   

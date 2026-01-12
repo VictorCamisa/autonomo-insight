@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Plus, Calendar, Gauge, Car, DollarSign, Clock, TrendingUp, TrendingDown, AlertTriangle, Globe, EyeOff, Image, Share2, Copy, FileText, Bookmark, CircleCheck, CircleDashed, Wrench } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, Calendar, Gauge, Car, DollarSign, Clock, TrendingUp, TrendingDown, AlertTriangle, Globe, EyeOff, Image, Share2, Copy, FileText, Bookmark, CircleCheck, CircleDashed, Wrench, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VehiclePhotosUpload } from '@/components/inventory/VehiclePhotosUpload';
 import { VehicleSaleSimulator } from '@/components/inventory/VehicleSaleSimulator';
 import { VehicleActiveNegotiations } from '@/components/inventory/VehicleActiveNegotiations';
+import { VehicleDocuments } from '@/components/inventory/VehicleDocuments';
 import {
   Dialog,
   DialogContent,
@@ -368,11 +369,15 @@ export default function VehicleDetails() {
       </Card>
 
       <Tabs defaultValue="info" className="w-full">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="info">Informações</TabsTrigger>
           <TabsTrigger value="photos" className="flex items-center gap-1">
             <Image className="h-4 w-4" />
             Fotos ({vehicle.images?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="docs" className="flex items-center gap-1">
+            <Paperclip className="h-4 w-4" />
+            Documentos
           </TabsTrigger>
           <TabsTrigger value="dre">DRE</TabsTrigger>
           <TabsTrigger value="costs">Custos ({costs?.length || 0})</TabsTrigger>
@@ -486,6 +491,10 @@ export default function VehicleDetails() {
             }}
             isManager={isManager}
           />
+        </TabsContent>
+
+        <TabsContent value="docs" className="mt-4">
+          <VehicleDocuments vehicleId={vehicle.id} isManager={isManager} />
         </TabsContent>
 
         <TabsContent value="dre" className="space-y-4 mt-4">

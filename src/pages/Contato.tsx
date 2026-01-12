@@ -21,12 +21,12 @@ const staggerContainer = {
 
 export default function Contato() {
   const openWhatsApp = () => {
-    window.open('https://wa.me/5511999999999?text=Olá! Gostaria de mais informações sobre os veículos.', '_blank');
+    window.open('https://wa.me/5512988973547?text=Olá! Gostaria de mais informações sobre os veículos.', '_blank');
   };
 
   const openGoogleMaps = () => {
     window.open(
-      'https://www.google.com/maps/search/?api=1&query=Rua+Benedito+de+Oliveira+Cavalheiro+125+Arujá+SP',
+      'https://www.google.com/maps/search/?api=1&query=Av.+Major+Joaquim+Monteiro+Patto+25+Taubaté+SP',
       '_blank'
     );
   };
@@ -69,8 +69,8 @@ export default function Contato() {
                 <Phone className="h-6 w-6 text-public-primary" />
               </div>
               <h3 className="font-semibold text-public-fg mb-2 font-['Oswald'] text-lg">Telefone</h3>
-              <p className="text-public-fg/60 text-sm">(11) 4654-1785</p>
-              <p className="text-public-fg/60 text-sm">(11) 97306-8654</p>
+              <p className="text-public-fg/60 text-sm">(12) 98897-3547 (Atendimento)</p>
+              <p className="text-public-fg/60 text-sm">(12) 99668-1249 (Escritório)</p>
             </motion.div>
 
             {/* WhatsApp */}
@@ -83,7 +83,7 @@ export default function Contato() {
                 <MessageCircle className="h-6 w-6 text-green-500" />
               </div>
               <h3 className="font-semibold text-public-fg mb-2 font-['Oswald'] text-lg">WhatsApp</h3>
-              <p className="text-public-fg/60 text-sm">(11) 97306-8654</p>
+              <p className="text-public-fg/60 text-sm">(12) 98897-3547</p>
               <p className="text-green-500 text-sm font-medium mt-1">Clique para conversar →</p>
             </motion.div>
 
@@ -137,8 +137,8 @@ export default function Contato() {
                   <div>
                     <h3 className="font-semibold text-public-fg mb-1">Endereço</h3>
                     <p className="text-public-fg/60">
-                      Rua Benedito de Oliveira Cavalheiro, 125<br />
-                      Arujá - SP, CEP 07402-060
+                      Av. Major Joaquim Monteiro Patto, 25<br />
+                      Chácara do Visconde - Taubaté/SP, CEP 12050-620
                     </p>
                   </div>
                 </div>

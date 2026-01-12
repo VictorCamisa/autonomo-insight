@@ -4,10 +4,12 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -57,8 +59,9 @@ const vehicleFormSchema = z.object({
   estimated_documentation: z.coerce.number().min(0).optional(),
   estimated_other_costs: z.coerce.number().min(0).optional(),
   
-  // Status e notas
+  // Status, visibilidade e notas
   status: z.enum(['disponivel', 'reservado', 'vendido', 'em_manutencao']).optional(),
+  featured: z.boolean().optional(),
   notes: z.string().max(1000).optional(),
 });
 
@@ -103,6 +106,7 @@ export function VehicleForm({ vehicle, onSubmit, isLoading, mode = 'simple' }: V
       estimated_documentation: vehicle?.estimated_documentation || undefined,
       estimated_other_costs: vehicle?.estimated_other_costs || undefined,
       status: vehicle?.status || 'disponivel',
+      featured: vehicle?.featured ?? false,
       notes: vehicle?.notes || '',
     },
   });
@@ -111,10 +115,11 @@ export function VehicleForm({ vehicle, onSubmit, isLoading, mode = 'simple' }: V
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Tabs defaultValue="basic" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic">Dados Básicos</TabsTrigger>
-            <TabsTrigger value="financial">Financeiro</TabsTrigger>
-            <TabsTrigger value="estimates">Estimativas</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="basic">Veículo</TabsTrigger>
+            <TabsTrigger value="financial">Aquisição</TabsTrigger>
+            <TabsTrigger value="pricing">Precificação</TabsTrigger>
+            <TabsTrigger value="notes">Observações</TabsTrigger>
           </TabsList>
           
           <TabsContent value="basic" className="space-y-4 mt-4">
@@ -236,6 +241,36 @@ export function VehicleForm({ vehicle, onSubmit, isLoading, mode = 'simple' }: V
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="renavam"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>RENAVAM</FormLabel>
+                    <FormControl>
+                      <Input placeholder="00000000000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="chassis"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Chassi</FormLabel>
+                    <FormControl>
+                      <Input placeholder="9BWZZZ377VT004251" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
@@ -303,34 +338,61 @@ export function VehicleForm({ vehicle, onSubmit, isLoading, mode = 'simple' }: V
             </div>
 
             {vehicle && (
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <>
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {Object.entries(vehicleStatusLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="featured"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Visível no Site</FormLabel>
+                        <FormDescription>
+                          Quando ativado, o veículo aparecerá no site público
+                        </FormDescription>
+                      </div>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        {Object.entries(vehicleStatusLabels).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    </FormItem>
+                  )}
+                />
+              </>
             )}
           </TabsContent>
 
           <TabsContent value="financial" className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Informações sobre a aquisição do veículo
+            </p>
+            
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -390,7 +452,13 @@ export function VehicleForm({ vehicle, onSubmit, isLoading, mode = 'simple' }: V
                 )}
               />
             </div>
+          </TabsContent>
 
+          <TabsContent value="pricing" className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Preços de venda e estimativas de custos
+            </p>
+            
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -450,73 +518,72 @@ export function VehicleForm({ vehicle, onSubmit, isLoading, mode = 'simple' }: V
                 )}
               />
             </div>
+
+            <div className="border-t pt-4 mt-4">
+              <p className="text-sm font-medium mb-3">Custos Estimados</p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="estimated_maintenance"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Manutenção Estimada (R$)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="estimated_cleaning"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Limpeza Estimada (R$)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <FormField
+                  control={form.control}
+                  name="estimated_documentation"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Documentação Estimada (R$)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="estimated_other_costs"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Outros Custos Estimados (R$)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
           </TabsContent>
 
-          <TabsContent value="estimates" className="space-y-4 mt-4">
-            <p className="text-sm text-muted-foreground">
-              Estimativas de custos antes da compra para análise de viabilidade
-            </p>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="estimated_maintenance"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Manutenção Estimada (R$)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" placeholder="0,00" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="estimated_cleaning"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Limpeza Estimada (R$)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" placeholder="0,00" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="estimated_documentation"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Documentação Estimada (R$)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" placeholder="0,00" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="estimated_other_costs"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Outros Custos Estimados (R$)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" placeholder="0,00" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
+          <TabsContent value="notes" className="space-y-4 mt-4">
             <FormField
               control={form.control}
               name="notes"
@@ -525,8 +592,8 @@ export function VehicleForm({ vehicle, onSubmit, isLoading, mode = 'simple' }: V
                   <FormLabel>Observações</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Anotações sobre o veículo..." 
-                      className="min-h-[100px]"
+                      placeholder="Anotações sobre o veículo, histórico, detalhes importantes..." 
+                      className="min-h-[200px]"
                       {...field} 
                     />
                   </FormControl>

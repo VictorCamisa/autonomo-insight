@@ -145,9 +145,9 @@ export default function VehicleDetails() {
   };
 
   // Cálculos DRE
-  const totalCost = dre ? dre.total_investment + dre.holding_cost : (vehicle.purchase_price || 0);
+  const totalCost = dre ? dre.total_investment : (vehicle.purchase_price || 0);
   const potentialMargin = dre && dre.sale_price 
-    ? dre.sale_price - dre.total_investment - dre.holding_cost 
+    ? dre.sale_price - dre.total_investment 
     : null;
   const marginPercent = dre && dre.sale_price && dre.total_investment > 0
     ? ((potentialMargin || 0) / dre.total_investment) * 100
@@ -269,12 +269,6 @@ export default function VehicleDetails() {
                 <div className="flex justify-between">
                   <span>Custos Adicionais:</span>
                   <span className="font-medium text-foreground">{formatCurrency(dre.total_real_costs)}</span>
-                </div>
-              )}
-              {dre && dre.holding_cost > 0 && (
-                <div className="flex justify-between">
-                  <span>Custo de Capital:</span>
-                  <span className="font-medium text-destructive">{formatCurrency(dre.holding_cost)}</span>
                 </div>
               )}
             </div>

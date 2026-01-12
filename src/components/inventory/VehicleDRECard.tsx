@@ -20,7 +20,7 @@ export function VehicleDRECard({ dre, onClick }: VehicleDRECardProps) {
   };
 
   // Calcular margem potencial
-  const potentialMargin = dre.sale_price ? dre.sale_price - dre.total_investment - dre.holding_cost : null;
+  const potentialMargin = dre.sale_price ? dre.sale_price - dre.total_investment : null;
   const marginPercent = dre.sale_price && dre.total_investment > 0
     ? ((potentialMargin || 0) / dre.total_investment) * 100
     : null;
@@ -66,16 +66,6 @@ export function VehicleDRECard({ dre, onClick }: VehicleDRECardProps) {
           <span className="font-semibold">{formatCurrency(dre.sale_price)}</span>
         </div>
 
-        {/* Custo de Capital (Holding) */}
-        {dre.holding_cost > 0 && (
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              Custo de Capital
-            </span>
-            <span className="text-destructive">{formatCurrency(dre.holding_cost)}</span>
-          </div>
-        )}
 
         {/* Margem Potencial */}
         {potentialMargin !== null && (

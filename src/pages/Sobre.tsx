@@ -466,7 +466,8 @@ export default function Sobre() {
                   </div>
                   <div>
                     <h4 className="text-white font-semibold text-lg mb-1">Telefone</h4>
-                    <p className="text-white/50">(12) 3621-1234</p>
+                    <p className="text-white/50">(12) 98897-3547 (Atendimento)</p>
+                    <p className="text-white/50">(12) 99668-1249 (Escritório)</p>
                   </div>
                 </motion.div>
               </motion.div>

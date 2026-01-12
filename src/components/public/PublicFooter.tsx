@@ -56,8 +56,8 @@ export function PublicFooter() {
               <li className="flex items-start gap-3">
                 <Phone className="h-5 w-5 text-public-primary flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-gray-400 text-sm">(11) 4654-1785</p>
-                  <p className="text-gray-400 text-sm">(11) 97306-8654</p>
+                  <p className="text-gray-400 text-sm">(12) 98897-3547 (Atendimento)</p>
+                  <p className="text-gray-400 text-sm">(12) 99668-1249 (Escritório)</p>
                 </div>
               </li>
               <li className="flex items-start gap-3">
@@ -67,8 +67,8 @@ export function PublicFooter() {
               <li className="flex items-start gap-3">
                 <MapPin className="h-5 w-5 text-public-primary flex-shrink-0 mt-0.5" />
                 <p className="text-gray-400 text-sm">
-                  Rua Benedito de Oliveira Cavalheiro, 125<br />
-                  Arujá - SP, 07402-060
+                  Av. Major Joaquim Monteiro Patto, 25<br />
+                  Chácara do Visconde - Taubaté/SP, 12050-620
                 </p>
               </li>
             </ul>

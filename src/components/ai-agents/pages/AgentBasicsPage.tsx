@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAIAgent, useCreateAIAgent, useUpdateAIAgent } from '@/hooks/useAIAgents';
-import { AGENT_OBJECTIVES, AGENT_STATUS } from '@/types/ai-agents';
+import { AGENT_OBJECTIVES, AGENT_STATUS, DEFAULT_AGENT } from '@/types/ai-agents';
 
 const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
@@ -61,12 +61,9 @@ export default function AgentBasicsPage() {
 
   const onSubmit = async (data: FormData) => {
     if (isNew) {
-      // Send only the basic fields that exist in the database
       const newAgent = await createAgent.mutateAsync({
-        name: data.name,
-        description: data.description || null,
-        objective: data.objective,
-        status: data.status,
+        ...DEFAULT_AGENT,
+        ...data,
       });
       navigate(`/ai-agents/${newAgent.id}/llm`);
     } else {

@@ -1,10 +1,60 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+async function generateVoiceAudio(text: string, voiceId: string): Promise<string | null> {
+  const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
+  
+  if (!ELEVENLABS_API_KEY) {
+    console.log('[ai-agent-chat] ELEVENLABS_API_KEY not configured, skipping voice generation');
+    return null;
+  }
+
+  try {
+    console.log('[ai-agent-chat] Generating voice audio with voice:', voiceId);
+    
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.3,
+            use_speaker_boost: true,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[ai-agent-chat] ElevenLabs API error:', response.status, errorText);
+      return null;
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    const base64Audio = base64Encode(audioBuffer);
+    
+    console.log('[ai-agent-chat] Voice audio generated successfully');
+    return base64Audio;
+  } catch (error) {
+    console.error('[ai-agent-chat] Error generating voice audio:', error);
+    return null;
+  }
+}
 
 serve(async (req) => {
   console.log('[ai-agent-chat] Request received');
@@ -15,9 +65,9 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { message, agent_id, conversation_history = [], data_sources = [] } = body;
+    const { message, agent_id, conversation_history = [], data_sources = [], is_audio_message = false } = body;
     
-    console.log('[ai-agent-chat] Processing message for agent:', agent_id);
+    console.log('[ai-agent-chat] Processing message for agent:', agent_id, 'is_audio:', is_audio_message);
 
     if (!message) {
       return new Response(
@@ -287,9 +337,16 @@ Regras importantes:
 
     console.log('[ai-agent-chat] Response generated successfully');
 
+    // Generate voice audio if enabled and user sent audio message
+    let audioContent: string | null = null;
+    if (agentConfig?.enable_voice && agentConfig?.voice_id && is_audio_message) {
+      audioContent = await generateVoiceAudio(content, agentConfig.voice_id);
+    }
+
     return new Response(
       JSON.stringify({
         response: content,
+        audio_content: audioContent,
         data_sources_used: Object.keys(contextData),
         tokens_used: aiResponse.usage?.total_tokens || 0,
       }),

@@ -308,8 +308,30 @@ export default function AgentLLMConfigPage() {
                   <Label>Voz</Label>
                   {voicesLoading ? (
                     <Skeleton className="h-10 w-full" />
-                  ) : voicesError ? (
-                    <p className="text-sm text-destructive">Erro ao carregar vozes. Verifique se a ELEVENLABS_API_KEY está configurada.</p>
+                  ) : voicesError || !voices?.length ? (
+                    <>
+                      <Select
+                        value={form.watch('voice_id')}
+                        onValueChange={(value) => form.setValue('voice_id', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione a voz" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          <SelectItem value="CwhRBWXzGAHq8TQ4Fs17">Roger (Americano)</SelectItem>
+                          <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah (Suave)</SelectItem>
+                          <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George (Britânico)</SelectItem>
+                          <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam (Narrativo)</SelectItem>
+                          <SelectItem value="XrExE9yKIg1WjnnlVkGX">Matilda (Amigável)</SelectItem>
+                          <SelectItem value="onwK4e9ZLuTAKqWW03F9">Daniel (Autoritativo)</SelectItem>
+                          <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily (Narradora)</SelectItem>
+                          <SelectItem value="nPczCjzI2devNBz1zQrb">Brian (Conversacional)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Usando vozes padrão. Para mais opções, configure ELEVENLABS_API_KEY com permissão "voices_read".
+                      </p>
+                    </>
                   ) : (
                     <Select
                       value={form.watch('voice_id')}

@@ -9,6 +9,7 @@ export interface ChatMessage {
   timestamp: Date;
   isLoading?: boolean;
   audioUrl?: string;
+  dataSourcesUsed?: string[];
 }
 
 interface UseAgentChatOptions {
@@ -46,34 +47,37 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
     }]);
 
     try {
-      // First, try to get the agent config
-      const { data: agent } = await supabase
-        .from('ai_agents')
-        .select('*')
-        .eq('id', agentId)
-        .single();
-
-      const systemPrompt = (agent as any)?.system_prompt || 'Você é um assistente virtual da loja Matheus Veículos. Seja prestativo e cordial.';
-
-      // Build conversation history
+      // Build conversation history from previous messages
       const allMessages = [...messages, userMessage];
-      const historyMessages = allMessages.slice(-10).map(m => ({
+      const conversationHistory = allMessages.slice(-10).map(m => ({
         role: m.role,
         content: m.content,
       }));
 
-      // Build the full message with context
-      const fullMessage = `[Contexto do Sistema: ${systemPrompt}]
-
-Histórico da conversa:
-${historyMessages.slice(0, -1).map(m => `${m.role === 'user' ? 'Usuário' : 'Assistente'}: ${m.content}`).join('\n')}
-
-Usuário: ${content}`;
-
-      // Call the generate-report function which uses Lovable AI
-      const { data, error } = await supabase.functions.invoke('generate-report', {
-        body: { message: fullMessage },
-      });
+      // Try the dedicated ai-agent-chat function first
+      let data, error;
+      
+      try {
+        const result = await supabase.functions.invoke('ai-agent-chat', {
+          body: {
+            message: content,
+            agent_id: agentId,
+            conversation_history: conversationHistory.slice(0, -1), // Exclude the current message
+            session_id: sessionId,
+          },
+        });
+        data = result.data;
+        error = result.error;
+      } catch (e) {
+        console.warn('[useAgentChat] ai-agent-chat failed, trying generate-report:', e);
+        
+        // Fallback to generate-report
+        const fallbackResult = await supabase.functions.invoke('generate-report', {
+          body: { message: content },
+        });
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
 
       if (error) {
         console.error('Function error:', error);
@@ -81,6 +85,7 @@ Usuário: ${content}`;
       }
 
       const aiResponse = data?.response || data?.content || 'Desculpe, não consegui processar sua mensagem.';
+      const dataSourcesUsed = data?.data_sources_used || [];
 
       // Remove loading and add real response
       setMessages(prev => {
@@ -90,6 +95,7 @@ Usuário: ${content}`;
           role: 'assistant',
           content: aiResponse,
           timestamp: new Date(),
+          dataSourcesUsed,
         }];
       });
 

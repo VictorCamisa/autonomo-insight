@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Database, Save, ArrowRight, Server, HardDrive } from 'lucide-react';
+import { Database, Save, ArrowRight, Server, HardDrive, CheckCircle2, XCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,8 +19,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAIAgent, useUpdateAIAgent } from '@/hooks/useAIAgents';
-import { SHORT_TERM_MEMORY_TYPES, DATA_SOURCE_TYPES } from '@/types/ai-agents';
+import { toast } from 'sonner';
+import { useAIAgent, useUpdateAIAgent, useAIAgentDataSources, useCreateAIAgentDataSource, useDeleteAIAgentDataSource } from '@/hooks/useAIAgents';
+import { SHORT_TERM_MEMORY_TYPES } from '@/types/ai-agents';
 
 const formSchema = z.object({
   short_term_memory_type: z.string(),
@@ -33,12 +34,68 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+interface DataSourceConfig {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  icon: string;
+  tables: string[];
+}
+
+const AVAILABLE_DATA_SOURCES: DataSourceConfig[] = [
+  {
+    id: 'inventory',
+    name: 'Estoque de Veículos',
+    description: 'Acesso ao catálogo de veículos disponíveis, preços, características',
+    type: 'inventory',
+    icon: '🚗',
+    tables: ['vehicles'],
+  },
+  {
+    id: 'crm',
+    name: 'CRM (Leads)',
+    description: 'Acesso a leads, status de qualificação, histórico de contatos',
+    type: 'crm',
+    icon: '👥',
+    tables: ['leads'],
+  },
+  {
+    id: 'negotiations',
+    name: 'Negociações',
+    description: 'Pipeline de vendas, propostas, agendamentos',
+    type: 'negotiations',
+    icon: '🤝',
+    tables: ['negotiations'],
+  },
+  {
+    id: 'sales',
+    name: 'Vendas',
+    description: 'Histórico de vendas, métricas, performance',
+    type: 'sales',
+    icon: '💰',
+    tables: ['sales'],
+  },
+  {
+    id: 'faq',
+    name: 'FAQ / Base de Conhecimento',
+    description: 'Informações gerais da loja, políticas, horários',
+    type: 'faq',
+    icon: '📚',
+    tables: [],
+  },
+];
+
 export default function AgentMemoryPage() {
   const { agentId } = useParams();
   const navigate = useNavigate();
+  const [syncingSource, setSyncingSource] = useState<string | null>(null);
   
   const { data: agent, isLoading } = useAIAgent(agentId);
+  const { data: dataSources = [], refetch: refetchDataSources } = useAIAgentDataSources(agentId);
   const updateAgent = useUpdateAIAgent();
+  const createDataSource = useCreateAIAgentDataSource();
+  const deleteDataSource = useDeleteAIAgentDataSource();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -64,6 +121,51 @@ export default function AgentMemoryPage() {
     }
   }, [agent, form]);
 
+  const isSourceConnected = (sourceType: string) => {
+    return dataSources.some(ds => ds.source_type === sourceType && ds.is_active);
+  };
+
+  const getSourceId = (sourceType: string) => {
+    return dataSources.find(ds => ds.source_type === sourceType)?.id;
+  };
+
+  const handleToggleDataSource = async (source: DataSourceConfig) => {
+    if (!agentId) return;
+
+    setSyncingSource(source.type);
+
+    try {
+      const existingSource = dataSources.find(ds => ds.source_type === source.type);
+
+      if (existingSource) {
+        // Delete the source to disconnect
+        await deleteDataSource.mutateAsync({ id: existingSource.id, agentId });
+        toast.success(`${source.name} desconectado`);
+      } else {
+        // Create new data source connection
+        await createDataSource.mutateAsync({
+          agent_id: agentId,
+          name: source.name,
+          source_type: source.type,
+          connection_config: { tables: source.tables },
+          table_name: source.tables[0] || null,
+          embeddings_enabled: false,
+          text_column: null,
+          embedding_column: null,
+          embedding_model: null,
+          is_active: true,
+        });
+        toast.success(`${source.name} conectado com sucesso!`);
+      }
+
+      await refetchDataSources();
+    } catch (error) {
+      toast.error(`Erro ao ${isSourceConnected(source.type) ? 'desconectar' : 'conectar'} ${source.name}`);
+    } finally {
+      setSyncingSource(null);
+    }
+  };
+
   const onSubmit = async (data: FormData) => {
     await updateAgent.mutateAsync({ id: agentId!, data });
     navigate(`/ai-agents/${agentId}/ferramentas`);
@@ -77,6 +179,8 @@ export default function AgentMemoryPage() {
       </div>
     );
   }
+
+  const connectedCount = dataSources.filter(ds => ds.is_active).length;
 
   return (
     <div className="p-6 space-y-6 max-w-3xl">
@@ -93,6 +197,77 @@ export default function AgentMemoryPage() {
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Data Sources - MAIN FEATURE */}
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5 text-primary" />
+              Fontes de Dados do Supabase
+              {connectedCount > 0 && (
+                <Badge variant="default" className="ml-2">
+                  {connectedCount} conectada{connectedCount > 1 ? 's' : ''}
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Conecte o agente às tabelas do Supabase para respostas baseadas em dados reais
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3">
+              {AVAILABLE_DATA_SOURCES.map((source) => {
+                const isConnected = isSourceConnected(source.type);
+                const isSyncing = syncingSource === source.type;
+
+                return (
+                  <div 
+                    key={source.id}
+                    className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
+                      isConnected ? 'bg-primary/5 border-primary/30' : 'hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{source.icon}</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{source.name}</span>
+                          {isConnected && (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{source.description}</p>
+                        {source.tables.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Tabelas: {source.tables.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isSyncing ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      ) : (
+                        <Switch
+                          checked={isConnected}
+                          onCheckedChange={() => handleToggleDataSource(source)}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>💡 Como funciona:</strong> Quando uma fonte está conectada, o agente consulta 
+                automaticamente os dados atualizados do Supabase a cada mensagem. Isso permite respostas 
+                precisas sobre estoque, preços, clientes e muito mais.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Short Term Memory */}
         <Card>
           <CardHeader>
@@ -180,37 +355,6 @@ export default function AgentMemoryPage() {
                 Número de mensagens anteriores incluídas em cada chamada ao modelo
               </p>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Data Sources */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Fontes de Dados</CardTitle>
-            <CardDescription>
-              Conecte o agente a dados do sistema para respostas mais precisas
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3">
-              {DATA_SOURCE_TYPES.slice(0, 3).map((source) => (
-                <div 
-                  key={source.value}
-                  className="flex items-center justify-between p-3 border rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <Database className="h-4 w-4 text-muted-foreground" />
-                    <span>{source.label}</span>
-                  </div>
-                  <Badge variant="secondary">
-                    {source.value === 'inventory' ? 'Conectado' : 'Disponível'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Fontes de dados são configuradas automaticamente. O agente tem acesso ao estoque de veículos e ao CRM.
-            </p>
           </CardContent>
         </Card>
 

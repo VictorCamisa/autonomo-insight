@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Calendar, Gauge, Fuel, Settings2, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, Gauge, Fuel, Settings2, MessageCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePublicVehicle } from '@/hooks/usePublicVehicles';
 import { fuelTypeLabels, transmissionLabels } from '@/types/inventory';
@@ -8,6 +9,7 @@ import { fuelTypeLabels, transmissionLabels } from '@/types/inventory';
 export default function PublicVehicleDetails() {
   const { id } = useParams<{ id: string }>();
   const { data: vehicle, isLoading, error } = usePublicVehicle(id || '');
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   const formatPrice = (price: number | null) => {
     if (!price) return 'Consulte';
@@ -45,7 +47,15 @@ export default function PublicVehicleDetails() {
     );
   }
 
-  const coverImage = vehicle.images.find(img => img.is_cover) || vehicle.images[0];
+  const selectedImage = vehicle.images[selectedImageIndex] || vehicle.images[0];
+
+  const goToPrevious = () => {
+    setSelectedImageIndex((prev) => (prev === 0 ? vehicle.images.length - 1 : prev - 1));
+  };
+
+  const goToNext = () => {
+    setSelectedImageIndex((prev) => (prev === vehicle.images.length - 1 ? 0 : prev + 1));
+  };
 
   return (
     <div className="bg-public-bg min-h-screen pt-24">
@@ -57,21 +67,48 @@ export default function PublicVehicleDetails() {
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Gallery */}
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-            <div className="aspect-[4/3] rounded-xl overflow-hidden bg-public-muted mb-4">
-              {coverImage ? (
-                <img src={coverImage.image_url} alt={vehicle.model} className="w-full h-full object-cover" />
+            <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-public-muted mb-4 group">
+              {selectedImage ? (
+                <img src={selectedImage.image_url} alt={vehicle.model} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-public-fg/30">
                   <Settings2 className="h-16 w-16" />
                 </div>
               )}
+              {vehicle.images.length > 1 && (
+                <>
+                  <button
+                    onClick={goToPrevious}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Foto anterior"
+                  >
+                    <ChevronLeft className="h-6 w-6" />
+                  </button>
+                  <button
+                    onClick={goToNext}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Próxima foto"
+                  >
+                    <ChevronRight className="h-6 w-6" />
+                  </button>
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
+                    {selectedImageIndex + 1} / {vehicle.images.length}
+                  </div>
+                </>
+              )}
             </div>
             {vehicle.images.length > 1 && (
-              <div className="grid grid-cols-4 gap-2">
-                {vehicle.images.slice(0, 4).map((img, i) => (
-                  <div key={img.id} className="aspect-square rounded-lg overflow-hidden bg-public-muted">
+              <div className="grid grid-cols-5 gap-2">
+                {vehicle.images.map((img, i) => (
+                  <button
+                    key={img.id}
+                    onClick={() => setSelectedImageIndex(i)}
+                    className={`aspect-square rounded-lg overflow-hidden bg-public-muted ring-2 transition-all ${
+                      i === selectedImageIndex ? 'ring-public-primary' : 'ring-transparent hover:ring-public-primary/50'
+                    }`}
+                  >
                     <img src={img.image_url} alt="" className="w-full h-full object-cover" />
-                  </div>
+                  </button>
                 ))}
               </div>
             )}

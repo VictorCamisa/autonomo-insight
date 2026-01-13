@@ -82,7 +82,7 @@ export function VehicleDocuments({ vehicleId, isManager = false }: VehicleDocume
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as VehicleDocument[];
+      return (data as unknown) as VehicleDocument[];
     },
   });
 

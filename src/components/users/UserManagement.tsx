@@ -28,6 +28,7 @@ import {
   XCircle,
   Loader2,
   RefreshCw,
+  Pencil,
 } from 'lucide-react';
 import { UserFormDialog } from './UserFormDialog';
 import { UserActivityDialog } from './UserActivityDialog';
@@ -180,6 +181,10 @@ export function UserManagement() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setEditingUser(user)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setActivityUser(user)}>
                               <History className="h-4 w-4 mr-2" />
                               Ver Histórico

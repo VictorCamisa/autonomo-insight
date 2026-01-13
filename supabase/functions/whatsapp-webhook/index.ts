@@ -124,14 +124,41 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
       leadId = await createLeadWithRoundRobin(supabase, phone, pushName || 'WhatsApp', origin);
       console.log('Created lead:', leadId);
     } else {
-      // Update existing lead's last contact
-      console.log('Updating existing lead:', leadId);
-      await supabase
+      // Check if this message reveals campaign origin (customer might mention ad later)
+      const { data: existingLead } = await supabase
         .from('leads')
-        .update({ 
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', leadId);
+        .select('source')
+        .eq('id', leadId)
+        .single();
+      
+      // Only update if current source is 'whatsapp' (organic) and message indicates campaign
+      if (existingLead?.source === 'whatsapp') {
+        const origin = await detectLeadOrigin(supabase, content);
+        if (origin.source !== 'whatsapp') {
+          console.log('[Lead Origin] Updating existing lead source from whatsapp to:', origin.source);
+          await supabase
+            .from('leads')
+            .update({ 
+              source: origin.source,
+              meta_campaign_id: origin.meta_campaign_id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', leadId);
+        } else {
+          // Just update timestamp
+          await supabase
+            .from('leads')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', leadId);
+        }
+      } else {
+        // Update existing lead's last contact
+        console.log('Updating existing lead:', leadId);
+        await supabase
+          .from('leads')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', leadId);
+      }
     }
 
     // Find contact by phone

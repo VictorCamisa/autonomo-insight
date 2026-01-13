@@ -385,9 +385,13 @@ serve(async (req) => {
       );
     }
 
-    if (!agent.api_key_encrypted) {
+    // Use agent's API key or fall back to environment variable
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    const apiKey = agent.api_key_encrypted || (agent.llm_provider === 'openai' ? openaiKey : null);
+    
+    if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: 'Agent API key not configured' }),
+        JSON.stringify({ error: 'API key not configured. Set OPENAI_API_KEY or configure in agent settings.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -436,9 +440,9 @@ serve(async (req) => {
     let result: { content: string; toolCalls?: any[] };
     
     if (agent.llm_provider === 'openai') {
-      result = await callOpenAI(agent.api_key_encrypted, agent.llm_model, messages, agentTools);
+      result = await callOpenAI(apiKey, agent.llm_model, messages, agentTools);
     } else if (agent.llm_provider === 'google') {
-      result = await callGoogle(agent.api_key_encrypted, agent.llm_model, messages, agentTools);
+      result = await callGoogle(apiKey, agent.llm_model, messages, agentTools);
     } else {
       throw new Error(`Unsupported provider: ${agent.llm_provider}`);
     }
@@ -457,7 +461,7 @@ serve(async (req) => {
         
         // Get final response incorporating tool results
         if (agent.llm_provider === 'openai') {
-          const followUp = await callOpenAI(agent.api_key_encrypted, agent.llm_model, messages, agentTools);
+          const followUp = await callOpenAI(apiKey, agent.llm_model, messages, agentTools);
           finalResponse = followUp.content;
         } else {
           // For Google, append tool result to response

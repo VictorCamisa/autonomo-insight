@@ -372,6 +372,9 @@ async function processWithAIAgent(
   messageId: string,
   isAudio: boolean = false
 ) {
+  // Track if we should respond with audio
+  let shouldRespondWithAudio = false;
+  
   // Check if content is audio placeholder - try to transcribe
   let actualMessage = messageContent;
   
@@ -380,6 +383,7 @@ async function processWithAIAgent(
     const transcription = await transcribeWhatsAppAudio(instanceName, messageId);
     if (transcription) {
       actualMessage = transcription;
+      shouldRespondWithAudio = true; // Respond with audio if client sent audio
       console.log('[AI Agent] Transcribed audio to:', actualMessage);
     } else {
       console.log('[AI Agent] Transcription failed, using placeholder');
@@ -659,54 +663,35 @@ Bonito né? Quer agendar visita?"
 
     const targetJid = remoteJid || `${phone}@s.whatsapp.net`;
 
-    // ===== SEND PHOTOS FIRST =====
+    // ===== SEND TEXT RESPONSE FIRST (before photos) =====
+    if (cleanResponse) {
+      // Check if we should respond with audio (client sent audio)
+      if (shouldRespondWithAudio && agent.enable_voice && agent.elevenlabs_api_key) {
+        console.log('[AI Agent] Generating audio response via ElevenLabs...');
+        const audioSent = await sendWhatsAppAudioResponse(
+          instanceName, 
+          targetJid, 
+          cleanResponse, 
+          agent.elevenlabs_api_key,
+          agent.voice_id || 'nPczCjzI2devNBz1zQrb' // Default: Brian (Portuguese-friendly voice)
+        );
+        
+        if (!audioSent) {
+          // Fallback to text if audio fails
+          console.log('[AI Agent] Audio failed, falling back to text');
+          await sendTextInChunks(instanceName, targetJid, cleanResponse);
+        }
+      } else {
+        // Send as text messages
+        await sendTextInChunks(instanceName, targetJid, cleanResponse);
+      }
+    }
+
+    // ===== SEND PHOTOS AFTER TEXT =====
     for (const photoUrl of extractedPhotos) {
       console.log('[AI Agent] Sending photo:', photoUrl);
       await sendWhatsAppImage(instanceName, targetJid, photoUrl);
       await new Promise(resolve => setTimeout(resolve, 800));
-    }
-
-    // ===== SEND TEXT RESPONSE IN MULTIPLE MESSAGES =====
-    if (cleanResponse) {
-      // Split response into multiple messages by paragraphs
-      const paragraphs = cleanResponse
-        .split(/\n\n+/)
-        .map((p: string) => p.trim())
-        .filter((p: string) => p.length > 0);
-      
-      // If there are multiple paragraphs, send each as separate message
-      if (paragraphs.length > 1) {
-        console.log('[AI Agent] Sending', paragraphs.length, 'separate messages');
-        for (const paragraph of paragraphs) {
-          await sendWhatsAppMessage(instanceName, targetJid, paragraph);
-          await new Promise(resolve => setTimeout(resolve, 600));
-        }
-      } else {
-        // Single paragraph - check if it's too long (>300 chars) and split by sentences
-        if (cleanResponse.length > 300) {
-          const sentences = cleanResponse.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim());
-          const chunks: string[] = [];
-          let currentChunk = '';
-          
-          for (const sentence of sentences) {
-            if (currentChunk.length + sentence.length > 250) {
-              if (currentChunk) chunks.push(currentChunk.trim());
-              currentChunk = sentence;
-            } else {
-              currentChunk += (currentChunk ? ' ' : '') + sentence;
-            }
-          }
-          if (currentChunk) chunks.push(currentChunk.trim());
-          
-          console.log('[AI Agent] Split long message into', chunks.length, 'chunks');
-          for (const chunk of chunks) {
-            await sendWhatsAppMessage(instanceName, targetJid, chunk);
-            await new Promise(resolve => setTimeout(resolve, 600));
-          }
-        } else {
-          await sendWhatsAppMessage(instanceName, targetJid, cleanResponse);
-        }
-      }
     }
 
     // Get instance for saving message
@@ -851,6 +836,132 @@ async function sendWhatsAppMessage(instanceName: string, remoteJid: string, mess
     return true;
   } catch (error) {
     console.error('Error sending WhatsApp message:', error);
+    return false;
+  }
+}
+
+// Send text in chunks (multiple messages)
+async function sendTextInChunks(instanceName: string, targetJid: string, text: string): Promise<void> {
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map((p: string) => p.trim())
+    .filter((p: string) => p.length > 0);
+  
+  if (paragraphs.length > 1) {
+    console.log('[AI Agent] Sending', paragraphs.length, 'separate messages');
+    for (const paragraph of paragraphs) {
+      await sendWhatsAppMessage(instanceName, targetJid, paragraph);
+      await new Promise(resolve => setTimeout(resolve, 600));
+    }
+  } else if (text.length > 300) {
+    const sentences = text.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim());
+    const chunks: string[] = [];
+    let currentChunk = '';
+    
+    for (const sentence of sentences) {
+      if (currentChunk.length + sentence.length > 250) {
+        if (currentChunk) chunks.push(currentChunk.trim());
+        currentChunk = sentence;
+      } else {
+        currentChunk += (currentChunk ? ' ' : '') + sentence;
+      }
+    }
+    if (currentChunk) chunks.push(currentChunk.trim());
+    
+    console.log('[AI Agent] Split long message into', chunks.length, 'chunks');
+    for (const chunk of chunks) {
+      await sendWhatsAppMessage(instanceName, targetJid, chunk);
+      await new Promise(resolve => setTimeout(resolve, 600));
+    }
+  } else {
+    await sendWhatsAppMessage(instanceName, targetJid, text);
+  }
+}
+
+// Generate TTS with ElevenLabs and send audio via WhatsApp
+async function sendWhatsAppAudioResponse(
+  instanceName: string,
+  remoteJid: string,
+  text: string,
+  elevenLabsApiKey: string,
+  voiceId: string
+): Promise<boolean> {
+  const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+  const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+
+  if (!evolutionUrl || !evolutionApiKey) {
+    console.error('[TTS] Evolution API not configured');
+    return false;
+  }
+
+  try {
+    console.log('[TTS] Generating audio with ElevenLabs, voice:', voiceId);
+    
+    // Call ElevenLabs TTS API
+    const ttsResponse = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': elevenLabsApiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.3,
+          },
+        }),
+      }
+    );
+
+    if (!ttsResponse.ok) {
+      const error = await ttsResponse.text();
+      console.error('[TTS] ElevenLabs API error:', error);
+      return false;
+    }
+
+    const audioBuffer = await ttsResponse.arrayBuffer();
+    console.log('[TTS] Audio generated, size:', audioBuffer.byteLength);
+
+    // Convert to base64 for Evolution API
+    const uint8Array = new Uint8Array(audioBuffer);
+    let binary = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    const base64Audio = btoa(binary);
+    
+    console.log('[TTS] Sending audio via Evolution API...');
+    
+    // Send audio via Evolution API
+    const response = await fetch(`${evolutionUrl}/message/sendMedia/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': evolutionApiKey,
+      },
+      body: JSON.stringify({
+        number: remoteJid,
+        mediatype: 'audio',
+        media: `data:audio/mpeg;base64,${base64Audio}`,
+        mimetype: 'audio/mpeg',
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('[TTS] Error sending WhatsApp audio:', error);
+      return false;
+    }
+
+    console.log('[TTS] WhatsApp audio sent successfully');
+    return true;
+  } catch (error) {
+    console.error('[TTS] Error:', error);
     return false;
   }
 }

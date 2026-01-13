@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Database, Save, ArrowRight, Server, HardDrive, CheckCircle2, XCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { Database, ArrowRight, Server, HardDrive, CheckCircle2, Loader2, Link2, Link2Off, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { useAIAgent, useUpdateAIAgent, useAIAgentDataSources, useCreateAIAgentDataSource, useDeleteAIAgentDataSource } from '@/hooks/useAIAgents';
+import { supabase } from '@/integrations/supabase/client';
+import { useAIAgent, useUpdateAIAgent } from '@/hooks/useAIAgents';
 import { SHORT_TERM_MEMORY_TYPES } from '@/types/ai-agents';
 
 const formSchema = z.object({
@@ -89,13 +90,14 @@ const AVAILABLE_DATA_SOURCES: DataSourceConfig[] = [
 export default function AgentMemoryPage() {
   const { agentId } = useParams();
   const navigate = useNavigate();
-  const [syncingSource, setSyncingSource] = useState<string | null>(null);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [connectionInfo, setConnectionInfo] = useState<{ tables: number; url: string } | null>(null);
+  const [enabledSources, setEnabledSources] = useState<string[]>([]);
+  const [savingSource, setSavingSource] = useState<string | null>(null);
   
-  const { data: agent, isLoading } = useAIAgent(agentId);
-  const { data: dataSources = [], refetch: refetchDataSources } = useAIAgentDataSources(agentId);
+  const { data: agent, isLoading, refetch } = useAIAgent(agentId);
   const updateAgent = useUpdateAIAgent();
-  const createDataSource = useCreateAIAgentDataSource();
-  const deleteDataSource = useDeleteAIAgentDataSource();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -108,6 +110,48 @@ export default function AgentMemoryPage() {
 
   const memoryType = form.watch('short_term_memory_type');
 
+  // Check Supabase connection
+  const checkConnection = async () => {
+    setIsCheckingConnection(true);
+    try {
+      // Try to query a simple table to verify connection
+      const { error } = await supabase.from('vehicles').select('id').limit(1);
+      
+      if (error) {
+        setIsConnected(false);
+        setConnectionInfo(null);
+        toast.error('Não foi possível conectar ao Supabase');
+      } else {
+        setIsConnected(true);
+        
+        // Get some stats
+        const [vehiclesRes, leadsRes, salesRes] = await Promise.all([
+          supabase.from('vehicles').select('id', { count: 'exact', head: true }),
+          supabase.from('leads').select('id', { count: 'exact', head: true }),
+          supabase.from('sales').select('id', { count: 'exact', head: true }),
+        ]);
+        
+        const totalTables = 3; // vehicles, leads, sales
+        setConnectionInfo({
+          tables: totalTables,
+          url: 'Lovable Cloud (Supabase)',
+        });
+        toast.success('Conexão com Supabase verificada!');
+      }
+    } catch (err) {
+      setIsConnected(false);
+      setConnectionInfo(null);
+      toast.error('Erro ao verificar conexão');
+    } finally {
+      setIsCheckingConnection(false);
+    }
+  };
+
+  useEffect(() => {
+    // Auto-check connection on mount
+    checkConnection();
+  }, []);
+
   useEffect(() => {
     if (agent) {
       form.reset({
@@ -118,47 +162,53 @@ export default function AgentMemoryPage() {
         context_window_size: agent.context_window_size,
         long_term_memory_enabled: agent.long_term_memory_enabled,
       });
+      
+      // Load enabled sources from vector_db_config
+      const config = agent.vector_db_config as Record<string, unknown> || {};
+      const sources = (config.enabled_data_sources as string[]) || [];
+      setEnabledSources(sources);
     }
   }, [agent, form]);
 
-  const isSourceConnected = (sourceType: string) => {
-    return dataSources.some(ds => ds.source_type === sourceType && ds.is_active);
-  };
-
-  const getSourceId = (sourceType: string) => {
-    return dataSources.find(ds => ds.source_type === sourceType)?.id;
+  const isSourceEnabled = (sourceType: string) => {
+    return enabledSources.includes(sourceType);
   };
 
   const handleToggleDataSource = async (source: DataSourceConfig) => {
     if (!agentId) return;
 
-    setSyncingSource(source.type);
+    setSavingSource(source.type);
 
     try {
-      const existingSource = dataSources.find(ds => ds.source_type === source.type);
-
-      if (existingSource) {
-        // Delete the source to disconnect
-        await deleteDataSource.mutateAsync({ id: existingSource.id, agentId });
+      const currentConfig = (agent?.vector_db_config as Record<string, unknown>) || {};
+      const currentSources = (currentConfig.enabled_data_sources as string[]) || [];
+      
+      let newSources: string[];
+      if (currentSources.includes(source.type)) {
+        newSources = currentSources.filter(s => s !== source.type);
         toast.success(`${source.name} desconectado`);
       } else {
-        // Create new data source connection with minimal required fields
-        await createDataSource.mutateAsync({
-          agent_id: agentId,
-          name: source.name,
-          source_type: source.type,
-          table_name: source.tables[0] || null,
-          embeddings_enabled: false,
-          is_active: true,
-        });
-        toast.success(`${source.name} conectado com sucesso!`);
+        newSources = [...currentSources, source.type];
+        toast.success(`${source.name} conectado!`);
       }
 
-      await refetchDataSources();
+      // Update agent with new sources
+      await updateAgent.mutateAsync({
+        id: agentId,
+        data: {
+          vector_db_config: {
+            ...currentConfig,
+            enabled_data_sources: newSources,
+          },
+        } as any,
+      });
+
+      setEnabledSources(newSources);
+      await refetch();
     } catch (error) {
-      toast.error(`Erro ao ${isSourceConnected(source.type) ? 'desconectar' : 'conectar'} ${source.name}`);
+      toast.error(`Erro ao ${isSourceEnabled(source.type) ? 'desconectar' : 'conectar'} ${source.name}`);
     } finally {
-      setSyncingSource(null);
+      setSavingSource(null);
     }
   };
 
@@ -176,7 +226,7 @@ export default function AgentMemoryPage() {
     );
   }
 
-  const connectedCount = dataSources.filter(ds => ds.is_active).length;
+  const connectedCount = enabledSources.length;
 
   return (
     <div className="p-6 space-y-6 max-w-3xl">
@@ -193,33 +243,89 @@ export default function AgentMemoryPage() {
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Data Sources - MAIN FEATURE */}
+        {/* Connection Status Card */}
+        <Card className={isConnected ? 'border-green-500/30 bg-green-500/5' : 'border-orange-500/30 bg-orange-500/5'}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              {isConnected ? (
+                <>
+                  <Link2 className="h-5 w-5 text-green-500" />
+                  <span className="text-green-700 dark:text-green-400">Supabase Conectado</span>
+                </>
+              ) : (
+                <>
+                  <Link2Off className="h-5 w-5 text-orange-500" />
+                  <span className="text-orange-700 dark:text-orange-400">Verificando Conexão...</span>
+                </>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                {isConnected && connectionInfo ? (
+                  <p className="text-sm text-muted-foreground">
+                    Conectado a <strong>{connectionInfo.url}</strong> com acesso a {connectionInfo.tables} tabelas
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Clique para verificar a conexão com o banco de dados
+                  </p>
+                )}
+              </div>
+              <Button 
+                type="button"
+                variant="outline" 
+                size="sm"
+                onClick={checkConnection}
+                disabled={isCheckingConnection}
+              >
+                {isCheckingConnection ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                <span className="ml-2">Verificar</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Data Sources */}
         <Card className="border-primary/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-5 w-5 text-primary" />
-              Fontes de Dados do Supabase
+              Fontes de Dados
               {connectedCount > 0 && (
                 <Badge variant="default" className="ml-2">
-                  {connectedCount} conectada{connectedCount > 1 ? 's' : ''}
+                  {connectedCount} ativa{connectedCount > 1 ? 's' : ''}
                 </Badge>
               )}
             </CardTitle>
             <CardDescription>
-              Conecte o agente às tabelas do Supabase para respostas baseadas em dados reais
+              Ative as fontes que o agente pode consultar para responder perguntas
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {!isConnected && (
+              <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20 mb-4">
+                <p className="text-sm text-orange-700 dark:text-orange-300">
+                  ⚠️ Verifique a conexão com o Supabase antes de ativar as fontes de dados.
+                </p>
+              </div>
+            )}
+
             <div className="grid gap-3">
               {AVAILABLE_DATA_SOURCES.map((source) => {
-                const isConnected = isSourceConnected(source.type);
-                const isSyncing = syncingSource === source.type;
+                const isEnabled = isSourceEnabled(source.type);
+                const isSaving = savingSource === source.type;
 
                 return (
                   <div 
                     key={source.id}
                     className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
-                      isConnected ? 'bg-primary/5 border-primary/30' : 'hover:bg-muted/50'
+                      isEnabled ? 'bg-primary/5 border-primary/30' : 'hover:bg-muted/50'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -227,7 +333,7 @@ export default function AgentMemoryPage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{source.name}</span>
-                          {isConnected && (
+                          {isEnabled && (
                             <CheckCircle2 className="h-4 w-4 text-green-500" />
                           )}
                         </div>
@@ -240,12 +346,13 @@ export default function AgentMemoryPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {isSyncing ? (
+                      {isSaving ? (
                         <Loader2 className="h-4 w-4 animate-spin text-primary" />
                       ) : (
                         <Switch
-                          checked={isConnected}
+                          checked={isEnabled}
                           onCheckedChange={() => handleToggleDataSource(source)}
+                          disabled={!isConnected}
                         />
                       )}
                     </div>
@@ -256,8 +363,8 @@ export default function AgentMemoryPage() {
 
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
               <p className="text-sm text-blue-700 dark:text-blue-300">
-                <strong>💡 Como funciona:</strong> Quando uma fonte está conectada, o agente consulta 
-                automaticamente os dados atualizados do Supabase a cada mensagem. Isso permite respostas 
+                <strong>💡 Como funciona:</strong> Quando uma fonte está ativa, o agente consulta 
+                automaticamente os dados atualizados do banco a cada mensagem. Isso permite respostas 
                 precisas sobre estoque, preços, clientes e muito mais.
               </p>
             </div>

@@ -267,16 +267,27 @@ Regras importantes:
 - Colete dados de contato de forma natural na conversa`;
 
     // Ajuste automático: trocar Léo por Gabi e ajustar tom feminino
-    const defaultSystemPrompt = rawSystemPrompt
+    let adjustedPrompt = rawSystemPrompt
       .replace(/\bLéo\b/gi, 'Gabi')
       .replace(/\bLeo\b/gi, 'Gabi')
-      .replace(/Meu nome é Gabi/gi, 'Meu nome é Gabi')
       .replace(/Você é o Gabi/gi, 'Você é a Gabi')
       .replace(/o primeiro contato/gi, 'a primeira contato')
       .replace(/um especialista de produto/gi, 'uma especialista de produto')
       .replace(/gente boa, amigável/gi, 'gente boa, simpática')
       .replace(/um amigo que entende/gi, 'uma amiga que entende')
-      .replace(/Sou um assistente/gi, 'Sou uma assistente');
+      .replace(/Sou um assistente/gi, 'Sou uma assistente')
+      .replace(/Meu nome é Léo/gi, 'Meu nome é Gabi')
+      .replace(/Meu nome é Leo/gi, 'Meu nome é Gabi');
+
+    // Adiciona instrução explícita de identidade feminina no início
+    const femaleIdentityInstruction = `
+=== IDENTIDADE OBRIGATÓRIA ===
+Você é a GABI (mulher). NUNCA se apresente como Léo ou qualquer outro nome masculino.
+Sempre use linguagem FEMININA: "obrigada", "animada", "feliz", "empolgada".
+Quando se apresentar, diga: "Meu nome é Gabi" ou "Sou a Gabi".
+
+`;
+    const defaultSystemPrompt = femaleIdentityInstruction + adjustedPrompt;
 
     // Instruções especiais para fotos
     const photoInstructions = `

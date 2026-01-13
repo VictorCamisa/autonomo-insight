@@ -242,10 +242,20 @@ export function useCreateAIAgentDataSource() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: AIAgentDataSourceFormData) => {
+    mutationFn: async (data: Partial<AIAgentDataSourceFormData> & { agent_id: string; name: string; source_type: string }) => {
+      // Only include fields that exist in the database
+      const insertData: Record<string, unknown> = {
+        agent_id: data.agent_id,
+        name: data.name,
+        source_type: data.source_type,
+        table_name: data.table_name || null,
+        embeddings_enabled: data.embeddings_enabled ?? false,
+        is_active: data.is_active ?? true,
+      };
+
       const { data: source, error } = await (supabase as any)
         .from('ai_agent_data_sources')
-        .insert(data)
+        .insert(insertData)
         .select()
         .single();
 

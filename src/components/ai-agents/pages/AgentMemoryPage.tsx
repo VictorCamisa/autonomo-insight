@@ -142,17 +142,13 @@ export default function AgentMemoryPage() {
         await deleteDataSource.mutateAsync({ id: existingSource.id, agentId });
         toast.success(`${source.name} desconectado`);
       } else {
-        // Create new data source connection
+        // Create new data source connection with minimal required fields
         await createDataSource.mutateAsync({
           agent_id: agentId,
           name: source.name,
           source_type: source.type,
-          connection_config: { tables: source.tables },
           table_name: source.tables[0] || null,
           embeddings_enabled: false,
-          text_column: null,
-          embedding_column: null,
-          embedding_model: null,
           is_active: true,
         });
         toast.success(`${source.name} conectado com sucesso!`);

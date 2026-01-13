@@ -194,7 +194,7 @@ export interface AIAgentDataSource {
   agent_id: string;
   name: string;
   source_type: string;
-  connection_config: Record<string, unknown>;
+  connection_config?: Record<string, unknown> | null;
   table_name: string | null;
   embeddings_enabled: boolean;
   text_column: string | null;

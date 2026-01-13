@@ -372,10 +372,10 @@ IMPORTANTE: Use APENAS URLs de fotos que existem no campo "todas_fotos" do veíc
     
     console.log('[ai-agent-chat] Extracted images:', extractedImages.length);
 
-    // Generate voice audio if enabled and user sent audio message
+    // Generate voice audio if enabled (always generate when voice is enabled)
     let audioContent: string | null = null;
-    if (agentConfig?.enable_voice && agentConfig?.voice_id && is_audio_message) {
-      console.log('[ai-agent-chat] Generating voice response...');
+    if (agentConfig?.enable_voice && agentConfig?.voice_id) {
+      console.log('[ai-agent-chat] Generating voice response with voice:', agentConfig.voice_id);
       audioContent = await generateVoiceAudio(cleanContent, agentConfig.voice_id);
       console.log('[ai-agent-chat] Voice audio generated:', audioContent ? 'success' : 'failed');
     }

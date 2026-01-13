@@ -248,10 +248,10 @@ async function processWithAIAgent(
   contactId: string | null,
   remoteJid: string | null
 ) {
-  // Check if content is just media placeholder, skip AI processing
-  if (messageContent === '[Mídia]') {
-    console.log('Skipping AI processing for media message');
-    return;
+  // Check if content is just media placeholder - treat as audio request
+  const isAudioMessage = messageContent === '[Mídia]';
+  if (isAudioMessage) {
+    console.log('Media message detected - treating as audio, will respond with audio');
   }
 
   // Find AI agent linked to this instance
@@ -270,10 +270,7 @@ async function processWithAIAgent(
 
   console.log('Found AI agent:', agent.id, agent.name);
 
-  // Note: Human takeover check is done after conversation is retrieved
-  // since the table uses conversation_id
-
-  // Get or create conversation first (needed for human takeover check)
+  // Get or create conversation
   const sessionId = `whatsapp_${phone}_${new Date().toISOString().split('T')[0]}`;
   
   let { data: conversation } = await supabase
@@ -311,7 +308,7 @@ async function processWithAIAgent(
     return;
   }
 
-  // Check if human takeover is active for this conversation
+  // Check if human takeover is active
   const { data: takeover } = await supabase
     .from('ai_agent_human_takeover')
     .select('id')
@@ -320,8 +317,7 @@ async function processWithAIAgent(
     .single();
 
   if (takeover) {
-    console.log('Human takeover active for conversation:', conversation.id, '- skipping AI response');
-    // Still save the message for the human to see
+    console.log('Human takeover active - skipping AI response');
     await supabase.from('ai_agent_messages').insert({
       conversation_id: conversation.id,
       role: 'user',
@@ -330,7 +326,7 @@ async function processWithAIAgent(
     return;
   }
 
-  // Check for transfer keywords if enabled
+  // Check for transfer keywords
   if (agent.transfer_to_human_enabled && agent.transfer_keywords?.length > 0) {
     const lowerContent = messageContent.toLowerCase();
     const shouldTransfer = agent.transfer_keywords.some((keyword: string) => 
@@ -339,21 +335,17 @@ async function processWithAIAgent(
 
     if (shouldTransfer) {
       console.log('Transfer keyword detected, creating human takeover');
-      
-      // Create human takeover with correct schema
       await supabase.from('ai_agent_human_takeover').insert({
         conversation_id: conversation.id,
         reason: `Usuário solicitou transferência: "${messageContent}"`,
       });
 
-      // Send transfer message
       await sendWhatsAppMessage(
         instanceName,
         remoteJid || `${phone}@s.whatsapp.net`,
         'Entendi! Vou transferir você para um de nossos atendentes. Em breve alguém entrará em contato. 🙂'
       );
 
-      // Notify assigned salesperson
       if (leadId) {
         const { data: lead } = await supabase
           .from('leads')
@@ -371,16 +363,15 @@ async function processWithAIAgent(
           });
         }
       }
-
       return;
     }
   }
 
-  // Save user message to conversation
+  // Save user message
   await supabase.from('ai_agent_messages').insert({
     conversation_id: conversation.id,
     role: 'user',
-    content: messageContent,
+    content: isAudioMessage ? '[Mensagem de áudio recebida]' : messageContent,
   });
 
   // Get conversation history
@@ -396,51 +387,111 @@ async function processWithAIAgent(
     content: m.content,
   })) || [{ role: 'user', content: messageContent }];
 
-  // Build system prompt with context
-  let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
-  
-  // Add vehicle inventory context if applicable
-  if (agent.objective === 'qualify_leads' || agent.objective === 'schedule_test_drive') {
-    const { data: vehicles, error: vehiclesError } = await supabase
-      .from('vehicles')
-      .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes')
-      .eq('status', 'disponivel')
-      .limit(50);
+  // ===== FETCH VEHICLES WITH PHOTOS =====
+  const { data: vehicles, error: vehiclesError } = await supabase
+    .from('vehicles')
+    .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+    .eq('status', 'disponivel')
+    .limit(50);
 
-    if (vehiclesError) {
-      console.error('Error fetching vehicles:', vehiclesError);
-    }
-
-    if (vehicles?.length) {
-      systemPrompt += '\n\n=== ESTOQUE DISPONÍVEL DA LOJA ===\n';
-      systemPrompt += `Total: ${vehicles.length} veículos\n\n`;
-      vehicles.forEach((v: any, i: number) => {
-        const preco = v.sale_price ? `R$ ${Number(v.sale_price).toLocaleString('pt-BR')}` : 'Consultar';
-        const km = v.km ? `${Number(v.km).toLocaleString('pt-BR')} km` : 'N/A';
-        const ano = v.year_model || v.year_fabrication || 'N/A';
-        const versao = v.version ? ` ${v.version}` : '';
-        systemPrompt += `${i + 1}. ${v.brand} ${v.model}${versao} ${ano}\n`;
-        systemPrompt += `   Preco: ${preco}\n`;
-        systemPrompt += `   KM: ${km}\n`;
-        systemPrompt += `   Cor: ${v.color || 'N/A'}\n`;
-        systemPrompt += `   Cambio: ${v.transmission || 'N/A'} | Combustivel: ${v.fuel_type || 'N/A'}\n`;
-        if (v.notes) systemPrompt += `   📝 Obs: ${v.notes}\n`;
-        systemPrompt += '\n';
-      });
-      systemPrompt += '=== FIM DO ESTOQUE ===\n';
-    } else {
-      console.log('No vehicles found with status disponivel');
-    }
+  if (vehiclesError) {
+    console.error('Error fetching vehicles:', vehiclesError);
   }
 
-  // Call AI to generate response
+  console.log('[AI Agent] Fetched', vehicles?.length || 0, 'vehicles with images');
+
+  // Build system prompt with vehicles INCLUDING PHOTOS
+  let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
+  
+  // CRITICAL: Add photo instructions
+  systemPrompt += `
+
+=== REGRAS OBRIGATÓRIAS PARA FOTOS ===
+Quando o cliente pedir foto de um veículo, você DEVE:
+1. Encontrar o veículo no estoque
+2. Se tiver foto disponível, OBRIGATORIAMENTE responder com a tag:
+   [ENVIAR_FOTO: URL_COMPLETA]
+
+Por exemplo, se pedirem foto do Polo:
+"Claro! Aqui está a foto do Polo:
+
+[ENVIAR_FOTO: https://exemplo.com/foto.jpg]
+
+O que achou? Posso te ajudar com mais informações!"
+
+IMPORTANTE: Use APENAS URLs que existem no campo "fotos" do veículo. A primeira foto é a principal.
+=== FIM DAS REGRAS DE FOTOS ===
+`;
+
+  if (vehicles?.length) {
+    systemPrompt += '\n\n=== ESTOQUE DISPONÍVEL (COM FOTOS) ===\n';
+    systemPrompt += `Total: ${vehicles.length} veículos\n\n`;
+    
+    vehicles.forEach((v: any, i: number) => {
+      const preco = v.sale_price ? `R$ ${Number(v.sale_price).toLocaleString('pt-BR')}` : 'Consultar';
+      const km = v.km ? `${Number(v.km).toLocaleString('pt-BR')} km` : 'N/A';
+      const ano = v.year_model || v.year_fabrication || 'N/A';
+      const versao = v.version ? ` ${v.version}` : '';
+      const fotos = v.images && v.images.length > 0 ? v.images : [];
+      
+      systemPrompt += `${i + 1}. ${v.brand} ${v.model}${versao} ${ano}\n`;
+      systemPrompt += `   Preco: ${preco}\n`;
+      systemPrompt += `   KM: ${km} | Cor: ${v.color || 'N/A'}\n`;
+      systemPrompt += `   Cambio: ${v.transmission || 'N/A'} | Combustivel: ${v.fuel_type || 'N/A'}\n`;
+      if (fotos.length > 0) {
+        systemPrompt += `   📸 FOTOS DISPONÍVEIS: ${fotos.length} fotos\n`;
+        systemPrompt += `   foto_principal: ${fotos[0]}\n`;
+        if (fotos.length > 1) {
+          systemPrompt += `   outras_fotos: ${fotos.slice(1, 3).join(', ')}\n`;
+        }
+      } else {
+        systemPrompt += `   ⚠️ SEM FOTOS DISPONÍVEIS\n`;
+      }
+      if (v.notes) systemPrompt += `   📝 Obs: ${v.notes}\n`;
+      systemPrompt += '\n';
+    });
+    systemPrompt += '=== FIM DO ESTOQUE ===\n';
+  }
+
+  // Call AI using Lovable Gateway (preferred)
   try {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     let aiResponse: string | null = null;
 
-    if (agent.llm_provider === 'openai') {
-      aiResponse = await callOpenAI(agent, systemPrompt, messages);
-    } else if (agent.llm_provider === 'google') {
-      aiResponse = await callGemini(agent, systemPrompt, messages);
+    if (LOVABLE_API_KEY) {
+      console.log('[AI Agent] Using Lovable AI Gateway');
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages,
+          ],
+          temperature: agent.temperature || 0.7,
+          max_tokens: agent.max_tokens || 2048,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        aiResponse = data.choices?.[0]?.message?.content || null;
+      } else {
+        console.error('[AI Agent] Lovable Gateway error:', await response.text());
+      }
+    }
+
+    // Fallback to OpenAI/Gemini if Lovable Gateway fails
+    if (!aiResponse) {
+      if (agent.llm_provider === 'openai') {
+        aiResponse = await callOpenAI(agent, systemPrompt, messages);
+      } else if (agent.llm_provider === 'google') {
+        aiResponse = await callGemini(agent, systemPrompt, messages);
+      }
     }
 
     if (!aiResponse) {
@@ -448,20 +499,44 @@ async function processWithAIAgent(
       return;
     }
 
-    console.log('AI Response:', aiResponse.substring(0, 100));
+    console.log('[AI Agent] Response:', aiResponse.substring(0, 200));
+
+    // ===== EXTRACT AND SEND PHOTOS =====
+    const photoRegex = /\[ENVIAR_FOTO:\s*(https?:\/\/[^\]\s]+)\]/gi;
+    const extractedPhotos: string[] = [];
+    let match;
+    while ((match = photoRegex.exec(aiResponse)) !== null) {
+      extractedPhotos.push(match[1].trim());
+    }
+
+    // Remove photo tags from text
+    const cleanResponse = aiResponse.replace(photoRegex, '').trim();
+
+    console.log('[AI Agent] Extracted photos:', extractedPhotos.length, extractedPhotos);
 
     // Save assistant message
     await supabase.from('ai_agent_messages').insert({
       conversation_id: conversation.id,
       role: 'assistant',
-      content: aiResponse,
+      content: cleanResponse,
     });
 
-    // Send response via WhatsApp
     const targetJid = remoteJid || `${phone}@s.whatsapp.net`;
-    await sendWhatsAppMessage(instanceName, targetJid, aiResponse);
 
-    // Save outgoing message record
+    // ===== SEND PHOTOS FIRST =====
+    for (const photoUrl of extractedPhotos) {
+      console.log('[AI Agent] Sending photo:', photoUrl);
+      await sendWhatsAppImage(instanceName, targetJid, photoUrl);
+      // Small delay between messages
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // ===== SEND TEXT RESPONSE =====
+    if (cleanResponse) {
+      await sendWhatsAppMessage(instanceName, targetJid, cleanResponse);
+    }
+
+    // Get instance for saving message
     const { data: instance } = await supabase
       .from('whatsapp_instances')
       .select('id')
@@ -474,8 +549,8 @@ async function processWithAIAgent(
       remote_jid: targetJid,
       message_id: `ai_${Date.now()}`,
       direction: 'outgoing',
-      message_type: 'text',
-      content: aiResponse,
+      message_type: extractedPhotos.length > 0 ? 'image' : 'text',
+      content: cleanResponse,
       status: 'sent',
       lead_id: leadId,
     });
@@ -485,8 +560,6 @@ async function processWithAIAgent(
 
   } catch (error) {
     console.error('Error processing AI agent:', error);
-    
-    // Update error metrics
     await supabase.rpc('increment_agent_errors', { 
       p_agent_id: agent.id,
       p_error_type: 'ai_call_error'
@@ -605,6 +678,47 @@ async function sendWhatsAppMessage(instanceName: string, remoteJid: string, mess
     return true;
   } catch (error) {
     console.error('Error sending WhatsApp message:', error);
+    return false;
+  }
+}
+
+// Send WhatsApp IMAGE via Evolution API
+async function sendWhatsAppImage(instanceName: string, remoteJid: string, imageUrl: string, caption?: string): Promise<boolean> {
+  const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+  const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+
+  if (!evolutionUrl || !evolutionApiKey) {
+    console.error('Evolution API not configured for image');
+    return false;
+  }
+
+  try {
+    console.log('[sendWhatsAppImage] Sending image to:', remoteJid, 'URL:', imageUrl);
+    
+    const response = await fetch(`${evolutionUrl}/message/sendMedia/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': evolutionApiKey,
+      },
+      body: JSON.stringify({
+        number: remoteJid,
+        mediatype: 'image',
+        media: imageUrl,
+        caption: caption || '',
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Error sending WhatsApp image:', error);
+      return false;
+    }
+
+    console.log('WhatsApp image sent successfully');
+    return true;
+  } catch (error) {
+    console.error('Error sending WhatsApp image:', error);
     return false;
   }
 }

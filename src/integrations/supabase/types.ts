@@ -50,6 +50,587 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_agent_conversations: {
+        Row: {
+          agent_id: string
+          channel: string | null
+          created_at: string | null
+          customer_phone: string | null
+          id: string
+          lead_id: string | null
+          metadata: Json | null
+          session_id: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id: string
+          channel?: string | null
+          created_at?: string | null
+          customer_phone?: string | null
+          id?: string
+          lead_id?: string | null
+          metadata?: Json | null
+          session_id: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string
+          channel?: string | null
+          created_at?: string | null
+          customer_phone?: string | null
+          id?: string
+          lead_id?: string | null
+          metadata?: Json | null
+          session_id?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_conversations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_data_sources: {
+        Row: {
+          agent_id: string
+          config: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          name: string
+          source_type: string
+          sync_frequency: string | null
+        }
+        Insert: {
+          agent_id: string
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          name: string
+          source_type: string
+          sync_frequency?: string | null
+        }
+        Update: {
+          agent_id?: string
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          name?: string
+          source_type?: string
+          sync_frequency?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_data_sources_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_guardrails: {
+        Row: {
+          agent_id: string
+          config: Json | null
+          created_at: string | null
+          guardrail_type: string
+          id: string
+          is_active: boolean | null
+          name: string
+          violation_action: string | null
+        }
+        Insert: {
+          agent_id: string
+          config?: Json | null
+          created_at?: string | null
+          guardrail_type: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          violation_action?: string | null
+        }
+        Update: {
+          agent_id?: string
+          config?: Json | null
+          created_at?: string | null
+          guardrail_type?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          violation_action?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_guardrails_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_human_takeover: {
+        Row: {
+          conversation_id: string
+          created_at: string | null
+          handled_by: string | null
+          id: string
+          reason: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string | null
+          handled_by?: string | null
+          id?: string
+          reason?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string | null
+          handled_by?: string | null
+          id?: string
+          reason?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_human_takeover_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_messages: {
+        Row: {
+          audio_url: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string | null
+          id: string
+          latency_ms: number | null
+          role: string
+          thinking: string | null
+          tokens_used: number | null
+          tool_calls: Json | null
+          tool_results: Json | null
+        }
+        Insert: {
+          audio_url?: string | null
+          content?: string | null
+          conversation_id: string
+          created_at?: string | null
+          id?: string
+          latency_ms?: number | null
+          role: string
+          thinking?: string | null
+          tokens_used?: number | null
+          tool_calls?: Json | null
+          tool_results?: Json | null
+        }
+        Update: {
+          audio_url?: string | null
+          content?: string | null
+          conversation_id?: string
+          created_at?: string | null
+          id?: string
+          latency_ms?: number | null
+          role?: string
+          thinking?: string | null
+          tokens_used?: number | null
+          tool_calls?: Json | null
+          tool_results?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_metrics: {
+        Row: {
+          agent_id: string
+          avg_response_time_ms: number | null
+          created_at: string | null
+          date: string
+          failed_tool_calls: number | null
+          human_takeovers: number | null
+          id: string
+          satisfaction_score: number | null
+          successful_tool_calls: number | null
+          total_conversations: number | null
+          total_messages: number | null
+          total_tokens_used: number | null
+        }
+        Insert: {
+          agent_id: string
+          avg_response_time_ms?: number | null
+          created_at?: string | null
+          date: string
+          failed_tool_calls?: number | null
+          human_takeovers?: number | null
+          id?: string
+          satisfaction_score?: number | null
+          successful_tool_calls?: number | null
+          total_conversations?: number | null
+          total_messages?: number | null
+          total_tokens_used?: number | null
+        }
+        Update: {
+          agent_id?: string
+          avg_response_time_ms?: number | null
+          created_at?: string | null
+          date?: string
+          failed_tool_calls?: number | null
+          human_takeovers?: number | null
+          id?: string
+          satisfaction_score?: number | null
+          successful_tool_calls?: number | null
+          total_conversations?: number | null
+          total_messages?: number | null
+          total_tokens_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_metrics_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_notifications: {
+        Row: {
+          agent_id: string
+          channels: string[] | null
+          condition: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          recipients: Json | null
+          threshold: number | null
+        }
+        Insert: {
+          agent_id: string
+          channels?: string[] | null
+          condition: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          recipients?: Json | null
+          threshold?: number | null
+        }
+        Update: {
+          agent_id?: string
+          channels?: string[] | null
+          condition?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          recipients?: Json | null
+          threshold?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_notifications_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_tests: {
+        Row: {
+          agent_id: string
+          created_at: string | null
+          description: string | null
+          expected_behaviors: Json | null
+          id: string
+          last_run_at: string | null
+          last_run_details: Json | null
+          last_run_result: string | null
+          name: string
+          test_messages: Json | null
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string | null
+          description?: string | null
+          expected_behaviors?: Json | null
+          id?: string
+          last_run_at?: string | null
+          last_run_details?: Json | null
+          last_run_result?: string | null
+          name: string
+          test_messages?: Json | null
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string | null
+          description?: string | null
+          expected_behaviors?: Json | null
+          id?: string
+          last_run_at?: string | null
+          last_run_details?: Json | null
+          last_run_result?: string | null
+          name?: string
+          test_messages?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_tests_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_tools: {
+        Row: {
+          agent_id: string
+          auth_config: Json | null
+          auth_method: string | null
+          created_at: string | null
+          description: string | null
+          endpoint_url: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          parameters: Json | null
+          tool_type: string
+        }
+        Insert: {
+          agent_id: string
+          auth_config?: Json | null
+          auth_method?: string | null
+          created_at?: string | null
+          description?: string | null
+          endpoint_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          parameters?: Json | null
+          tool_type: string
+        }
+        Update: {
+          agent_id?: string
+          auth_config?: Json | null
+          auth_method?: string | null
+          created_at?: string | null
+          description?: string | null
+          endpoint_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          parameters?: Json | null
+          tool_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_tools_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_workflows: {
+        Row: {
+          actions: Json | null
+          agent_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          trigger_config: Json | null
+          trigger_type: string
+        }
+        Insert: {
+          actions?: Json | null
+          agent_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          trigger_config?: Json | null
+          trigger_type: string
+        }
+        Update: {
+          actions?: Json | null
+          agent_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          trigger_config?: Json | null
+          trigger_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_workflows_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agents: {
+        Row: {
+          api_endpoint: string | null
+          api_key_encrypted: string | null
+          avatar_url: string | null
+          context_window_size: number | null
+          created_at: string | null
+          created_by: string | null
+          deployment_channels: string[] | null
+          description: string | null
+          elevenlabs_api_key: string | null
+          embed_code: string | null
+          enable_voice: boolean | null
+          id: string
+          llm_model: string | null
+          llm_provider: string | null
+          long_term_memory_enabled: boolean | null
+          max_tokens: number | null
+          name: string
+          objective: string | null
+          redis_host: string | null
+          redis_password: string | null
+          redis_password_encrypted: string | null
+          redis_port: number | null
+          short_term_memory_type: string | null
+          status: string | null
+          system_prompt: string | null
+          temperature: number | null
+          top_p: number | null
+          transfer_keywords: string[] | null
+          transfer_to_human_enabled: boolean | null
+          updated_at: string | null
+          vector_db_config: Json | null
+          vector_db_provider: string | null
+          voice_id: string | null
+          voice_model: string | null
+          webhook_url: string | null
+          whatsapp_auto_reply: boolean | null
+          whatsapp_instance_id: string | null
+          whatsapp_welcome_message: string | null
+        }
+        Insert: {
+          api_endpoint?: string | null
+          api_key_encrypted?: string | null
+          avatar_url?: string | null
+          context_window_size?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          deployment_channels?: string[] | null
+          description?: string | null
+          elevenlabs_api_key?: string | null
+          embed_code?: string | null
+          enable_voice?: boolean | null
+          id?: string
+          llm_model?: string | null
+          llm_provider?: string | null
+          long_term_memory_enabled?: boolean | null
+          max_tokens?: number | null
+          name: string
+          objective?: string | null
+          redis_host?: string | null
+          redis_password?: string | null
+          redis_password_encrypted?: string | null
+          redis_port?: number | null
+          short_term_memory_type?: string | null
+          status?: string | null
+          system_prompt?: string | null
+          temperature?: number | null
+          top_p?: number | null
+          transfer_keywords?: string[] | null
+          transfer_to_human_enabled?: boolean | null
+          updated_at?: string | null
+          vector_db_config?: Json | null
+          vector_db_provider?: string | null
+          voice_id?: string | null
+          voice_model?: string | null
+          webhook_url?: string | null
+          whatsapp_auto_reply?: boolean | null
+          whatsapp_instance_id?: string | null
+          whatsapp_welcome_message?: string | null
+        }
+        Update: {
+          api_endpoint?: string | null
+          api_key_encrypted?: string | null
+          avatar_url?: string | null
+          context_window_size?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          deployment_channels?: string[] | null
+          description?: string | null
+          elevenlabs_api_key?: string | null
+          embed_code?: string | null
+          enable_voice?: boolean | null
+          id?: string
+          llm_model?: string | null
+          llm_provider?: string | null
+          long_term_memory_enabled?: boolean | null
+          max_tokens?: number | null
+          name?: string
+          objective?: string | null
+          redis_host?: string | null
+          redis_password?: string | null
+          redis_password_encrypted?: string | null
+          redis_port?: number | null
+          short_term_memory_type?: string | null
+          status?: string | null
+          system_prompt?: string | null
+          temperature?: number | null
+          top_p?: number | null
+          transfer_keywords?: string[] | null
+          transfer_to_human_enabled?: boolean | null
+          updated_at?: string | null
+          vector_db_config?: Json | null
+          vector_db_provider?: string | null
+          voice_id?: string | null
+          voice_model?: string | null
+          webhook_url?: string | null
+          whatsapp_auto_reply?: boolean | null
+          whatsapp_instance_id?: string | null
+          whatsapp_welcome_message?: string | null
+        }
+        Relationships: []
+      }
       campaign_events: {
         Row: {
           all_day: boolean | null
@@ -2495,6 +3076,57 @@ export type Database = {
           },
         ]
       }
+      vehicle_documents: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          uploaded_by: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          uploaded_by?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          uploaded_by?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_documents_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_dre"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_documents_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_images: {
         Row: {
           created_at: string
@@ -3219,6 +3851,13 @@ export type Database = {
         Returns: string
       }
       get_next_round_robin_salesperson: { Args: never; Returns: string }
+      get_table_columns: {
+        Args: { table_name: string }
+        Returns: {
+          column_name: string
+          data_type: string
+        }[]
+      }
       get_user_permissions: {
         Args: { _user_id: string }
         Returns: {

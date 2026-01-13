@@ -229,6 +229,380 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
       description: `Mensagem recebida via WhatsApp: ${content.substring(0, 200)}`,
     });
   }
+
+  // ===== AI AGENT INTEGRATION =====
+  // Check if there's an active AI agent linked to this WhatsApp instance
+  if (instance?.id) {
+    await processWithAIAgent(supabase, instance.id, instanceName, content, effectivePhone, leadId, contact?.id || null, remoteJidToStore || remoteJid || null);
+  }
+}
+
+// ===== AI AGENT PROCESSING =====
+async function processWithAIAgent(
+  supabase: any,
+  instanceId: string,
+  instanceName: string,
+  messageContent: string,
+  phone: string,
+  leadId: string | null,
+  contactId: string | null,
+  remoteJid: string | null
+) {
+  // Check if content is just media placeholder, skip AI processing
+  if (messageContent === '[Mídia]') {
+    console.log('Skipping AI processing for media message');
+    return;
+  }
+
+  // Find AI agent linked to this instance
+  const { data: agent, error: agentError } = await supabase
+    .from('ai_agents')
+    .select('*')
+    .eq('whatsapp_instance_id', instanceId)
+    .eq('status', 'active')
+    .eq('whatsapp_auto_reply', true)
+    .single();
+
+  if (agentError || !agent) {
+    console.log('No active AI agent found for instance:', instanceId);
+    return;
+  }
+
+  console.log('Found AI agent:', agent.id, agent.name);
+
+  // Check if human takeover is active for this conversation
+  const { data: takeover } = await supabase
+    .from('ai_agent_human_takeovers')
+    .select('id')
+    .eq('phone', phone)
+    .eq('instance_id', instanceId)
+    .is('released_at', null)
+    .single();
+
+  if (takeover) {
+    console.log('Human takeover active for phone:', phone, '- skipping AI response');
+    return;
+  }
+
+  // Check for transfer keywords if enabled
+  if (agent.transfer_to_human_enabled && agent.transfer_keywords?.length > 0) {
+    const lowerContent = messageContent.toLowerCase();
+    const shouldTransfer = agent.transfer_keywords.some((keyword: string) => 
+      lowerContent.includes(keyword.toLowerCase())
+    );
+
+    if (shouldTransfer) {
+      console.log('Transfer keyword detected, creating human takeover');
+      await supabase.from('ai_agent_human_takeovers').insert({
+        phone,
+        instance_id: instanceId,
+        lead_id: leadId,
+        reason: `Usuário solicitou transferência: "${messageContent}"`,
+        taken_over_at: new Date().toISOString(),
+      });
+
+      // Send transfer message
+      await sendWhatsAppMessage(
+        instanceName,
+        remoteJid || `${phone}@s.whatsapp.net`,
+        'Entendi! Vou transferir você para um de nossos atendentes. Em breve alguém entrará em contato. 🙂'
+      );
+
+      // Notify assigned salesperson
+      if (leadId) {
+        const { data: lead } = await supabase
+          .from('leads')
+          .select('assigned_to, name')
+          .eq('id', leadId)
+          .single();
+
+        if (lead?.assigned_to) {
+          await supabase.from('notifications').insert({
+            user_id: lead.assigned_to,
+            type: 'human_takeover',
+            title: 'Transferência solicitada',
+            message: `${lead.name} solicitou falar com um humano`,
+            link: '/whatsapp',
+          });
+        }
+      }
+
+      return;
+    }
+  }
+
+  // Get or create conversation
+  const sessionId = `whatsapp_${phone}_${new Date().toISOString().split('T')[0]}`;
+  
+  let { data: conversation } = await supabase
+    .from('ai_agent_conversations')
+    .select('id')
+    .eq('agent_id', agent.id)
+    .eq('session_id', sessionId)
+    .eq('status', 'active')
+    .single();
+
+  if (!conversation) {
+    const { data: newConv } = await supabase
+      .from('ai_agent_conversations')
+      .insert({
+        agent_id: agent.id,
+        session_id: sessionId,
+        lead_id: leadId,
+        channel: 'whatsapp',
+        status: 'active',
+        started_at: new Date().toISOString(),
+        metadata: { phone, instance_id: instanceId },
+      })
+      .select()
+      .single();
+    conversation = newConv;
+  }
+
+  if (!conversation) {
+    console.error('Failed to create conversation');
+    return;
+  }
+
+  // Save user message to conversation
+  await supabase.from('ai_agent_messages').insert({
+    conversation_id: conversation.id,
+    role: 'user',
+    content: messageContent,
+  });
+
+  // Get conversation history
+  const { data: history } = await supabase
+    .from('ai_agent_messages')
+    .select('role, content')
+    .eq('conversation_id', conversation.id)
+    .order('created_at', { ascending: true })
+    .limit(agent.context_window_size || 10);
+
+  const messages = history?.map((m: any) => ({
+    role: m.role,
+    content: m.content,
+  })) || [{ role: 'user', content: messageContent }];
+
+  // Build system prompt with context
+  let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
+  
+  // Add vehicle inventory context if applicable
+  if (agent.objective === 'qualify_leads' || agent.objective === 'schedule_test_drive') {
+    const { data: vehicles } = await supabase
+      .from('vehicles')
+      .select('brand, model, year, price, mileage, fuel_type, transmission')
+      .eq('status', 'available')
+      .limit(20);
+
+    if (vehicles?.length) {
+      systemPrompt += '\n\n**Veículos disponíveis no estoque:**\n';
+      vehicles.forEach((v: any) => {
+        systemPrompt += `- ${v.brand} ${v.model} ${v.year} | R$ ${v.price?.toLocaleString('pt-BR')} | ${v.mileage?.toLocaleString('pt-BR')} km | ${v.fuel_type} | ${v.transmission}\n`;
+      });
+    }
+  }
+
+  // Call AI to generate response
+  try {
+    let aiResponse: string | null = null;
+
+    if (agent.llm_provider === 'openai') {
+      aiResponse = await callOpenAI(agent, systemPrompt, messages);
+    } else if (agent.llm_provider === 'google') {
+      aiResponse = await callGemini(agent, systemPrompt, messages);
+    }
+
+    if (!aiResponse) {
+      console.error('No response from AI');
+      return;
+    }
+
+    console.log('AI Response:', aiResponse.substring(0, 100));
+
+    // Save assistant message
+    await supabase.from('ai_agent_messages').insert({
+      conversation_id: conversation.id,
+      role: 'assistant',
+      content: aiResponse,
+    });
+
+    // Send response via WhatsApp
+    const targetJid = remoteJid || `${phone}@s.whatsapp.net`;
+    await sendWhatsAppMessage(instanceName, targetJid, aiResponse);
+
+    // Save outgoing message record
+    const { data: instance } = await supabase
+      .from('whatsapp_instances')
+      .select('id')
+      .eq('instance_name', instanceName)
+      .single();
+
+    await supabase.from('whatsapp_messages').insert({
+      instance_id: instance?.id,
+      contact_id: contactId,
+      remote_jid: targetJid,
+      message_id: `ai_${Date.now()}`,
+      direction: 'outgoing',
+      message_type: 'text',
+      content: aiResponse,
+      status: 'sent',
+      lead_id: leadId,
+    });
+
+    // Update metrics
+    await updateAgentMetrics(supabase, agent.id);
+
+  } catch (error) {
+    console.error('Error processing AI agent:', error);
+    
+    // Update error metrics
+    await supabase.rpc('increment_agent_errors', { 
+      p_agent_id: agent.id,
+      p_error_type: 'ai_call_error'
+    }).catch(() => {});
+  }
+}
+
+// Call OpenAI API
+async function callOpenAI(agent: any, systemPrompt: string, messages: any[]): Promise<string | null> {
+  const apiKey = agent.api_key_encrypted || Deno.env.get('OPENAI_API_KEY');
+  
+  if (!apiKey) {
+    console.error('No OpenAI API key configured');
+    return null;
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: agent.llm_model || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages,
+      ],
+      temperature: agent.temperature || 0.7,
+      max_tokens: agent.max_tokens || 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('OpenAI API error:', error);
+    return null;
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || null;
+}
+
+// Call Google Gemini API
+async function callGemini(agent: any, systemPrompt: string, messages: any[]): Promise<string | null> {
+  const apiKey = agent.api_key_encrypted || Deno.env.get('GOOGLE_AI_API_KEY');
+  
+  if (!apiKey) {
+    console.error('No Google AI API key configured');
+    return null;
+  }
+
+  // Convert messages to Gemini format
+  const contents = messages.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  const model = agent.llm_model || 'gemini-2.5-flash';
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents,
+      generationConfig: {
+        temperature: agent.temperature || 0.7,
+        maxOutputTokens: agent.max_tokens || 1024,
+        topP: agent.top_p || 0.9,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Gemini API error:', error);
+    return null;
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+}
+
+// Send WhatsApp message via Evolution API
+async function sendWhatsAppMessage(instanceName: string, remoteJid: string, message: string): Promise<boolean> {
+  const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+  const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+
+  if (!evolutionUrl || !evolutionApiKey) {
+    console.error('Evolution API not configured');
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': evolutionApiKey,
+      },
+      body: JSON.stringify({
+        number: remoteJid,
+        text: message,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Error sending WhatsApp message:', error);
+      return false;
+    }
+
+    console.log('WhatsApp message sent successfully');
+    return true;
+  } catch (error) {
+    console.error('Error sending WhatsApp message:', error);
+    return false;
+  }
+}
+
+// Update agent metrics
+async function updateAgentMetrics(supabase: any, agentId: string) {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Try to increment existing metrics
+  const { data: existing } = await supabase
+    .from('ai_agent_metrics')
+    .select('id, conversations_count')
+    .eq('agent_id', agentId)
+    .eq('date', today)
+    .single();
+
+  if (existing) {
+    await supabase
+      .from('ai_agent_metrics')
+      .update({ conversations_count: (existing.conversations_count || 0) + 1 })
+      .eq('id', existing.id);
+  } else {
+    await supabase.from('ai_agent_metrics').insert({
+      agent_id: agentId,
+      date: today,
+      conversations_count: 1,
+    });
+  }
 }
 
 // Process outgoing messages (sent by us)

@@ -8,13 +8,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useLeads } from '@/hooks/useLeads';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useUsersWithRoles } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
 import { negotiationStatusLabels, pipelineColumns, lossReasonLabels, objectionOptions } from '@/types/negotiations';
 import type { Negotiation, NegotiationStatus, LossReasonType } from '@/types/negotiations';
-import { Calendar, Clock, Lock, User, UserCheck } from 'lucide-react';
+import { Calendar, Clock, Lock, User, UserCheck, AlertCircle, Trash2 } from 'lucide-react';
+import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
 
 const negotiationFormSchema = z.object({
   lead_id: z.string().min(1, 'Selecione um lead'),
@@ -48,7 +50,8 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
   const { data: users = [] } = useUsersWithRoles();
 
   const isManager = role === 'gerente';
-  const isEditing = !!negotiation?.id; // Has an ID = existing negotiation being edited
+  const isEditing = !!negotiation?.id;
+  const storageKey = isEditing ? `negotiation_edit_${negotiation.id}` : 'negotiation_create';
 
   const availableVehicles = vehicles.filter(v => v.status === 'disponivel' || v.id === negotiation?.vehicle_id);
   
@@ -77,10 +80,26 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
     },
   });
 
+  // Persistir formulário
+  const { clearDraft, hasDraft, discardDraft } = useFormPersistence({
+    form,
+    key: storageKey,
+  });
+
+  // Alertar ao sair com alterações não salvas
+  useFormLeaveWarning(form.formState.isDirty);
+
+  // Handler de submit que limpa o rascunho após sucesso
+  const handleSubmit = (data: NegotiationFormValues) => {
+    onSubmit(data);
+    clearDraft();
+  };
+
   const watchStatus = form.watch('status');
   const watchAppointmentDate = form.watch('appointment_date');
   const watchLeadId = form.watch('lead_id');
   const watchVehicleId = form.watch('vehicle_id');
+  const showDraftAlert = hasDraft() && !isEditing;
 
   // Auto-fill salesperson when selecting a lead (only on creation)
   useEffect(() => {
@@ -104,7 +123,26 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        {/* Alerta de rascunho recuperado */}
+        {showDraftAlert && (
+          <Alert className="border-amber-500/50 bg-amber-500/10">
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+            <AlertDescription className="flex items-center justify-between">
+              <span className="text-sm">Rascunho recuperado.</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={discardDraft}
+                className="h-8 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Descartar
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
         <FormField
           control={form.control}
           name="lead_id"

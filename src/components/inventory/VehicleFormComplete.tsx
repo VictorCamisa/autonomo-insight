@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Form,
   FormControl,
@@ -25,7 +26,8 @@ import {
 } from '@/components/ui/select';
 import { vehicleStatusLabels, fuelTypeLabels, transmissionLabels } from '@/types/inventory';
 import type { Vehicle } from '@/types/inventory';
-import { Car, DollarSign, Calculator, FileText, Globe } from 'lucide-react';
+import { Car, DollarSign, Calculator, FileText, Globe, AlertCircle, Trash2 } from 'lucide-react';
+import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
 
 const completeFormSchema = z.object({
   // Dados básicos
@@ -77,6 +79,8 @@ interface VehicleFormCompleteProps {
 
 export function VehicleFormComplete({ vehicle, onSubmit, isLoading }: VehicleFormCompleteProps) {
   const currentYear = new Date().getFullYear();
+  const isEditing = !!vehicle;
+  const storageKey = isEditing ? `vehicle_edit_${vehicle.id}` : 'vehicle_create';
   
   const form = useForm<CompleteFormValues>({
     resolver: zodResolver(completeFormSchema),
@@ -112,6 +116,21 @@ export function VehicleFormComplete({ vehicle, onSubmit, isLoading }: VehicleFor
     },
   });
 
+  // Persistir formulário apenas para criação (não edição)
+  const { clearDraft, hasDraft, discardDraft } = useFormPersistence({
+    form,
+    key: storageKey,
+  });
+
+  // Alertar ao sair com alterações não salvas
+  useFormLeaveWarning(form.formState.isDirty);
+
+  // Handler de submit que limpa o rascunho após sucesso
+  const handleSubmit = (data: CompleteFormValues) => {
+    onSubmit(data);
+    clearDraft();
+  };
+
   // Calcular custo total estimado
   const watchedValues = form.watch([
     'purchase_price',
@@ -133,9 +152,32 @@ export function VehicleFormComplete({ vehicle, onSubmit, isLoading }: VehicleFor
     }).format(value);
   };
 
+  const showDraftAlert = hasDraft() && !isEditing;
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        {/* Alerta de rascunho recuperado */}
+        {showDraftAlert && (
+          <Alert className="border-amber-500/50 bg-amber-500/10">
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+            <AlertDescription className="flex items-center justify-between">
+              <span className="text-sm">
+                Um rascunho foi recuperado. Os dados preenchidos anteriormente foram restaurados.
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={discardDraft}
+                className="h-8 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Descartar
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
         {/* Seção: Dados do Veículo */}
         <Card>
           <CardHeader className="pb-4">

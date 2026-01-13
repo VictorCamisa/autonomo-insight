@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Form,
   FormControl,
@@ -23,7 +24,8 @@ import { leadSourceLabels, leadStatusLabels, qualificationStatusLabels } from '@
 import type { Lead, LeadSource, LeadStatus, QualificationStatus } from '@/types/crm';
 import { useMetaCampaigns } from '@/hooks/useMetaAds';
 import { useUsersWithRoles } from '@/hooks/useUsers';
-import { Megaphone, User } from 'lucide-react';
+import { Megaphone, User, AlertCircle, Trash2 } from 'lucide-react';
+import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
 
 const leadFormSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100),
@@ -50,6 +52,8 @@ interface LeadFormProps {
 export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
   const { data: campaigns = [] } = useMetaCampaigns();
   const { data: users = [] } = useUsersWithRoles();
+  const isEditing = !!lead;
+  const storageKey = isEditing ? `lead_edit_${lead.id}` : 'lead_create';
   
   // Filter to only show active users with vendedor or gerente role
   const salespeople = users.filter(u => 
@@ -73,12 +77,47 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
     },
   });
 
+  // Persistir formulário
+  const { clearDraft, hasDraft, discardDraft } = useFormPersistence({
+    form,
+    key: storageKey,
+  });
+
+  // Alertar ao sair com alterações não salvas
+  useFormLeaveWarning(form.formState.isDirty);
+
+  // Handler de submit que limpa o rascunho após sucesso
+  const handleSubmit = (data: LeadFormValues) => {
+    onSubmit(data);
+    clearDraft();
+  };
+
   const watchSource = form.watch('source');
   const showCampaignField = ['facebook', 'instagram', 'google_ads'].includes(watchSource);
+  const showDraftAlert = hasDraft() && !isEditing;
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        {/* Alerta de rascunho recuperado */}
+        {showDraftAlert && (
+          <Alert className="border-amber-500/50 bg-amber-500/10">
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+            <AlertDescription className="flex items-center justify-between">
+              <span className="text-sm">Rascunho recuperado.</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={discardDraft}
+                className="h-8 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Descartar
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
         <FormField
           control={form.control}
           name="name"

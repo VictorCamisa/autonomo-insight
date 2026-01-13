@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCreateSale, useUpdateSale } from '@/hooks/useSales';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useCustomers } from '@/hooks/useCustomers';
@@ -17,6 +18,8 @@ import { CommissionSection } from './CommissionSection';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { AlertCircle, Trash2 } from 'lucide-react';
+import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
 
 const formSchema = z.object({
   customer_id: z.string().min(1, 'Selecione um cliente'),
@@ -43,6 +46,8 @@ export function SaleForm({ open, onOpenChange, sale }: SaleFormProps) {
   const updateSale = useUpdateSale();
   const { data: vehicles } = useVehicles();
   const { data: customers } = useCustomers();
+  const isEditing = !!sale;
+  const storageKey = isEditing ? `sale_edit_${sale.id}` : 'sale_create';
   
   // Fetch salespeople (users with vendedor role)
   const { data: salespeople } = useQuery({
@@ -94,8 +99,18 @@ export function SaleForm({ open, onOpenChange, sale }: SaleFormProps) {
     },
   });
 
+  // Persistir formulário
+  const { clearDraft, hasDraft, discardDraft } = useFormPersistence({
+    form,
+    key: storageKey,
+  });
+
+  // Alertar ao sair com alterações não salvas
+  useFormLeaveWarning(form.formState.isDirty);
+
   const salePrice = form.watch('sale_price');
   const vehicleId = form.watch('vehicle_id');
+  const showDraftAlert = hasDraft() && !isEditing;
   
   // Get selected vehicle purchase price for profit calculation
   const selectedVehicle = vehicles?.find(v => v.id === vehicleId);
@@ -131,6 +146,7 @@ export function SaleForm({ open, onOpenChange, sale }: SaleFormProps) {
     } else {
       await createSale.mutateAsync(saleData as any);
     }
+    clearDraft();
     onOpenChange(false);
     form.reset();
   };
@@ -145,6 +161,25 @@ export function SaleForm({ open, onOpenChange, sale }: SaleFormProps) {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Alerta de rascunho recuperado */}
+            {showDraftAlert && (
+              <Alert className="border-amber-500/50 bg-amber-500/10">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span className="text-sm">Rascunho recuperado.</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={discardDraft}
+                    className="h-8 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Descartar
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-4">
               <FormField

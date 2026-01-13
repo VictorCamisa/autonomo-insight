@@ -352,16 +352,30 @@ async function callGoogle(
 
 // ============= MAIN HANDLER =============
 serve(async (req) => {
+  console.log('[ai-agent-chat] Request received:', req.method);
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('[ai-agent-chat] Missing Supabase credentials');
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { agent_id, message, session_id, conversation_id } = await req.json();
+    const body = await req.json();
+    console.log('[ai-agent-chat] Request body:', JSON.stringify(body));
+    
+    const { agent_id, message, session_id, conversation_id } = body;
 
     if (!agent_id || !message) {
       return new Response(

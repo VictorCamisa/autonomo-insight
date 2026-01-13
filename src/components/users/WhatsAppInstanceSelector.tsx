@@ -52,12 +52,20 @@ export function WhatsAppInstanceSelector({
 
         toast.success('Instância criada! Escaneie o QR Code para conectar.');
       } else {
-        // Link user to existing instance
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
-          .from('whatsapp_instances')
-          .update({ user_id: userId })
-          .eq('id', selectedOption);
+        // Link user to existing instance using the junction table
+        // First, remove any existing link for this user
+        await supabase
+          .from('user_whatsapp_instances')
+          .delete()
+          .eq('user_id', userId);
+
+        // Then create the new link
+        const { error } = await supabase
+          .from('user_whatsapp_instances')
+          .insert({
+            user_id: userId,
+            instance_id: selectedOption,
+          });
 
         if (error) throw error;
 

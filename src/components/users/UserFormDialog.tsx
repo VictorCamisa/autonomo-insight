@@ -50,6 +50,7 @@ export function UserFormDialog({ open, onOpenChange, mode, user }: UserFormDialo
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<
     { module: ModuleName; permission: PermissionType }[]
   >([]);
@@ -59,6 +60,7 @@ export function UserFormDialog({ open, onOpenChange, mode, user }: UserFormDialo
       setFullName(user.full_name || '');
       setEmail(user.email || '');
       setPassword('');
+      setPhone((user as any).phone || '');
       setSelectedPermissions(
         user.permissions.map((p) => ({
           module: p.module as ModuleName,
@@ -69,6 +71,7 @@ export function UserFormDialog({ open, onOpenChange, mode, user }: UserFormDialo
       setFullName('');
       setEmail('');
       setPassword('');
+      setPhone('');
       setSelectedPermissions([
         { module: 'crm', permission: 'view' },
         { module: 'vendas', permission: 'view' },
@@ -112,6 +115,7 @@ export function UserFormDialog({ open, onOpenChange, mode, user }: UserFormDialo
         email,
         password,
         full_name: fullName,
+        phone: phone || undefined,
         roles: ['vendedor'],
         permissions: selectedPermissions,
       });
@@ -119,6 +123,7 @@ export function UserFormDialog({ open, onOpenChange, mode, user }: UserFormDialo
       await updateUser.mutateAsync({
         userId: user.id,
         full_name: fullName,
+        phone: phone || undefined,
       });
 
       await updatePermissions.mutateAsync({
@@ -193,6 +198,20 @@ export function UserFormDialog({ open, onOpenChange, mode, user }: UserFormDialo
                 <Input value={email} disabled className="bg-muted" />
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">WhatsApp (para notificações)</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(11) 99999-9999"
+              />
+              <p className="text-xs text-muted-foreground">
+                Receberá notificações de leads qualificados
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">

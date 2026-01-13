@@ -1411,10 +1411,10 @@ async function assignSalespersonOnQualification(
     return null;
   }
 
-  // Get salesperson name
+  // Get salesperson details including phone for notification
   const { data: salesperson } = await supabase
     .from('profiles')
-    .select('id, full_name')
+    .select('id, full_name, phone')
     .eq('id', assignedTo)
     .single();
 
@@ -1461,7 +1461,7 @@ async function assignSalespersonOnQualification(
   // Get qualification data for notification
   const { data: qualData } = await supabase
     .from('lead_qualification_data')
-    .select('vehicle_interest, budget, down_payment')
+    .select('vehicle_interest, budget, down_payment, desired_installment, clean_credit, cpf')
     .eq('lead_id', leadId)
     .single();
 
@@ -1474,7 +1474,108 @@ async function assignSalespersonOnQualification(
     link: '/crm',
   });
 
+  // Send WhatsApp notification to salesperson if they have a phone registered
+  if (salesperson?.phone) {
+    await sendWhatsAppToSalesperson(supabase, salesperson.phone, lead, qualData);
+  } else {
+    console.log('[Qualification] Salesperson has no phone registered, skipping WhatsApp notification');
+  }
+
   return { id: assignedTo, name: salespersonName };
+}
+
+// Send WhatsApp notification to salesperson with lead qualification details
+async function sendWhatsAppToSalesperson(
+  supabase: any,
+  salespersonPhone: string,
+  lead: { name?: string; phone?: string } | null,
+  qualData: { 
+    vehicle_interest?: string; 
+    budget?: number; 
+    down_payment?: number; 
+    desired_installment?: number;
+    clean_credit?: boolean;
+    cpf?: string;
+  } | null
+): Promise<void> {
+  try {
+    console.log('[Notification] Sending WhatsApp to salesperson:', salespersonPhone);
+
+    // Get a connected WhatsApp instance
+    const { data: instance } = await supabase
+      .from('whatsapp_instances')
+      .select('*')
+      .eq('status', 'connected')
+      .limit(1)
+      .single();
+
+    if (!instance) {
+      console.log('[Notification] No WhatsApp instance available for salesperson notification');
+      return;
+    }
+
+    // Format salesperson phone
+    let formattedPhone = salespersonPhone.replace(/\D/g, '');
+    if (!formattedPhone.startsWith('55')) {
+      formattedPhone = '55' + formattedPhone;
+    }
+
+    // Build qualification card message
+    const formatCurrency = (value?: number) => {
+      if (!value) return 'Não informado';
+      return `R$ ${value.toLocaleString('pt-BR')}`;
+    };
+
+    const fichaMensagem = `🔥 *NOVO LEAD QUALIFICADO!*
+
+👤 *Cliente:* ${lead?.name || 'Não informado'}
+📞 *Telefone:* ${lead?.phone || 'Não informado'}
+
+📋 *FICHA DE QUALIFICAÇÃO:*
+🚗 Veículo de Interesse: ${qualData?.vehicle_interest || 'Não informado'}
+💰 Orçamento: ${formatCurrency(qualData?.budget)}
+💵 Entrada: ${formatCurrency(qualData?.down_payment)}
+📊 Parcela Desejada: ${formatCurrency(qualData?.desired_installment)}
+✅ Nome Limpo: ${qualData?.clean_credit === true ? 'Sim' : qualData?.clean_credit === false ? 'Não' : 'Não informado'}
+📝 CPF: ${qualData?.cpf || 'Não informado'}
+
+⏰ *Entre em contato o quanto antes!*
+
+_Clique no telefone acima para iniciar a conversa._`;
+
+    // Send via Evolution API
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL')?.replace(/\/$/, '');
+    const evolutionKey = Deno.env.get('EVOLUTION_API_KEY');
+
+    if (!evolutionUrl || !evolutionKey) {
+      console.error('[Notification] Missing Evolution API credentials');
+      return;
+    }
+
+    const sendUrl = `${evolutionUrl}/message/sendText/${instance.instance_name}`;
+    
+    const response = await fetch(sendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': evolutionKey,
+      },
+      body: JSON.stringify({
+        number: formattedPhone,
+        text: fichaMensagem,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Notification] Failed to send WhatsApp to salesperson:', errorText);
+      return;
+    }
+
+    console.log('[Notification] WhatsApp sent successfully to salesperson:', formattedPhone);
+  } catch (error) {
+    console.error('[Notification] Error sending WhatsApp to salesperson:', error);
+  }
 }
 
 // Get next salesperson using Round Robin algorithm

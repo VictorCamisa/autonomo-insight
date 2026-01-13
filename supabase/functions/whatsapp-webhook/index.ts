@@ -401,17 +401,35 @@ async function processWithAIAgent(
   
   // Add vehicle inventory context if applicable
   if (agent.objective === 'qualify_leads' || agent.objective === 'schedule_test_drive') {
-    const { data: vehicles } = await supabase
+    const { data: vehicles, error: vehiclesError } = await supabase
       .from('vehicles')
-      .select('brand, model, year, price, mileage, fuel_type, transmission')
-      .eq('status', 'available')
-      .limit(20);
+      .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes')
+      .eq('status', 'disponivel')
+      .limit(50);
+
+    if (vehiclesError) {
+      console.error('Error fetching vehicles:', vehiclesError);
+    }
 
     if (vehicles?.length) {
-      systemPrompt += '\n\n**Veículos disponíveis no estoque:**\n';
-      vehicles.forEach((v: any) => {
-        systemPrompt += `- ${v.brand} ${v.model} ${v.year} | R$ ${v.price?.toLocaleString('pt-BR')} | ${v.mileage?.toLocaleString('pt-BR')} km | ${v.fuel_type} | ${v.transmission}\n`;
+      systemPrompt += '\n\n=== ESTOQUE DISPONÍVEL DA LOJA ===\n';
+      systemPrompt += `Total: ${vehicles.length} veículos\n\n`;
+      vehicles.forEach((v: any, i: number) => {
+        const preco = v.sale_price ? `R$ ${Number(v.sale_price).toLocaleString('pt-BR')}` : 'Consultar';
+        const km = v.km ? `${Number(v.km).toLocaleString('pt-BR')} km` : 'N/A';
+        const ano = v.year_model || v.year_fabrication || 'N/A';
+        const versao = v.version ? ` ${v.version}` : '';
+        systemPrompt += `${i + 1}. ${v.brand} ${v.model}${versao} ${ano}\n`;
+        systemPrompt += `   💰 Preço: ${preco}\n`;
+        systemPrompt += `   📏 KM: ${km}\n`;
+        systemPrompt += `   🎨 Cor: ${v.color || 'N/A'}\n`;
+        systemPrompt += `   ⚙️ Câmbio: ${v.transmission || 'N/A'} | Combustível: ${v.fuel_type || 'N/A'}\n`;
+        if (v.notes) systemPrompt += `   📝 Obs: ${v.notes}\n`;
+        systemPrompt += '\n';
       });
+      systemPrompt += '=== FIM DO ESTOQUE ===\n';
+    } else {
+      console.log('No vehicles found with status disponivel');
     }
   }
 

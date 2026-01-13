@@ -511,18 +511,23 @@ async function processWithAIAgent(
     content: actualMessage,
   });
 
-  // Get conversation history
-  const { data: history } = await supabase
+  // Get conversation history (fetch last N messages, most recent first, then reverse for chronological order)
+  const contextWindowSize = agent.context_window_size || 20;
+  const { data: historyReversed } = await supabase
     .from('ai_agent_messages')
-    .select('role, content')
+    .select('role, content, created_at')
     .eq('conversation_id', conversation.id)
-    .order('created_at', { ascending: true })
-    .limit(agent.context_window_size || 10);
+    .order('created_at', { ascending: false })
+    .limit(contextWindowSize);
 
-  const messages = history?.map((m: any) => ({
-    role: m.role,
-    content: m.content,
-  })) || [{ role: 'user', content: actualMessage }];
+  // Reverse to get chronological order (oldest first)
+  const history = historyReversed?.reverse() || [];
+  
+  console.log('[AI Agent] Loaded', history.length, 'messages from history');
+
+  const messages = history.length > 0 
+    ? history.map((m: any) => ({ role: m.role, content: m.content })) 
+    : [{ role: 'user', content: actualMessage }];
 
   // ===== FETCH VEHICLES WITH PHOTOS =====
   const { data: vehicles, error: vehiclesError } = await supabase
@@ -949,10 +954,12 @@ async function sendWhatsAppAudioResponse(
       {
         method: 'POST',
         headers: {
+          'apikey': supabaseKey!,
           'Authorization': `Bearer ${supabaseKey}`,
           'Content-Type': 'audio/mpeg',
+          'x-upsert': 'true',
         },
-        body: audioBuffer,
+        body: new Uint8Array(audioBuffer),
       }
     );
 

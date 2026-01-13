@@ -251,7 +251,7 @@ serve(async (req) => {
     }
 
     // Build system prompt with context
-    const defaultSystemPrompt = agentConfig?.system_prompt || `Você é um assistente virtual especializado em vendas de veículos da loja Matheus Veículos.
+    let rawSystemPrompt = agentConfig?.system_prompt || `Você é um assistente virtual especializado em vendas de veículos da loja Matheus Veículos.
 
 Seu objetivo é:
 1. Receber o cliente de forma cordial e profissional
@@ -265,6 +265,18 @@ Regras importantes:
 - Use APENAS os dados fornecidos no contexto - nunca invente informações
 - Se não souber algo, ofereça transferir para um vendedor humano
 - Colete dados de contato de forma natural na conversa`;
+
+    // Ajuste automático: trocar Léo por Gabi e ajustar tom feminino
+    const defaultSystemPrompt = rawSystemPrompt
+      .replace(/\bLéo\b/gi, 'Gabi')
+      .replace(/\bLeo\b/gi, 'Gabi')
+      .replace(/Meu nome é Gabi/gi, 'Meu nome é Gabi')
+      .replace(/Você é o Gabi/gi, 'Você é a Gabi')
+      .replace(/o primeiro contato/gi, 'a primeira contato')
+      .replace(/um especialista de produto/gi, 'uma especialista de produto')
+      .replace(/gente boa, amigável/gi, 'gente boa, simpática')
+      .replace(/um amigo que entende/gi, 'uma amiga que entende')
+      .replace(/Sou um assistente/gi, 'Sou uma assistente');
 
     // Instruções especiais para fotos
     const photoInstructions = `

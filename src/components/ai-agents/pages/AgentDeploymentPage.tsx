@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Rocket, Copy, Check, Globe, MessageSquare, Play, ExternalLink } from 'lucide-react';
+import { Rocket, Copy, Check, Globe, MessageSquare, Play, ExternalLink, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,9 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAIAgent, useUpdateAIAgent } from '@/hooks/useAIAgents';
+import { useWhatsAppInstances } from '@/hooks/useWhatsApp';
 import { toast } from 'sonner';
 import AgentChatPanel from '../AgentChatPanel';
 
@@ -19,7 +21,18 @@ export default function AgentDeploymentPage() {
   const [showChat, setShowChat] = useState(false);
   
   const { data: agent, isLoading } = useAIAgent(agentId);
+  const { data: whatsappInstances = [], isLoading: isLoadingInstances } = useWhatsAppInstances();
   const updateAgent = useUpdateAIAgent();
+
+  const connectedInstances = whatsappInstances.filter(i => i.status === 'connected');
+  const selectedInstanceId = agent?.whatsapp_instance_id;
+
+  const handleSelectInstance = (instanceId: string | null) => {
+    updateAgent.mutate({ 
+      id: agentId!, 
+      data: { whatsapp_instance_id: instanceId } 
+    });
+  };
 
   const widgetCode = `<!-- Matheus Veículos AI Agent Widget -->
 <script>
@@ -181,7 +194,71 @@ export default function AgentDeploymentPage() {
                 Conecte o agente a uma instância do WhatsApp para responder automaticamente
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Instance Selection */}
+              <div className="space-y-3">
+                <Label className="text-base font-medium">Selecionar Instância</Label>
+                {isLoadingInstances ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : connectedInstances.length === 0 ? (
+                  <div className="p-4 border rounded-lg bg-muted/50 text-center">
+                    <WifiOff className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma instância conectada. Configure uma instância primeiro.
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      className="mt-3 gap-2"
+                      onClick={() => navigate('/whatsapp/instancias')}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Configurar Instância
+                    </Button>
+                  </div>
+                ) : (
+                  <RadioGroup
+                    value={selectedInstanceId || 'none'}
+                    onValueChange={(value) => handleSelectInstance(value === 'none' ? null : value)}
+                    className="space-y-2"
+                  >
+                    <div className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                      <RadioGroupItem value="none" id="none" />
+                      <Label htmlFor="none" className="flex-1 cursor-pointer">
+                        <span className="font-medium">Nenhuma</span>
+                        <p className="text-xs text-muted-foreground">
+                          Agente não responderá no WhatsApp
+                        </p>
+                      </Label>
+                    </div>
+                    
+                    {connectedInstances.map((instance) => (
+                      <div 
+                        key={instance.id} 
+                        className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <RadioGroupItem value={instance.id} id={instance.id} />
+                        <Label htmlFor={instance.id} className="flex-1 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{instance.name}</span>
+                            <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+                              <Wifi className="h-3 w-3" />
+                              Conectado
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {instance.phone_number || 'Número não disponível'}
+                          </p>
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                )}
+              </div>
+
+              {/* Auto-reply toggle */}
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
                   <Label>Resposta Automática</Label>
@@ -197,6 +274,7 @@ export default function AgentDeploymentPage() {
                 />
               </div>
 
+              {/* Transfer to human toggle */}
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
                   <Label>Permitir Transferência para Humano</Label>

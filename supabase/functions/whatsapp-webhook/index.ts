@@ -1213,7 +1213,7 @@ async function createLeadWithRoundRobin(
       source: 'whatsapp',
       status: 'novo',
       assigned_to: null, // NOT assigning vendor yet - wait for qualification
-      qualification_status: 'pendente',
+      qualification_status: 'nao_qualificado',
     })
     .select()
     .single();

@@ -946,10 +946,10 @@ async function sendWhatsAppAudioResponse(
     }
     const base64Audio = btoa(binary);
     
-    console.log('[TTS] Sending audio via Evolution API...');
+    console.log('[TTS] Sending audio via Evolution API (sendWhatsAppAudio endpoint)...');
     
-    // Send audio via Evolution API
-    const response = await fetch(`${evolutionUrl}/message/sendMedia/${instanceName}`, {
+    // Send audio via Evolution API - using sendWhatsAppAudio for PTT audio
+    const response = await fetch(`${evolutionUrl}/message/sendWhatsAppAudio/${instanceName}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -957,9 +957,7 @@ async function sendWhatsAppAudioResponse(
       },
       body: JSON.stringify({
         number: remoteJid,
-        mediatype: 'audio',
-        media: `data:audio/mpeg;base64,${base64Audio}`,
-        mimetype: 'audio/mpeg',
+        audio: `data:audio/mpeg;base64,${base64Audio}`,
       }),
     });
 

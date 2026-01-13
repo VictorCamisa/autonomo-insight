@@ -92,6 +92,16 @@ const WhatsAppTemplates = lazy(() => import("@/components/whatsapp/WhatsAppTempl
 const WhatsAppInstances = lazy(() => import("@/components/whatsapp/WhatsAppInstances").then(m => ({ default: m.WhatsAppInstances })));
 const WhatsAppConfig = lazy(() => import("@/components/whatsapp/WhatsAppConfig").then(m => ({ default: m.WhatsAppConfig })));
 const WhatsAppManagerDashboard = lazy(() => import("@/components/whatsapp/WhatsAppManagerDashboard").then(m => ({ default: m.WhatsAppManagerDashboard })));
+
+// Lazy load AI Agents pages
+const AIAgentsLayout = lazy(() => import("@/components/ai-agents/AIAgentsLayout"));
+const AIAgentsListPage = lazy(() => import("@/components/ai-agents/pages/AIAgentsListPage"));
+const AgentBasicsPage = lazy(() => import("@/components/ai-agents/pages/AgentBasicsPage"));
+const AgentLLMConfigPage = lazy(() => import("@/components/ai-agents/pages/AgentLLMConfigPage"));
+const AgentMemoryPage = lazy(() => import("@/components/ai-agents/pages/AgentMemoryPage"));
+const AgentToolsPage = lazy(() => import("@/components/ai-agents/pages/AgentToolsPage"));
+const AgentDeploymentPage = lazy(() => import("@/components/ai-agents/pages/AgentDeploymentPage"));
+
 // Optimized QueryClient with better caching
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -275,6 +285,23 @@ const App = () => (
                       </Suspense>
                     </ProtectedRoute>
                   } />
+
+                  {/* AI Agents Routes */}
+                  <Route path="/ai-agents" element={
+                    <ProtectedRoute requiredModule="configuracoes">
+                      <Suspense fallback={<PageLoader />}>
+                        <AIAgentsLayout />
+                      </Suspense>
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<AIAgentsListPage />} />
+                    <Route path="novo" element={<AgentBasicsPage />} />
+                    <Route path=":agentId/basico" element={<AgentBasicsPage />} />
+                    <Route path=":agentId/llm" element={<AgentLLMConfigPage />} />
+                    <Route path=":agentId/memoria" element={<AgentMemoryPage />} />
+                    <Route path=":agentId/ferramentas" element={<AgentToolsPage />} />
+                    <Route path=":agentId/implantacao" element={<AgentDeploymentPage />} />
+                  </Route>
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

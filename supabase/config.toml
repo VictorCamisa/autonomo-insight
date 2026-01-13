@@ -30,3 +30,6 @@ verify_jwt = true
 
 [functions.generate-report]
 verify_jwt = false
+
+[functions.ai-agent-chat]
+verify_jwt = false

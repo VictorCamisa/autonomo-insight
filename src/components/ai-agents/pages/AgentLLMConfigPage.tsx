@@ -43,7 +43,10 @@ export default function AgentLLMConfigPage() {
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   
-  const { data: agent, isLoading } = useAIAgent(agentId);
+  // Validate that agentId is a valid UUID
+  const isValidUUID = agentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agentId);
+  
+  const { data: agent, isLoading } = useAIAgent(isValidUUID ? agentId : undefined);
   const updateAgent = useUpdateAIAgent();
   const validateKey = useValidateAPIKey();
   const { data: voices, isLoading: voicesLoading, error: voicesError } = useElevenLabsVoices();
@@ -98,16 +101,30 @@ export default function AgentLLMConfigPage() {
   };
 
   const onSubmit = async (data: FormData) => {
-    console.log('[AgentLLMConfig] Saving data:', data);
-    console.log('[AgentLLMConfig] Agent ID:', agentId);
+    if (!isValidUUID) {
+      console.error('[AgentLLMConfig] Invalid agent ID, redirecting...');
+      navigate('/ai-agents');
+      return;
+    }
+    
     try {
       await updateAgent.mutateAsync({ id: agentId!, data });
-      console.log('[AgentLLMConfig] Save successful');
       navigate(`/ai-agents/${agentId}/memoria`);
     } catch (error) {
       console.error('[AgentLLMConfig] Save error:', error);
     }
   };
+
+  // Redirect if agentId is invalid
+  if (!isValidUUID) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">ID do agente inválido. Redirecionando...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -1666,6 +1666,71 @@ export type Database = {
           },
         ]
       }
+      lead_qualification_data: {
+        Row: {
+          additional_info: Json | null
+          budget: number | null
+          clean_credit: boolean | null
+          cpf: string | null
+          created_at: string | null
+          desired_installment: number | null
+          down_payment: number | null
+          has_trade_in: boolean | null
+          id: string
+          is_qualified: boolean | null
+          lead_id: string | null
+          message_count: number | null
+          qualified_at: string | null
+          trade_in_vehicle: string | null
+          updated_at: string | null
+          vehicle_interest: string | null
+        }
+        Insert: {
+          additional_info?: Json | null
+          budget?: number | null
+          clean_credit?: boolean | null
+          cpf?: string | null
+          created_at?: string | null
+          desired_installment?: number | null
+          down_payment?: number | null
+          has_trade_in?: boolean | null
+          id?: string
+          is_qualified?: boolean | null
+          lead_id?: string | null
+          message_count?: number | null
+          qualified_at?: string | null
+          trade_in_vehicle?: string | null
+          updated_at?: string | null
+          vehicle_interest?: string | null
+        }
+        Update: {
+          additional_info?: Json | null
+          budget?: number | null
+          clean_credit?: boolean | null
+          cpf?: string | null
+          created_at?: string | null
+          desired_installment?: number | null
+          down_payment?: number | null
+          has_trade_in?: boolean | null
+          id?: string
+          is_qualified?: boolean | null
+          lead_id?: string | null
+          message_count?: number | null
+          qualified_at?: string | null
+          trade_in_vehicle?: string | null
+          updated_at?: string | null
+          vehicle_interest?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_qualification_data_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           assigned_to: string | null

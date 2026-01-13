@@ -545,7 +545,7 @@ async function processWithAIAgent(
   // Build system prompt with vehicles INCLUDING PHOTOS
   let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
   
-  // Add Matheus Veículos context and photo instructions
+  // Add Matheus Veículos context, photo instructions, and QUALIFICATION data extraction
   systemPrompt += `
 
 Você é Léo, assistente virtual da MATHEUS VEÍCULOS.
@@ -577,6 +577,48 @@ Exemplo: "Olha só o Polo! 👇
 Bonito né? Quer agendar visita?"
 
 ⚠️ Se não tiver foto: "Esse modelo não tem foto no sistema ainda, mas posso te mostrar pessoalmente!"
+
+===== 🎯 QUALIFICAÇÃO DO CLIENTE (MUITO IMPORTANTE!) =====
+Seu objetivo é COLETAR informações para qualificar o cliente. Conduza a conversa naturalmente para descobrir:
+
+1. **Veículo de interesse** - Qual carro ele quer? (obrigatório)
+2. **Orçamento** - Quanto quer gastar? (opcional mas importante)
+3. **Valor da entrada** - Quanto pode dar de entrada? (opcional)
+4. **Parcela desejada** - Qual parcela cabe no bolso? (opcional)
+5. **Tem carro para troca?** - Sim ou não? Qual? (opcional)
+6. **Nome limpo?** - Precisa saber se tem restrição (obrigatório)
+7. **CPF** - Para consulta de crédito (obrigatório)
+
+🔑 NÃO peça tudo de uma vez! Vá coletando aos poucos, de forma natural na conversa.
+
+📝 Quando o cliente CONFIRMAR uma informação, adicione a TAG correspondente NO FINAL da sua resposta:
+- [DADO:veiculo_interesse=Polo 2020 TSI]
+- [DADO:orcamento=50000]
+- [DADO:parcela=2000]
+- [DADO:entrada=10000]
+- [DADO:tem_troca=sim]
+- [DADO:veiculo_troca=Gol 2018]
+- [DADO:nome_limpo=sim]
+- [DADO:cpf=12345678900]
+
+⚠️ IMPORTANTE:
+- Só adicione a tag quando o cliente CONFIRMAR a informação
+- Adicione apenas UMA tag por vez se possível
+- NÃO invente dados - só extraia o que o cliente disse
+- As tags serão removidas antes de enviar a mensagem
+
+Exemplo de conversa:
+Cliente: "Tô procurando um Polo até 70 mil"
+Sua resposta: "Temos ótimas opções de Polo nessa faixa! 🚗
+Você prefere à vista ou financiado?
+[DADO:veiculo_interesse=Polo]
+[DADO:orcamento=70000]"
+
+===== PERGUNTAS NATURAIS PARA QUALIFICAR =====
+- "E você tá pensando em dar entrada ou financiar tudo?"
+- "Tem algum carro pra gente avaliar na troca?"
+- "Só pra eu dar uma olhada nas melhores condições, seu nome tá limpo?"
+- "Me passa seu CPF que já consulto as condições pra você! 🔍"
 `;
 
   if (vehicles?.length) {
@@ -654,29 +696,53 @@ Bonito né? Quer agendar visita?"
       extractedPhotos.push(match[1].trim());
     }
 
-    // Remove photo tags from text
-    const cleanResponse = aiResponse.replace(photoRegex, '').trim();
+    // Remove photo tags AND data tags from text
+    let cleanResponse = aiResponse.replace(photoRegex, '');
+    cleanResponse = cleanResponse.replace(/\[DADO:[^\]]+\]/g, '').trim();
 
     console.log('[AI Agent] Extracted photos:', extractedPhotos.length, extractedPhotos);
 
-    // Save assistant message
+    // ===== QUALIFICATION FLOW =====
+    let finalResponse = cleanResponse;
+    
+    if (leadId) {
+      // 1. Extract qualification data from AI response (using ORIGINAL response with tags)
+      const qualResult = await extractAndSaveQualificationData(supabase, leadId, aiResponse);
+      
+      // 2. Check and progress negotiation status based on message count
+      await checkAndProgressNegotiation(supabase, conversation.id, leadId);
+      
+      // 3. If newly qualified, add handoff message
+      if (qualResult.newlyQualified && qualResult.salespersonName) {
+        console.log('[Qualification] Lead newly qualified! Adding handoff message');
+        const handoffMessage = `\n\n🎉 Excelente! Consegui todas as informações!
+
+O ${qualResult.salespersonName} vai entrar em contato com você em breve para dar continuidade ao seu atendimento.
+
+Ele já está com todo o histórico da nossa conversa! 👍`;
+        
+        finalResponse = cleanResponse + handoffMessage;
+      }
+    }
+
+    // Save assistant message (with clean response, no tags)
     await supabase.from('ai_agent_messages').insert({
       conversation_id: conversation.id,
       role: 'assistant',
-      content: cleanResponse,
+      content: finalResponse,
     });
 
     const targetJid = remoteJid || `${phone}@s.whatsapp.net`;
 
     // ===== SEND TEXT RESPONSE FIRST (before photos) =====
-    if (cleanResponse) {
+    if (finalResponse) {
       // Check if we should respond with audio (client sent audio)
       if (shouldRespondWithAudio && agent.enable_voice && agent.elevenlabs_api_key) {
         console.log('[AI Agent] Generating audio response via ElevenLabs...');
         const audioSent = await sendWhatsAppAudioResponse(
           instanceName, 
           targetJid, 
-          cleanResponse, 
+          finalResponse, 
           agent.elevenlabs_api_key,
           agent.voice_id || 'nPczCjzI2devNBz1zQrb' // Default: Brian (Portuguese-friendly voice)
         );
@@ -684,11 +750,11 @@ Bonito né? Quer agendar visita?"
         if (!audioSent) {
           // Fallback to text if audio fails
           console.log('[AI Agent] Audio failed, falling back to text');
-          await sendTextInChunks(instanceName, targetJid, cleanResponse);
+          await sendTextInChunks(instanceName, targetJid, finalResponse);
         }
       } else {
         // Send as text messages
-        await sendTextInChunks(instanceName, targetJid, cleanResponse);
+        await sendTextInChunks(instanceName, targetJid, finalResponse);
       }
     }
 
@@ -713,7 +779,7 @@ Bonito né? Quer agendar visita?"
       message_id: `ai_${Date.now()}`,
       direction: 'outgoing',
       message_type: extractedPhotos.length > 0 ? 'image' : 'text',
-      content: cleanResponse,
+      content: finalResponse,
       status: 'sent',
       lead_id: leadId,
     });
@@ -1130,18 +1196,15 @@ async function processOutgoingMessage(
   }
 }
 
-// Create lead and assign via Round Robin
+// Create lead WITHOUT vendor (vendor assigned after qualification)
 async function createLeadWithRoundRobin(
   supabase: any,
   phone: string,
   name: string
 ): Promise<string | null> {
-  // Get next salesperson from Round Robin
-  const assignedTo = await getNextRoundRobinSalesperson(supabase);
-  
-  console.log('Round Robin assigned to:', assignedTo);
+  console.log('[Lead Creation] Creating lead WITHOUT vendor assignment (will be assigned after qualification)');
 
-  // Create lead
+  // Create lead WITHOUT assigned_to
   const { data: lead, error: leadError } = await supabase
     .from('leads')
     .insert({
@@ -1149,7 +1212,8 @@ async function createLeadWithRoundRobin(
       name,
       source: 'whatsapp',
       status: 'novo',
-      assigned_to: assignedTo,
+      assigned_to: null, // NOT assigning vendor yet - wait for qualification
+      qualification_status: 'pendente',
     })
     .select()
     .single();
@@ -1159,57 +1223,258 @@ async function createLeadWithRoundRobin(
     return null;
   }
 
-  // Create lead assignment record
-  if (assignedTo) {
-    await supabase.from('lead_assignments').insert({
-      lead_id: lead.id,
-      salesperson_id: assignedTo,
-      assignment_type: 'round_robin',
-      notes: 'Atribuído automaticamente via Round Robin (WhatsApp)',
-    });
+  console.log('[Lead Creation] Lead created:', lead.id);
 
-    // Update round robin config
-    await supabase
-      .from('round_robin_config')
-      .update({
-        last_assigned_at: new Date().toISOString(),
-        total_leads_assigned: supabase.rpc ? undefined : undefined, // Will increment via separate query
-        current_leads_today: supabase.rpc ? undefined : undefined,
-      })
-      .eq('salesperson_id', assignedTo);
+  // Create negotiation in "em_andamento" status (no salesperson yet)
+  const { error: negError } = await supabase.from('negotiations').insert({
+    lead_id: lead.id,
+    salesperson_id: null, // Will be assigned after qualification
+    status: 'em_andamento',
+    notes: 'Negociação criada automaticamente - aguardando qualificação pelo bot',
+  });
 
-    // Increment counters
-    await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: assignedTo });
+  if (negError) {
+    console.error('Error creating negotiation:', negError);
+  } else {
+    console.log('[Lead Creation] Negotiation created for lead:', lead.id);
   }
 
-  // Create negotiation
-  if (assignedTo) {
-    const { error: negError } = await supabase.from('negotiations').insert({
-      lead_id: lead.id,
-      salesperson_id: assignedTo,
-      status: 'contato_inicial',
-      notes: 'Negociação criada automaticamente a partir de mensagem WhatsApp',
-    });
+  // Create qualification data tracker
+  const { error: qualError } = await supabase.from('lead_qualification_data').insert({
+    lead_id: lead.id,
+    message_count: 0,
+    is_qualified: false,
+  });
 
-    if (negError) {
-      console.error('Error creating negotiation:', negError);
-    } else {
-      console.log('Created negotiation for lead:', lead.id);
-    }
-  }
-
-  // Create notification for assigned salesperson
-  if (assignedTo) {
-    await supabase.from('notifications').insert({
-      user_id: assignedTo,
-      type: 'new_lead',
-      title: 'Novo Lead Atribuído',
-      message: `Um novo lead foi atribuído a você: ${name} (${phone})`,
-      link: '/leads',
-    });
+  if (qualError) {
+    console.error('Error creating qualification data:', qualError);
+  } else {
+    console.log('[Lead Creation] Qualification tracker created for lead:', lead.id);
   }
 
   return lead.id;
+}
+
+// Check and progress negotiation status based on message count
+async function checkAndProgressNegotiation(
+  supabase: any,
+  conversationId: string,
+  leadId: string
+): Promise<void> {
+  // Count messages in conversation
+  const { count } = await supabase
+    .from('ai_agent_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId);
+
+  console.log('[Qualification] Message count:', count);
+
+  // Update message count in qualification data
+  await supabase
+    .from('lead_qualification_data')
+    .update({ message_count: count })
+    .eq('lead_id', leadId);
+
+  // If >= 4 messages and negotiation is "em_andamento", move to "proposta_enviada"
+  if (count >= 4) {
+    const { data: negotiation } = await supabase
+      .from('negotiations')
+      .select('id, status')
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (negotiation && negotiation.status === 'em_andamento') {
+      console.log('[Qualification] Moving negotiation to proposta_enviada (4+ messages)');
+      await supabase
+        .from('negotiations')
+        .update({ status: 'proposta_enviada' })
+        .eq('id', negotiation.id);
+    }
+  }
+}
+
+// Extract qualification data from AI response
+async function extractAndSaveQualificationData(
+  supabase: any,
+  leadId: string,
+  aiResponse: string
+): Promise<{ isQualified: boolean; newlyQualified: boolean; salespersonName?: string }> {
+  // Extract data tags from AI response [DADO:field=value]
+  const regex = /\[DADO:(\w+)=([^\]]+)\]/g;
+  const updates: Record<string, any> = {};
+  
+  let match;
+  while ((match = regex.exec(aiResponse)) !== null) {
+    const [_, field, value] = match;
+    
+    // Map field names to database columns
+    switch (field) {
+      case 'veiculo_interesse':
+        updates.vehicle_interest = value;
+        break;
+      case 'orcamento':
+        updates.budget = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
+        break;
+      case 'parcela':
+        updates.desired_installment = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
+        break;
+      case 'entrada':
+        updates.down_payment = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
+        break;
+      case 'tem_troca':
+        updates.has_trade_in = value.toLowerCase() === 'sim' || value.toLowerCase() === 'true';
+        break;
+      case 'veiculo_troca':
+        updates.trade_in_vehicle = value;
+        break;
+      case 'nome_limpo':
+        updates.clean_credit = value.toLowerCase() === 'sim' || value.toLowerCase() === 'true';
+        break;
+      case 'cpf':
+        updates.cpf = value.replace(/[^\d]/g, '');
+        break;
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    console.log('[Qualification] Extracted data:', updates);
+    await supabase
+      .from('lead_qualification_data')
+      .update(updates)
+      .eq('lead_id', leadId);
+  }
+
+  // Check if lead is now qualified
+  const { data: qualData } = await supabase
+    .from('lead_qualification_data')
+    .select('*')
+    .eq('lead_id', leadId)
+    .single();
+
+  if (!qualData) {
+    return { isQualified: false, newlyQualified: false };
+  }
+
+  // Already qualified? Don't re-assign
+  if (qualData.is_qualified) {
+    return { isQualified: true, newlyQualified: false };
+  }
+
+  // Required: vehicle_interest, clean_credit, cpf
+  // Optional (need at least 1): budget, desired_installment, down_payment
+  const hasVehicle = !!qualData.vehicle_interest;
+  const hasCredit = qualData.clean_credit !== null;
+  const hasCpf = !!qualData.cpf;
+  const hasFinancial = qualData.budget || qualData.desired_installment || qualData.down_payment;
+
+  const isNowQualified = hasVehicle && hasCredit && hasCpf && hasFinancial;
+
+  console.log('[Qualification] Status check - vehicle:', hasVehicle, 'credit:', hasCredit, 'cpf:', hasCpf, 'financial:', !!hasFinancial, '=> qualified:', isNowQualified);
+
+  if (isNowQualified) {
+    // Assign salesperson via round-robin
+    const salespersonInfo = await assignSalespersonOnQualification(supabase, leadId);
+    
+    // Mark as qualified
+    await supabase
+      .from('lead_qualification_data')
+      .update({
+        is_qualified: true,
+        qualified_at: new Date().toISOString(),
+      })
+      .eq('lead_id', leadId);
+
+    return { 
+      isQualified: true, 
+      newlyQualified: true,
+      salespersonName: salespersonInfo?.name || undefined,
+    };
+  }
+
+  return { isQualified: false, newlyQualified: false };
+}
+
+// Assign salesperson after lead qualification
+async function assignSalespersonOnQualification(
+  supabase: any,
+  leadId: string
+): Promise<{ id: string; name: string } | null> {
+  console.log('[Qualification] Lead qualified! Assigning salesperson via round-robin...');
+
+  // Get next salesperson from Round Robin
+  const assignedTo = await getNextRoundRobinSalesperson(supabase);
+  
+  if (!assignedTo) {
+    console.error('[Qualification] No salesperson available in round-robin');
+    return null;
+  }
+
+  // Get salesperson name
+  const { data: salesperson } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .eq('id', assignedTo)
+    .single();
+
+  const salespersonName = salesperson?.full_name || 'Nosso atendente';
+  console.log('[Qualification] Assigned to:', salespersonName, '(', assignedTo, ')');
+
+  // Update lead with assigned salesperson
+  await supabase
+    .from('leads')
+    .update({
+      assigned_to: assignedTo,
+      qualification_status: 'qualificado',
+    })
+    .eq('id', leadId);
+
+  // Update negotiation status to "negociando" and assign salesperson
+  await supabase
+    .from('negotiations')
+    .update({
+      salesperson_id: assignedTo,
+      status: 'negociando',
+      notes: 'Lead qualificado pelo bot - atribuído ao vendedor',
+    })
+    .eq('lead_id', leadId);
+
+  // Create lead assignment record
+  await supabase.from('lead_assignments').insert({
+    lead_id: leadId,
+    salesperson_id: assignedTo,
+    assignment_type: 'round_robin',
+    notes: 'Atribuído após qualificação pelo bot (WhatsApp)',
+  });
+
+  // Increment round-robin counters
+  await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: assignedTo });
+
+  // Get lead info for notification
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('name, phone, vehicle_interest')
+    .eq('id', leadId)
+    .single();
+
+  // Get qualification data for notification
+  const { data: qualData } = await supabase
+    .from('lead_qualification_data')
+    .select('vehicle_interest, budget, down_payment')
+    .eq('lead_id', leadId)
+    .single();
+
+  // Create notification for assigned salesperson
+  await supabase.from('notifications').insert({
+    user_id: assignedTo,
+    type: 'lead_qualified',
+    title: '🔥 Lead Qualificado pelo Bot!',
+    message: `${lead?.name || 'Novo lead'} foi qualificado! Veículo: ${qualData?.vehicle_interest || 'Não informado'}. Orçamento: R$ ${qualData?.budget?.toLocaleString('pt-BR') || 'Não informado'}`,
+    link: '/crm',
+  });
+
+  return { id: assignedTo, name: salespersonName };
 }
 
 // Get next salesperson using Round Robin algorithm

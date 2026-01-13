@@ -2,3 +2,9 @@ project_id = "ahfoixzdnpswuqavbmgf"
 
 [functions.elevenlabs-voices]
 verify_jwt = false
+
+[functions.transcribe-audio]
+verify_jwt = false
+
+[functions.ai-agent-chat]
+verify_jwt = false

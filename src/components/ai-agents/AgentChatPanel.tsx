@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useAgentChat, ChatMessage } from '@/hooks/useAgentChat';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface AgentChatPanelProps {
   agentId: string;
@@ -14,6 +16,7 @@ interface AgentChatPanelProps {
 export default function AgentChatPanel({ agentId, className }: AgentChatPanelProps) {
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -35,6 +38,48 @@ export default function AgentChatPanel({ agentId, className }: AgentChatPanelPro
     setInput('');
   };
 
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        // Remove the data URL prefix (e.g., "data:audio/webm;base64,")
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const transcribeAudio = async (audioBlob: Blob): Promise<string | null> => {
+    try {
+      setIsTranscribing(true);
+      console.log('[AgentChatPanel] Transcribing audio, size:', audioBlob.size);
+      
+      const base64Audio = await blobToBase64(audioBlob);
+      console.log('[AgentChatPanel] Base64 length:', base64Audio.length);
+
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: { audio: base64Audio },
+      });
+
+      if (error) {
+        console.error('[AgentChatPanel] Transcription error:', error);
+        throw error;
+      }
+
+      console.log('[AgentChatPanel] Transcription result:', data);
+      return data?.text || null;
+    } catch (error) {
+      console.error('[AgentChatPanel] Failed to transcribe:', error);
+      toast.error('Erro ao transcrever áudio');
+      return null;
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -50,15 +95,23 @@ export default function AgentChatPanel({ agentId, className }: AgentChatPanelPro
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         stream.getTracks().forEach(track => track.stop());
         
-        // Here you would transcribe the audio - for now we'll simulate with a message
-        // In production, you'd send to a speech-to-text service
-        sendMessage('[Mensagem de áudio]', { isAudio: true });
+        // Transcribe the audio
+        const transcribedText = await transcribeAudio(audioBlob);
+        
+        if (transcribedText && transcribedText.trim()) {
+          // Send the transcribed message with isAudio flag for voice response
+          sendMessage(transcribedText, { isAudio: true });
+        } else {
+          toast.error('Não foi possível entender o áudio. Tente novamente.');
+        }
       };
 
       mediaRecorder.start();
       setIsRecording(true);
+      toast.info('Gravando... Clique novamente para parar.');
     } catch (error) {
       console.error('Error accessing microphone:', error);
+      toast.error('Erro ao acessar microfone. Verifique as permissões.');
     }
   };
 
@@ -121,9 +174,11 @@ export default function AgentChatPanel({ agentId, className }: AgentChatPanelPro
             size="icon"
             variant={isRecording ? "destructive" : "outline"}
             onClick={isRecording ? stopRecording : startRecording}
-            disabled={isLoading}
+            disabled={isLoading || isTranscribing}
           >
-            {isRecording ? (
+            {isTranscribing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : isRecording ? (
               <MicOff className="h-4 w-4" />
             ) : (
               <Mic className="h-4 w-4" />
@@ -133,11 +188,11 @@ export default function AgentChatPanel({ agentId, className }: AgentChatPanelPro
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isRecording ? "Gravando áudio..." : "Digite sua mensagem..."}
-            disabled={isLoading || isRecording}
+            placeholder={isRecording ? "Gravando áudio..." : isTranscribing ? "Transcrevendo..." : "Digite sua mensagem..."}
+            disabled={isLoading || isRecording || isTranscribing}
             className="flex-1"
           />
-          <Button type="submit" disabled={isLoading || !input.trim() || isRecording}>
+          <Button type="submit" disabled={isLoading || !input.trim() || isRecording || isTranscribing}>
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

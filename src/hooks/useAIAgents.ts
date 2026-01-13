@@ -18,13 +18,13 @@ export function useAIAgents() {
   return useQuery({
     queryKey: ['ai-agents'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('ai_agents')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as AIAgent[];
+      return (data || []) as AIAgent[];
     },
   });
 }
@@ -35,7 +35,7 @@ export function useAIAgent(id: string | undefined) {
     queryFn: async () => {
       if (!id) return null;
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('ai_agents')
         .select('*')
         .eq('id', id)
@@ -53,9 +53,9 @@ export function useCreateAIAgent() {
 
   return useMutation({
     mutationFn: async (data: Partial<AIAgentFormData>) => {
-      const { data: agent, error } = await supabase
+      const { data: agent, error } = await (supabase as any)
         .from('ai_agents')
-        .insert(data as any)
+        .insert(data)
         .select()
         .single();
 
@@ -77,9 +77,9 @@ export function useUpdateAIAgent() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<AIAgentFormData> }) => {
-      const { data: agent, error } = await supabase
+      const { data: agent, error } = await (supabase as any)
         .from('ai_agents')
-        .update({ ...data, updated_at: new Date().toISOString() } as any)
+        .update({ ...data, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();
@@ -103,7 +103,7 @@ export function useDeleteAIAgent() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('ai_agents')
         .delete()
         .eq('id', id);
@@ -130,14 +130,14 @@ export function useAIAgentTools(agentId: string | undefined) {
     queryFn: async () => {
       if (!agentId) return [];
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('ai_agent_tools')
         .select('*')
         .eq('agent_id', agentId)
         .order('priority', { ascending: true });
 
       if (error) throw error;
-      return data as AIAgentTool[];
+      return (data || []) as AIAgentTool[];
     },
     enabled: !!agentId,
   });
@@ -148,17 +148,17 @@ export function useCreateAIAgentTool() {
 
   return useMutation({
     mutationFn: async (data: AIAgentToolFormData) => {
-      const { data: tool, error } = await supabase
+      const { data: tool, error } = await (supabase as any)
         .from('ai_agent_tools')
-        .insert([data] as any)
+        .insert(data)
         .select()
         .single();
 
       if (error) throw error;
       return tool as AIAgentTool;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['ai-agent-tools', variables.agent_id] });
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['ai-agent-tools', result.agent_id] });
       toast.success('Ferramenta adicionada!');
     },
     onError: (error: Error) => {
@@ -172,9 +172,9 @@ export function useUpdateAIAgentTool() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<AIAgentToolFormData> }) => {
-      const { data: tool, error } = await supabase
+      const { data: tool, error } = await (supabase as any)
         .from('ai_agent_tools')
-        .update(data as any)
+        .update(data)
         .eq('id', id)
         .select()
         .single();
@@ -197,7 +197,7 @@ export function useDeleteAIAgentTool() {
 
   return useMutation({
     mutationFn: async ({ id, agentId }: { id: string; agentId: string }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('ai_agent_tools')
         .delete()
         .eq('id', id);
@@ -225,14 +225,14 @@ export function useAIAgentDataSources(agentId: string | undefined) {
     queryFn: async () => {
       if (!agentId) return [];
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('ai_agent_data_sources')
         .select('*')
         .eq('agent_id', agentId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as AIAgentDataSource[];
+      return (data || []) as AIAgentDataSource[];
     },
     enabled: !!agentId,
   });
@@ -243,17 +243,17 @@ export function useCreateAIAgentDataSource() {
 
   return useMutation({
     mutationFn: async (data: AIAgentDataSourceFormData) => {
-      const { data: source, error } = await supabase
+      const { data: source, error } = await (supabase as any)
         .from('ai_agent_data_sources')
-        .insert([data] as any)
+        .insert(data)
         .select()
         .single();
 
       if (error) throw error;
       return source as AIAgentDataSource;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['ai-agent-data-sources', variables.agent_id] });
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['ai-agent-data-sources', result.agent_id] });
       toast.success('Fonte de dados adicionada!');
     },
     onError: (error: Error) => {
@@ -267,7 +267,7 @@ export function useDeleteAIAgentDataSource() {
 
   return useMutation({
     mutationFn: async ({ id, agentId }: { id: string; agentId: string }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('ai_agent_data_sources')
         .delete()
         .eq('id', id);
@@ -286,83 +286,12 @@ export function useDeleteAIAgentDataSource() {
 }
 
 // =============================================
-// CONVERSATIONS & MESSAGES
-// =============================================
-
-export function useAIAgentConversations(agentId: string | undefined) {
-  return useQuery({
-    queryKey: ['ai-agent-conversations', agentId],
-    queryFn: async () => {
-      if (!agentId) return [];
-      
-      const { data, error } = await supabase
-        .from('ai_agent_conversations')
-        .select('*')
-        .eq('agent_id', agentId)
-        .order('started_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!agentId,
-  });
-}
-
-export function useAIAgentMessages(conversationId: string | undefined) {
-  return useQuery({
-    queryKey: ['ai-agent-messages', conversationId],
-    queryFn: async () => {
-      if (!conversationId) return [];
-      
-      const { data, error } = await supabase
-        .from('ai_agent_messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!conversationId,
-  });
-}
-
-// =============================================
-// METRICS
-// =============================================
-
-export function useAIAgentMetrics(agentId: string | undefined, days: number = 30) {
-  return useQuery({
-    queryKey: ['ai-agent-metrics', agentId, days],
-    queryFn: async () => {
-      if (!agentId) return [];
-      
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
-      
-      const { data, error } = await supabase
-        .from('ai_agent_metrics')
-        .select('*')
-        .eq('agent_id', agentId)
-        .gte('date', startDate.toISOString().split('T')[0])
-        .order('date', { ascending: true });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!agentId,
-  });
-}
-
-// =============================================
 // VALIDATE API KEY
 // =============================================
 
 export function useValidateAPIKey() {
   return useMutation({
     mutationFn: async ({ provider, apiKey }: { provider: 'openai' | 'google'; apiKey: string }) => {
-      // Simple validation by making a minimal API call
       if (provider === 'openai') {
         const response = await fetch('https://api.openai.com/v1/models', {
           headers: { 'Authorization': `Bearer ${apiKey}` },

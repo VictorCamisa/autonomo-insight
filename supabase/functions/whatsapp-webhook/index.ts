@@ -420,10 +420,10 @@ async function processWithAIAgent(
         const ano = v.year_model || v.year_fabrication || 'N/A';
         const versao = v.version ? ` ${v.version}` : '';
         systemPrompt += `${i + 1}. ${v.brand} ${v.model}${versao} ${ano}\n`;
-        systemPrompt += `   💰 Preço: ${preco}\n`;
-        systemPrompt += `   📏 KM: ${km}\n`;
-        systemPrompt += `   🎨 Cor: ${v.color || 'N/A'}\n`;
-        systemPrompt += `   ⚙️ Câmbio: ${v.transmission || 'N/A'} | Combustível: ${v.fuel_type || 'N/A'}\n`;
+        systemPrompt += `   Preco: ${preco}\n`;
+        systemPrompt += `   KM: ${km}\n`;
+        systemPrompt += `   Cor: ${v.color || 'N/A'}\n`;
+        systemPrompt += `   Cambio: ${v.transmission || 'N/A'} | Combustivel: ${v.fuel_type || 'N/A'}\n`;
         if (v.notes) systemPrompt += `   📝 Obs: ${v.notes}\n`;
         systemPrompt += '\n';
       });

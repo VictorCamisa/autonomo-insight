@@ -2381,7 +2381,7 @@ export type Database = {
           notes: string | null
           objections: Json | null
           probability: number | null
-          salesperson_id: string
+          salesperson_id: string | null
           showed_up: boolean | null
           status: Database["public"]["Enums"]["negotiation_status"]
           structured_loss_reason:
@@ -2408,7 +2408,7 @@ export type Database = {
           notes?: string | null
           objections?: Json | null
           probability?: number | null
-          salesperson_id: string
+          salesperson_id?: string | null
           showed_up?: boolean | null
           status?: Database["public"]["Enums"]["negotiation_status"]
           structured_loss_reason?:
@@ -2435,7 +2435,7 @@ export type Database = {
           notes?: string | null
           objections?: Json | null
           probability?: number | null
-          salesperson_id?: string
+          salesperson_id?: string | null
           showed_up?: boolean | null
           status?: Database["public"]["Enums"]["negotiation_status"]
           structured_loss_reason?:

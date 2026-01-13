@@ -1520,28 +1520,57 @@ async function sendWhatsAppToSalesperson(
       formattedPhone = '55' + formattedPhone;
     }
 
+    // Format lead phone for WhatsApp link
+    let leadPhoneFormatted = (lead?.phone || '').replace(/\D/g, '');
+    if (leadPhoneFormatted && !leadPhoneFormatted.startsWith('55')) {
+      leadPhoneFormatted = '55' + leadPhoneFormatted;
+    }
+    const whatsappLink = leadPhoneFormatted ? `wa.me/${leadPhoneFormatted}` : 'Não informado';
+
+    // Fetch suggested vehicles from inventory based on client interest
+    const vehicleSuggestions = await getVehicleSuggestions(supabase, qualData?.vehicle_interest, qualData?.budget);
+
     // Build qualification card message
     const formatCurrency = (value?: number) => {
       if (!value) return 'Não informado';
       return `R$ ${value.toLocaleString('pt-BR')}`;
     };
 
-    const fichaMensagem = `🔥 *NOVO LEAD QUALIFICADO!*
+    // Build suggestions section
+    let suggestionsSection = '';
+    if (vehicleSuggestions.length > 0) {
+      suggestionsSection = `
 
-👤 *Cliente:* ${lead?.name || 'Não informado'}
-📞 *Telefone:* ${lead?.phone || 'Não informado'}
+━━━━━━━━━━━━━━━━━━━━━
+💡 *DICA: VEÍCULOS NO ESTOQUE*
+_Modelos similares que podem interessar:_
 
-📋 *FICHA DE QUALIFICAÇÃO:*
-🚗 Veículo de Interesse: ${qualData?.vehicle_interest || 'Não informado'}
-💰 Orçamento: ${formatCurrency(qualData?.budget)}
-💵 Entrada: ${formatCurrency(qualData?.down_payment)}
-📊 Parcela Desejada: ${formatCurrency(qualData?.desired_installment)}
-✅ Nome Limpo: ${qualData?.clean_credit === true ? 'Sim' : qualData?.clean_credit === false ? 'Não' : 'Não informado'}
-📝 CPF: ${qualData?.cpf || 'Não informado'}
+${vehicleSuggestions.map((v, i) => `${i + 1}. *${v.brand} ${v.model}* ${v.year_model}
+   ${formatCurrency(v.sale_price)} • ${v.km?.toLocaleString('pt-BR') || '0'} km`).join('\n\n')}
 
-⏰ *Entre em contato o quanto antes!*
+_Use essas opções para negociar!_`;
+    }
 
-_Clique no telefone acima para iniciar a conversa._`;
+    const fichaMensagem = `🔥 *LEAD QUENTE - AÇÃO IMEDIATA*
+
+━━━━━━━━━━━━━━━━━━━━━
+👤 *${lead?.name || 'Cliente'}*
+📱 ${whatsappLink}
+━━━━━━━━━━━━━━━━━━━━━
+
+💰 *PERFIL FINANCEIRO*
+• Orçamento: ${formatCurrency(qualData?.budget)}
+• Entrada: ${formatCurrency(qualData?.down_payment)}
+• Parcela: ${formatCurrency(qualData?.desired_installment)}/mês
+• Crédito: ${qualData?.clean_credit === true ? '✅ Aprovado' : qualData?.clean_credit === false ? '❌ Restrição' : '⏳ Verificar'}
+
+🚗 *INTERESSE*
+${qualData?.vehicle_interest || 'Não especificado'}
+
+📋 CPF: ${qualData?.cpf || 'Não informado'}${suggestionsSection}
+
+━━━━━━━━━━━━━━━━━━━━━
+⚡ *Qualificado agora - Seja o primeiro!*`;
 
     // Send via Evolution API
     const evolutionUrl = Deno.env.get('EVOLUTION_API_URL')?.replace(/\/$/, '');
@@ -1575,6 +1604,79 @@ _Clique no telefone acima para iniciar a conversa._`;
     console.log('[Notification] WhatsApp sent successfully to salesperson:', formattedPhone);
   } catch (error) {
     console.error('[Notification] Error sending WhatsApp to salesperson:', error);
+  }
+}
+
+// Get vehicle suggestions from inventory based on client interest
+async function getVehicleSuggestions(
+  supabase: any,
+  vehicleInterest?: string,
+  budget?: number
+): Promise<Array<{ brand: string; model: string; year_model: number; sale_price: number; km: number }>> {
+  try {
+    if (!vehicleInterest) return [];
+
+    // Extract brand/model keywords from interest
+    const keywords = vehicleInterest.toLowerCase().split(/\s+/).filter(k => k.length > 2);
+    
+    // Build query for available vehicles
+    let query = supabase
+      .from('vehicles')
+      .select('brand, model, year_model, sale_price, km')
+      .eq('status', 'disponivel')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    const { data: vehicles, error } = await query;
+
+    if (error || !vehicles) {
+      console.log('[Suggestions] Error fetching vehicles:', error);
+      return [];
+    }
+
+    // Score and filter vehicles based on interest match
+    const scoredVehicles = vehicles.map((v: any) => {
+      const vehicleText = `${v.brand} ${v.model}`.toLowerCase();
+      let score = 0;
+      
+      // Match keywords
+      for (const keyword of keywords) {
+        if (vehicleText.includes(keyword)) {
+          score += 10;
+        }
+      }
+      
+      // Budget proximity bonus (within 20% of budget)
+      if (budget && v.sale_price) {
+        const priceDiff = Math.abs(v.sale_price - budget) / budget;
+        if (priceDiff <= 0.2) {
+          score += 5;
+        } else if (priceDiff <= 0.4) {
+          score += 2;
+        }
+      }
+      
+      return { ...v, score };
+    });
+
+    // Sort by score and return top 3
+    const suggestions = scoredVehicles
+      .filter((v: any) => v.score > 0)
+      .sort((a: any, b: any) => b.score - a.score)
+      .slice(0, 3);
+
+    // If no matches, return vehicles within budget range
+    if (suggestions.length === 0 && budget) {
+      const budgetMatches = vehicles
+        .filter((v: any) => v.sale_price && v.sale_price <= budget * 1.2 && v.sale_price >= budget * 0.7)
+        .slice(0, 3);
+      return budgetMatches;
+    }
+
+    return suggestions;
+  } catch (error) {
+    console.error('[Suggestions] Error getting vehicle suggestions:', error);
+    return [];
   }
 }
 

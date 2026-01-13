@@ -899,6 +899,8 @@ async function sendWhatsAppAudioResponse(
 ): Promise<boolean> {
   const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
   const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!evolutionUrl || !evolutionApiKey) {
     console.error('[TTS] Evolution API not configured');
@@ -938,17 +940,35 @@ async function sendWhatsAppAudioResponse(
     const audioBuffer = await ttsResponse.arrayBuffer();
     console.log('[TTS] Audio generated, size:', audioBuffer.byteLength);
 
-    // Convert to base64 for Evolution API
-    const uint8Array = new Uint8Array(audioBuffer);
-    let binary = '';
-    for (let i = 0; i < uint8Array.length; i++) {
-      binary += String.fromCharCode(uint8Array[i]);
+    // Upload audio to Supabase Storage and get public URL
+    const fileName = `tts-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`;
+    
+    console.log('[TTS] Uploading audio to Supabase Storage...');
+    const uploadResponse = await fetch(
+      `${supabaseUrl}/storage/v1/object/vehicle-images/ai-audio/${fileName}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'audio/mpeg',
+        },
+        body: audioBuffer,
+      }
+    );
+
+    if (!uploadResponse.ok) {
+      const uploadError = await uploadResponse.text();
+      console.error('[TTS] Upload error:', uploadError);
+      return false;
     }
-    const base64Audio = btoa(binary);
+
+    // Get public URL
+    const audioUrl = `${supabaseUrl}/storage/v1/object/public/vehicle-images/ai-audio/${fileName}`;
+    console.log('[TTS] Audio uploaded, URL:', audioUrl);
     
-    console.log('[TTS] Sending audio via Evolution API (sendWhatsAppAudio endpoint)...');
+    console.log('[TTS] Sending audio via Evolution API (sendWhatsAppAudio endpoint with URL)...');
     
-    // Send audio via Evolution API - using sendWhatsAppAudio for PTT audio
+    // Send audio via Evolution API using URL
     const response = await fetch(`${evolutionUrl}/message/sendWhatsAppAudio/${instanceName}`, {
       method: 'POST',
       headers: {
@@ -957,7 +977,7 @@ async function sendWhatsAppAudioResponse(
       },
       body: JSON.stringify({
         number: remoteJid,
-        audio: `data:audio/mpeg;base64,${base64Audio}`,
+        audio: audioUrl,
       }),
     });
 

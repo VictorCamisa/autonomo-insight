@@ -1,1 +1,4 @@
 project_id = "ahfoixzdnpswuqavbmgf"
+
+[functions.elevenlabs-voices]
+verify_jwt = false

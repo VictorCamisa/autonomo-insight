@@ -840,8 +840,11 @@ async function sendWhatsAppMessage(instanceName: string, remoteJid: string, mess
   }
 }
 
-// Send text in chunks (multiple messages)
+// Send text in chunks (multiple messages) with natural delay
 async function sendTextInChunks(instanceName: string, targetJid: string, text: string): Promise<void> {
+  // Random delay between 2-4 seconds to feel more human
+  const getHumanDelay = () => 2000 + Math.random() * 2000;
+  
   const paragraphs = text
     .split(/\n\n+/)
     .map((p: string) => p.trim())
@@ -849,9 +852,13 @@ async function sendTextInChunks(instanceName: string, targetJid: string, text: s
   
   if (paragraphs.length > 1) {
     console.log('[AI Agent] Sending', paragraphs.length, 'separate messages');
-    for (const paragraph of paragraphs) {
-      await sendWhatsAppMessage(instanceName, targetJid, paragraph);
-      await new Promise(resolve => setTimeout(resolve, 600));
+    for (let i = 0; i < paragraphs.length; i++) {
+      await sendWhatsAppMessage(instanceName, targetJid, paragraphs[i]);
+      if (i < paragraphs.length - 1) {
+        const delay = getHumanDelay();
+        console.log('[AI Agent] Waiting', Math.round(delay), 'ms before next message');
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   } else if (text.length > 300) {
     const sentences = text.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim());
@@ -869,9 +876,13 @@ async function sendTextInChunks(instanceName: string, targetJid: string, text: s
     if (currentChunk) chunks.push(currentChunk.trim());
     
     console.log('[AI Agent] Split long message into', chunks.length, 'chunks');
-    for (const chunk of chunks) {
-      await sendWhatsAppMessage(instanceName, targetJid, chunk);
-      await new Promise(resolve => setTimeout(resolve, 600));
+    for (let i = 0; i < chunks.length; i++) {
+      await sendWhatsAppMessage(instanceName, targetJid, chunks[i]);
+      if (i < chunks.length - 1) {
+        const delay = getHumanDelay();
+        console.log('[AI Agent] Waiting', Math.round(delay), 'ms before next message');
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   } else {
     await sendWhatsAppMessage(instanceName, targetJid, text);

@@ -98,8 +98,15 @@ export default function AgentLLMConfigPage() {
   };
 
   const onSubmit = async (data: FormData) => {
-    await updateAgent.mutateAsync({ id: agentId!, data });
-    navigate(`/ai-agents/${agentId}/memoria`);
+    console.log('[AgentLLMConfig] Saving data:', data);
+    console.log('[AgentLLMConfig] Agent ID:', agentId);
+    try {
+      await updateAgent.mutateAsync({ id: agentId!, data });
+      console.log('[AgentLLMConfig] Save successful');
+      navigate(`/ai-agents/${agentId}/memoria`);
+    } catch (error) {
+      console.error('[AgentLLMConfig] Save error:', error);
+    }
   };
 
   if (isLoading) {

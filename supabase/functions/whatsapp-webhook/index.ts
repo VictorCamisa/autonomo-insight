@@ -65,10 +65,14 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
   const message = data;
   const remoteJid = message.key?.remoteJid;
   const fromMe = message.key?.fromMe;
+  
+  // Extract audio URL if present
+  const audioUrl = message.message?.audioMessage?.url || null;
+  
   const content =
     message.message?.conversation ||
     message.message?.extendedTextMessage?.text ||
-    '[Mídia]';
+    (audioUrl ? '[Áudio]' : '[Mídia]');
   const pushName = message.pushName;
   const messageId = message.key?.id;
 
@@ -233,7 +237,58 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
   // ===== AI AGENT INTEGRATION =====
   // Check if there's an active AI agent linked to this WhatsApp instance
   if (instance?.id) {
-    await processWithAIAgent(supabase, instance.id, instanceName, content, effectivePhone, leadId, contact?.id || null, remoteJidToStore || remoteJid || null);
+    await processWithAIAgent(supabase, instance.id, instanceName, content, effectivePhone, leadId, contact?.id || null, remoteJidToStore || remoteJid || null, audioUrl);
+  }
+}
+
+// ===== TRANSCRIBE AUDIO FROM WHATSAPP =====
+async function transcribeWhatsAppAudio(audioUrl: string, mediaKey: string): Promise<string | null> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  
+  if (!OPENAI_API_KEY) {
+    console.log('[Transcribe] No OpenAI API key for transcription');
+    return null;
+  }
+
+  try {
+    console.log('[Transcribe] Downloading audio from:', audioUrl.substring(0, 100));
+    
+    // Download the audio file
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) {
+      console.error('[Transcribe] Failed to download audio:', audioResponse.status);
+      return null;
+    }
+
+    const audioBlob = await audioResponse.blob();
+    console.log('[Transcribe] Audio downloaded, size:', audioBlob.size);
+
+    // Create form data for Whisper API
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.ogg');
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'pt');
+
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('[Transcribe] Whisper API error:', error);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('[Transcribe] Transcription result:', data.text);
+    return data.text;
+  } catch (error) {
+    console.error('[Transcribe] Error:', error);
+    return null;
   }
 }
 
@@ -246,12 +301,23 @@ async function processWithAIAgent(
   phone: string,
   leadId: string | null,
   contactId: string | null,
-  remoteJid: string | null
+  remoteJid: string | null,
+  audioUrl?: string
 ) {
-  // Check if content is just media placeholder - treat as audio request
-  const isAudioMessage = messageContent === '[Mídia]';
-  if (isAudioMessage) {
-    console.log('Media message detected - treating as audio, will respond with audio');
+  // Check if content is just media placeholder - try to transcribe audio
+  let isAudioMessage = messageContent === '[Mídia]';
+  let actualMessage = messageContent;
+  
+  if (isAudioMessage && audioUrl) {
+    console.log('[AI Agent] Audio message detected, attempting transcription...');
+    const transcription = await transcribeWhatsAppAudio(audioUrl, '');
+    if (transcription) {
+      actualMessage = transcription;
+      console.log('[AI Agent] Transcribed audio to:', actualMessage);
+    } else {
+      console.log('[AI Agent] Transcription failed, using placeholder');
+      actualMessage = 'O cliente enviou um áudio mas não consegui transcrever. Por favor, peça para ele enviar em texto.';
+    }
   }
 
   // Find AI agent linked to this instance
@@ -328,7 +394,7 @@ async function processWithAIAgent(
 
   // Check for transfer keywords
   if (agent.transfer_to_human_enabled && agent.transfer_keywords?.length > 0) {
-    const lowerContent = messageContent.toLowerCase();
+    const lowerContent = actualMessage.toLowerCase();
     const shouldTransfer = agent.transfer_keywords.some((keyword: string) => 
       lowerContent.includes(keyword.toLowerCase())
     );
@@ -337,7 +403,7 @@ async function processWithAIAgent(
       console.log('Transfer keyword detected, creating human takeover');
       await supabase.from('ai_agent_human_takeover').insert({
         conversation_id: conversation.id,
-        reason: `Usuário solicitou transferência: "${messageContent}"`,
+        reason: `Usuário solicitou transferência: "${actualMessage}"`,
       });
 
       await sendWhatsAppMessage(
@@ -367,11 +433,11 @@ async function processWithAIAgent(
     }
   }
 
-  // Save user message
+  // Save user message (with actual transcribed content)
   await supabase.from('ai_agent_messages').insert({
     conversation_id: conversation.id,
     role: 'user',
-    content: isAudioMessage ? '[Mensagem de áudio recebida]' : messageContent,
+    content: actualMessage,
   });
 
   // Get conversation history
@@ -385,7 +451,7 @@ async function processWithAIAgent(
   const messages = history?.map((m: any) => ({
     role: m.role,
     content: m.content,
-  })) || [{ role: 'user', content: messageContent }];
+  })) || [{ role: 'user', content: actualMessage }];
 
   // ===== FETCH VEHICLES WITH PHOTOS =====
   const { data: vehicles, error: vehiclesError } = await supabase
@@ -403,24 +469,33 @@ async function processWithAIAgent(
   // Build system prompt with vehicles INCLUDING PHOTOS
   let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
   
-  // CRITICAL: Add photo instructions
+  // CRITICAL: Add photo instructions - MUITO EXPLÍCITO
   systemPrompt += `
 
-=== REGRAS OBRIGATÓRIAS PARA FOTOS ===
-Quando o cliente pedir foto de um veículo, você DEVE:
-1. Encontrar o veículo no estoque
-2. Se tiver foto disponível, OBRIGATORIAMENTE responder com a tag:
-   [ENVIAR_FOTO: URL_COMPLETA]
+###############################################
+# REGRA CRÍTICA E OBRIGATÓRIA PARA FOTOS #####
+###############################################
 
-Por exemplo, se pedirem foto do Polo:
-"Claro! Aqui está a foto do Polo:
+SE O CLIENTE PEDIR FOTO DE UM VEÍCULO (usando palavras como "foto", "imagem", "ver", "mostra", "manda foto", "tem foto", etc):
 
-[ENVIAR_FOTO: https://exemplo.com/foto.jpg]
+1. Localize o veículo no ESTOQUE abaixo
+2. Pegue a URL da "foto_principal" do veículo
+3. OBRIGATORIAMENTE inclua esta tag na sua resposta:
 
-O que achou? Posso te ajudar com mais informações!"
+[ENVIAR_FOTO: URL_DA_FOTO]
 
-IMPORTANTE: Use APENAS URLs que existem no campo "fotos" do veículo. A primeira foto é a principal.
-=== FIM DAS REGRAS DE FOTOS ===
+EXEMPLO CORRETO quando pedem foto do Polo:
+"Claro! Segue a foto do Polo:
+
+[ENVIAR_FOTO: https://ahfoixzdnpswuqavbmgf.supabase.co/storage/v1/object/public/vehicle-images/xxx/foto.jpeg]
+
+Bonito, né? Posso agendar uma visita pra você ver pessoalmente?"
+
+⚠️ NUNCA responda "vou enviar" ou "aqui está" sem incluir a tag [ENVIAR_FOTO: URL].
+⚠️ A URL DEVE ser copiada EXATAMENTE do campo "foto_principal" do veículo.
+⚠️ Se o veículo não tiver foto, diga "Infelizmente não temos foto desse modelo no momento."
+
+###############################################
 `;
 
   if (vehicles?.length) {
@@ -434,20 +509,18 @@ IMPORTANTE: Use APENAS URLs que existem no campo "fotos" do veículo. A primeira
       const versao = v.version ? ` ${v.version}` : '';
       const fotos = v.images && v.images.length > 0 ? v.images : [];
       
-      systemPrompt += `${i + 1}. ${v.brand} ${v.model}${versao} ${ano}\n`;
-      systemPrompt += `   Preco: ${preco}\n`;
-      systemPrompt += `   KM: ${km} | Cor: ${v.color || 'N/A'}\n`;
-      systemPrompt += `   Cambio: ${v.transmission || 'N/A'} | Combustivel: ${v.fuel_type || 'N/A'}\n`;
+      systemPrompt += `VEÍCULO ${i + 1}: ${v.brand} ${v.model}${versao} ${ano}\n`;
+      systemPrompt += `  - Preco: ${preco}\n`;
+      systemPrompt += `  - KM: ${km} | Cor: ${v.color || 'N/A'}\n`;
+      systemPrompt += `  - Cambio: ${v.transmission || 'N/A'} | Combustivel: ${v.fuel_type || 'N/A'}\n`;
       if (fotos.length > 0) {
-        systemPrompt += `   📸 FOTOS DISPONÍVEIS: ${fotos.length} fotos\n`;
-        systemPrompt += `   foto_principal: ${fotos[0]}\n`;
+        systemPrompt += `  - 📸 foto_principal: ${fotos[0]}\n`;
         if (fotos.length > 1) {
-          systemPrompt += `   outras_fotos: ${fotos.slice(1, 3).join(', ')}\n`;
+          systemPrompt += `  - 📸 mais_fotos: ${fotos.slice(1, 3).join(' | ')}\n`;
         }
       } else {
-        systemPrompt += `   ⚠️ SEM FOTOS DISPONÍVEIS\n`;
+        systemPrompt += `  - ⚠️ SEM FOTOS\n`;
       }
-      if (v.notes) systemPrompt += `   📝 Obs: ${v.notes}\n`;
       systemPrompt += '\n';
     });
     systemPrompt += '=== FIM DO ESTOQUE ===\n';

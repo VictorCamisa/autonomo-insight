@@ -508,16 +508,9 @@ export default function VehicleDetails() {
                     <span className="text-muted-foreground">Custos Adicionais</span>
                     <span className="font-medium">{formatCurrency(dre.total_real_costs)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      Custo de Capital ({dre.days_in_stock} dias)
-                    </span>
-                    <span className="font-medium text-destructive">{formatCurrency(dre.holding_cost)}</span>
-                  </div>
                   <div className="border-t pt-4 flex justify-between">
                     <span className="font-semibold">Investimento Total</span>
-                    <span className="font-bold text-lg">{formatCurrency(dre.total_investment + dre.holding_cost)}</span>
+                    <span className="font-bold text-lg">{formatCurrency(dre.total_investment)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -534,7 +527,7 @@ export default function VehicleDetails() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">(-) Investimento Total</span>
-                    <span className="font-medium">{formatCurrency(dre.total_investment + dre.holding_cost)}</span>
+                    <span className="font-medium">{formatCurrency(dre.total_investment)}</span>
                   </div>
                   <div className="border-t pt-4 flex justify-between items-center">
                     <span className="font-semibold flex items-center gap-2">

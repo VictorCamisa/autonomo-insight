@@ -62,15 +62,17 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
         content: m.content,
       }));
 
+      // Build the full message with context
+      const fullMessage = `[Contexto do Sistema: ${systemPrompt}]
+
+Histórico da conversa:
+${historyMessages.slice(0, -1).map(m => `${m.role === 'user' ? 'Usuário' : 'Assistente'}: ${m.content}`).join('\n')}
+
+Usuário: ${content}`;
+
       // Call the generate-report function which uses Lovable AI
       const { data, error } = await supabase.functions.invoke('generate-report', {
-        body: {
-          type: 'chat',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...historyMessages,
-          ],
-        },
+        body: { message: fullMessage },
       });
 
       if (error) {

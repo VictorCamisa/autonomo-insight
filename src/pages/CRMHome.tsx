@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { UserCircle, User2, Pencil } from 'lucide-react';
+import { UserCircle, User2, Pencil, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeads, useCreateLead } from '@/hooks/useLeads';
-import { useNegotiations, useCreateNegotiation, useUpdateNegotiation } from '@/hooks/useNegotiations';
+import { useNegotiations, useCreateNegotiation, useUpdateNegotiation, useDeleteNegotiation } from '@/hooks/useNegotiations';
 import { LeadForm } from '@/components/crm/LeadForm';
 import { LeadDetailSheet } from '@/components/crm/LeadDetailSheet';
 import { NegotiationPipeline } from '@/components/crm/NegotiationPipeline';
@@ -22,6 +23,7 @@ export default function CRMHome() {
   const createLead = useCreateLead();
   const createNegotiation = useCreateNegotiation();
   const updateNegotiation = useUpdateNegotiation();
+  const deleteNegotiation = useDeleteNegotiation();
   
   const [createLeadOpen, setCreateLeadOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -39,6 +41,10 @@ export default function CRMHome() {
   // Action choice dialog for negotiation click
   const [actionChoiceOpen, setActionChoiceOpen] = useState(false);
   const [pendingNegotiation, setPendingNegotiation] = useState<Negotiation | null>(null);
+  
+  // Delete confirmation dialog
+  const [deleteNegotiationOpen, setDeleteNegotiationOpen] = useState(false);
+  const [negotiationToDelete, setNegotiationToDelete] = useState<Negotiation | null>(null);
 
   const isManager = role === 'gerente';
 
@@ -207,19 +213,32 @@ export default function CRMHome() {
                 onSubmit={handleUpdateNegotiation} 
                 isLoading={updateNegotiation.isPending}
               />
-              {selectedNegotiation.customer_id && (
+              <div className="flex gap-2 mt-2">
+                {selectedNegotiation.customer_id && (
+                  <Button 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => {
+                      setEditNegotiationOpen(false);
+                      handleViewCustomer(selectedNegotiation.customer_id!);
+                    }}
+                  >
+                    <UserCircle className="h-4 w-4 mr-2" />
+                    Ver Cliente
+                  </Button>
+                )}
                 <Button 
-                  variant="outline" 
-                  className="w-full mt-2"
+                  variant="destructive" 
+                  className={selectedNegotiation.customer_id ? '' : 'w-full'}
                   onClick={() => {
-                    setEditNegotiationOpen(false);
-                    handleViewCustomer(selectedNegotiation.customer_id!);
+                    setNegotiationToDelete(selectedNegotiation);
+                    setDeleteNegotiationOpen(true);
                   }}
                 >
-                  <UserCircle className="h-4 w-4 mr-2" />
-                  Ver Ficha do Cliente
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir Negociação
                 </Button>
-              )}
+              </div>
             </>
           )}
         </DialogContent>
@@ -257,9 +276,56 @@ export default function CRMHome() {
                 <div className="text-xs text-muted-foreground">Status, valor, previsão e objeções</div>
               </div>
             </Button>
+            <Button
+              variant="outline"
+              className="justify-start h-14 text-left text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => {
+                setNegotiationToDelete(pendingNegotiation);
+                setActionChoiceOpen(false);
+                setDeleteNegotiationOpen(true);
+              }}
+            >
+              <Trash2 className="h-5 w-5 mr-3" />
+              <div>
+                <div className="font-medium">Excluir Negociação</div>
+                <div className="text-xs text-muted-foreground">Remover permanentemente</div>
+              </div>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteNegotiationOpen} onOpenChange={setDeleteNegotiationOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Negociação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a negociação de <span className="font-semibold">{negotiationToDelete?.lead?.name || 'Lead'}</span>?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setNegotiationToDelete(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (negotiationToDelete) {
+                  await deleteNegotiation.mutateAsync(negotiationToDelete.id);
+                  setDeleteNegotiationOpen(false);
+                  setEditNegotiationOpen(false);
+                  setNegotiationToDelete(null);
+                  setSelectedNegotiation(null);
+                }
+              }}
+            >
+              {deleteNegotiation.isPending ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <CustomerDetailSheet
         customerId={selectedCustomerId}

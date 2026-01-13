@@ -66,35 +66,49 @@ serve(async (req) => {
 
     // INVENTORY - Estoque de veículos
     if (activeDataSources.includes('inventory')) {
-      const { data: vehicles } = await supabase
+      console.log('[ai-agent-chat] Fetching vehicles from inventory...');
+      const { data: vehicles, error: vehiclesError } = await supabase
         .from('vehicles')
-        .select('id, brand, model, year, sale_price, purchase_price, color, fuel_type, transmission, mileage, status, description')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, purchase_price, color, fuel_type, transmission, km, status, notes')
         .eq('status', 'disponivel')
         .order('created_at', { ascending: false })
         .limit(50);
+
+      if (vehiclesError) {
+        console.error('[ai-agent-chat] Error fetching vehicles:', vehiclesError);
+      } else {
+        console.log('[ai-agent-chat] Found', vehicles?.length || 0, 'vehicles');
+      }
 
       contextData.estoque = {
         total_disponiveis: vehicles?.length || 0,
         veiculos: vehicles?.map(v => ({
           id: v.id,
-          veiculo: `${v.brand} ${v.model} ${v.year}`,
-          preco: v.sale_price ? `R$ ${v.sale_price.toLocaleString('pt-BR')}` : 'Consultar',
+          veiculo: `${v.brand} ${v.model} ${v.version || ''} ${v.year_model || v.year_fabrication}`.trim(),
+          preco: v.sale_price ? `R$ ${Number(v.sale_price).toLocaleString('pt-BR')}` : 'Consultar',
+          preco_numerico: v.sale_price ? Number(v.sale_price) : null,
           cor: v.color,
           combustivel: v.fuel_type,
           cambio: v.transmission,
-          km: v.mileage ? `${v.mileage.toLocaleString('pt-BR')} km` : 'N/A',
-          descricao: v.description,
+          km: v.km ? `${Number(v.km).toLocaleString('pt-BR')} km` : 'N/A',
+          ano: v.year_model || v.year_fabrication,
+          observacoes: v.notes,
         })) || [],
       };
     }
 
     // CRM - Leads
     if (activeDataSources.includes('crm')) {
-      const { data: leads } = await supabase
+      console.log('[ai-agent-chat] Fetching leads from CRM...');
+      const { data: leads, error: leadsError } = await supabase
         .from('leads')
-        .select('id, name, phone, email, source, qualification_status, interest_vehicle, notes, created_at')
+        .select('id, name, phone, email, source, qualification_status, vehicle_interest, notes, created_at')
         .order('created_at', { ascending: false })
         .limit(20);
+
+      if (leadsError) {
+        console.error('[ai-agent-chat] Error fetching leads:', leadsError);
+      }
 
       const { data: leadStats } = await supabase
         .from('leads')
@@ -109,7 +123,7 @@ serve(async (req) => {
           email: l.email,
           origem: l.source,
           status: l.qualification_status,
-          interesse: l.interest_vehicle,
+          interesse: l.vehicle_interest,
           notas: l.notes,
         })) || [],
       };

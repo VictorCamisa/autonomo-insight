@@ -61,7 +61,7 @@ serve(async (req) => {
     }
 
     // Get request body
-    const { email, password, full_name, role } = await req.json();
+    const { email, password, full_name, phone, role } = await req.json();
 
     if (!email || !password || !full_name || !role) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -86,7 +86,7 @@ serve(async (req) => {
     }
 
 
-    // Ensure profile exists
+    // Ensure profile exists with phone
     const now = new Date().toISOString();
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
@@ -95,6 +95,7 @@ serve(async (req) => {
           id: newUser.user.id,
           email: newUser.user.email,
           full_name,
+          phone: phone || null,
           is_active: true,
           updated_at: now,
         },

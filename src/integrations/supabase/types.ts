@@ -2533,6 +2533,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_master: boolean
+          phone: string | null
           updated_at: string
         }
         Insert: {
@@ -2543,6 +2544,7 @@ export type Database = {
           id: string
           is_active?: boolean
           is_master?: boolean
+          phone?: string | null
           updated_at?: string
         }
         Update: {
@@ -2553,6 +2555,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_master?: boolean
+          phone?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export interface ChatMessage {
@@ -16,6 +15,9 @@ interface UseAgentChatOptions {
   sessionId?: string;
   onError?: (error: Error) => void;
 }
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -46,16 +48,37 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
     }]);
 
     try {
-      const { data, error } = await supabase.functions.invoke('ai-agent-chat', {
-        body: {
+      console.log('[useAgentChat] Sending request to edge function...');
+      
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/ai-agent-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
           agent_id: agentId,
           message: content.trim(),
           session_id: sessionId || `session-${Date.now()}`,
           conversation_id: conversationId,
-        },
+        }),
       });
 
-      if (error) throw error;
+      console.log('[useAgentChat] Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[useAgentChat] Error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('[useAgentChat] Response data:', data);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
       // Remove loading and add real response
       setMessages(prev => {
@@ -74,7 +97,7 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
       }
 
     } catch (error) {
-      console.error('Chat error:', error);
+      console.error('[useAgentChat] Chat error:', error);
       
       // Remove loading placeholder
       setMessages(prev => prev.filter(m => m.id !== loadingId));

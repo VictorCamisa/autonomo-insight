@@ -115,9 +115,13 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
     leadId = await findLeadIdByPhone(supabase, phone);
 
     if (!leadId) {
-      // Create new lead with Round Robin assignment
+      // Detect lead origin from first message (WhatsApp organic vs Meta Ads campaign)
+      const origin = await detectLeadOrigin(supabase, content);
+      console.log('[Lead Origin] Detected:', origin);
+      
+      // Create new lead with origin information
       console.log('Creating new lead for phone:', phone, 'name:', pushName);
-      leadId = await createLeadWithRoundRobin(supabase, phone, pushName || 'WhatsApp');
+      leadId = await createLeadWithRoundRobin(supabase, phone, pushName || 'WhatsApp', origin);
       console.log('Created lead:', leadId);
     } else {
       // Update existing lead's last contact
@@ -1201,24 +1205,102 @@ async function processOutgoingMessage(
   }
 }
 
+// ===== DETECT LEAD ORIGIN FROM MESSAGE =====
+// Analyzes first message to identify if it came from Meta Ads campaign or organic WhatsApp
+async function detectLeadOrigin(
+  supabase: any,
+  firstMessage: string
+): Promise<{
+  source: 'whatsapp' | 'facebook' | 'instagram';
+  meta_campaign_id: string | null;
+  campaign_name: string | null;
+}> {
+  // Default: organic WhatsApp
+  const defaultOrigin = { source: 'whatsapp' as const, meta_campaign_id: null, campaign_name: null };
+  
+  if (!firstMessage) {
+    return defaultOrigin;
+  }
+
+  // Patterns that indicate message came from Meta Ads campaign
+  // These are common "ready messages" from Facebook/Instagram ads
+  const campaignPatterns = [
+    /vi\s+(seu|o|esse)\s+an[uú]ncio/i,           // "vi seu anúncio", "vi o anúncio"
+    /interesse\s+(no|nesse)\s+an[uú]ncio/i,      // "interesse no anúncio"
+    /vi\s+no\s+(facebook|instagram|face|insta)/i, // "vi no Facebook"
+    /an[uú]ncio\s+(do|da|de|sobre)/i,            // "anúncio do carro"
+    /cliquei\s+no\s+an[uú]ncio/i,                // "cliquei no anúncio"
+    /pelo\s+an[uú]ncio/i,                        // "pelo anúncio"
+    /encontrei\s+(no|pelo)\s+(facebook|instagram)/i, // "encontrei no Facebook"
+    /an[uú]ncio\s+de\s+ve[ií]culo/i,             // "anúncio de veículo"
+    /vim\s+pelo\s+(facebook|instagram|face|insta)/i, // "vim pelo Facebook"
+    /propaganda\s+(do|da|de)/i,                  // "propaganda do carro"
+    /vi\s+a\s+propaganda/i,                      // "vi a propaganda"
+    /publicidade/i,                               // "publicidade"
+    /olá,?\s+gostaria\s+de\s+(saber|mais|informações)/i, // Meta Ads ready message pattern
+  ];
+
+  const isFromCampaign = campaignPatterns.some(pattern => pattern.test(firstMessage));
+
+  if (!isFromCampaign) {
+    console.log('[Lead Origin] Message appears organic, source: whatsapp');
+    return defaultOrigin;
+  }
+
+  console.log('[Lead Origin] Campaign pattern detected in message');
+
+  // Try to find an active Meta campaign to link
+  const { data: activeCampaign, error } = await supabase
+    .from('meta_campaigns')
+    .select('id, name')
+    .eq('status', 'ACTIVE')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !activeCampaign) {
+    console.log('[Lead Origin] No active Meta campaign found, but marking as facebook source');
+    // Still mark as facebook since the message pattern indicates campaign
+    return { source: 'facebook', meta_campaign_id: null, campaign_name: null };
+  }
+
+  // Detect if message mentions Instagram specifically
+  const isInstagram = /instagram|insta/i.test(firstMessage);
+  const source = isInstagram ? 'instagram' : 'facebook';
+
+  console.log('[Lead Origin] Linked to campaign:', activeCampaign.name, 'source:', source);
+
+  return {
+    source,
+    meta_campaign_id: activeCampaign.id,
+    campaign_name: activeCampaign.name,
+  };
+}
+
 // Create lead WITHOUT vendor (vendor assigned after qualification)
 async function createLeadWithRoundRobin(
   supabase: any,
   phone: string,
-  name: string
+  name: string,
+  origin: {
+    source: 'whatsapp' | 'facebook' | 'instagram';
+    meta_campaign_id: string | null;
+    campaign_name: string | null;
+  } = { source: 'whatsapp', meta_campaign_id: null, campaign_name: null }
 ): Promise<string | null> {
-  console.log('[Lead Creation] Creating lead WITHOUT vendor assignment (will be assigned after qualification)');
+  console.log('[Lead Creation] Creating lead with origin:', origin.source, 'campaign:', origin.campaign_name || 'none');
 
-  // Create lead WITHOUT assigned_to
+  // Create lead WITHOUT assigned_to, WITH origin information
   const { data: lead, error: leadError } = await supabase
     .from('leads')
     .insert({
       phone,
       name,
-      source: 'whatsapp',
+      source: origin.source,
       status: 'novo',
       assigned_to: null, // NOT assigning vendor yet - wait for qualification
       qualification_status: 'nao_qualificado',
+      meta_campaign_id: origin.meta_campaign_id,
     })
     .select()
     .single();
@@ -1228,14 +1310,16 @@ async function createLeadWithRoundRobin(
     return null;
   }
 
-  console.log('[Lead Creation] Lead created:', lead.id);
+  console.log('[Lead Creation] Lead created:', lead.id, 'source:', origin.source);
 
   // Create negotiation in "em_andamento" status (no salesperson yet)
   const { error: negError } = await supabase.from('negotiations').insert({
     lead_id: lead.id,
     salesperson_id: null, // Will be assigned after qualification
     status: 'em_andamento',
-    notes: 'Negociação criada automaticamente - aguardando qualificação pelo bot',
+    notes: origin.meta_campaign_id 
+      ? `Negociação criada automaticamente via ${origin.source.toUpperCase()} - Campanha: ${origin.campaign_name}` 
+      : 'Negociação criada automaticamente via WhatsApp orgânico',
   });
 
   if (negError) {
@@ -1255,6 +1339,16 @@ async function createLeadWithRoundRobin(
     console.error('Error creating qualification data:', qualError);
   } else {
     console.log('[Lead Creation] Qualification tracker created for lead:', lead.id);
+  }
+
+  // Log campaign attribution if from Meta Ads
+  if (origin.meta_campaign_id) {
+    await supabase.from('lead_interactions').insert({
+      lead_id: lead.id,
+      type: 'system',
+      description: `Lead originado de campanha Meta Ads (${origin.source.toUpperCase()}): ${origin.campaign_name}`,
+    });
+    console.log('[Lead Origin] Campaign attribution logged for lead:', lead.id);
   }
 
   return lead.id;

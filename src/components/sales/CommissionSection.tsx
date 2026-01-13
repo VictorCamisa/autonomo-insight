@@ -70,7 +70,9 @@ export function CommissionSection({
       case 'valor_fixo':
         commission = rule.fixed_value || 0;
         break;
-      case 'percentual_venda':
+      case 'escalonada':
+      case 'mista':
+        // Para tipos escalonada/mista, usa percentual sobre venda como padrão
         commission = salePrice * (rule.percentage_value || 0) / 100;
         break;
       case 'percentual_lucro':

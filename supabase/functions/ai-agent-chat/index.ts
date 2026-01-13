@@ -232,6 +232,31 @@ Regras importantes:
 
     console.log('[ai-agent-chat] Calling AI with context data:', Object.keys(contextData));
 
+    // Map old model names to valid Lovable AI Gateway models
+    const VALID_MODELS = [
+      'google/gemini-2.5-pro',
+      'google/gemini-2.5-flash',
+      'google/gemini-2.5-flash-lite',
+      'google/gemini-2.5-flash-image',
+      'google/gemini-3-pro-preview',
+      'google/gemini-3-flash-preview',
+      'google/gemini-3-pro-image-preview',
+      'openai/gpt-5',
+      'openai/gpt-5-mini',
+      'openai/gpt-5-nano',
+      'openai/gpt-5.2',
+    ];
+
+    let selectedModel = agentConfig?.llm_model || 'google/gemini-3-flash-preview';
+    
+    // Map invalid/legacy models to valid ones
+    if (!VALID_MODELS.includes(selectedModel)) {
+      console.log('[ai-agent-chat] Invalid model detected:', selectedModel, '- falling back to default');
+      selectedModel = 'google/gemini-3-flash-preview';
+    }
+
+    console.log('[ai-agent-chat] Using model:', selectedModel);
+
     // Call Lovable AI Gateway
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -240,7 +265,7 @@ Regras importantes:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: agentConfig?.llm_model || "google/gemini-2.5-flash",
+        model: selectedModel,
         messages,
         temperature: agentConfig?.temperature || 0.7,
         max_tokens: agentConfig?.max_tokens || 2048,

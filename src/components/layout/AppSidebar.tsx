@@ -19,6 +19,7 @@ import {
   Megaphone,
   Settings,
   MessageSquare,
+  Bot,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -80,6 +81,7 @@ export function AppSidebar() {
         { label: 'Marketing', href: '/marketing', icon: Megaphone, requiredModule: 'marketing' },
         { label: 'Relatórios', href: '/relatorios', icon: FileText, requiredModule: 'marketing' },
         { label: 'WhatsApp', href: '/whatsapp', icon: MessageSquare, requiredModule: 'configuracoes' },
+        { label: 'IA / Agentes', href: '/ia-agentes', icon: Bot, requiredModule: 'configuracoes' },
       ],
     },
   ];

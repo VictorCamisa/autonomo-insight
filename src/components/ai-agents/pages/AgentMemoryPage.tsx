@@ -124,17 +124,23 @@ export default function AgentMemoryPage() {
       } else {
         setIsConnected(true);
         
-        // Get some stats
-        const [vehiclesRes, leadsRes, salesRes] = await Promise.all([
-          supabase.from('vehicles').select('id', { count: 'exact', head: true }),
-          supabase.from('leads').select('id', { count: 'exact', head: true }),
-          supabase.from('sales').select('id', { count: 'exact', head: true }),
+        // Count available tables by checking which ones exist
+        const tableChecks = await Promise.all([
+          supabase.from('vehicles').select('id', { count: 'exact', head: true }).then(r => !r.error),
+          supabase.from('leads').select('id', { count: 'exact', head: true }).then(r => !r.error),
+          supabase.from('negotiations').select('id', { count: 'exact', head: true }).then(r => !r.error),
+          supabase.from('sales').select('id', { count: 'exact', head: true }).then(r => !r.error),
+          supabase.from('customers').select('id', { count: 'exact', head: true }).then(r => !r.error),
         ]);
         
-        const totalTables = 3; // vehicles, leads, sales
+        const availableTables = tableChecks.filter(Boolean).length;
+        
+        // Get actual Supabase project info from URL
+        const supabaseUrl = 'ahfoixzdnpswuqavbmgf.supabase.co';
+        
         setConnectionInfo({
-          tables: totalTables,
-          url: 'Lovable Cloud (Supabase)',
+          tables: availableTables,
+          url: `Matheus Veículos (${supabaseUrl})`,
         });
         toast.success('Conexão com Supabase verificada!');
       }

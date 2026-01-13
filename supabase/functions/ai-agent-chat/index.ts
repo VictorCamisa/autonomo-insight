@@ -46,18 +46,17 @@ serve(async (req) => {
       agentConfig = agent;
     }
 
-    // Get active data sources for this agent
+    // Get active data sources from agent config (stored in vector_db_config)
     let activeDataSources: string[] = data_sources;
-    if (agent_id && activeDataSources.length === 0) {
-      const { data: sources } = await supabase
-        .from('ai_agent_data_sources')
-        .select('source_type')
-        .eq('agent_id', agent_id)
-        .eq('is_active', true);
-      
-      if (sources) {
-        activeDataSources = sources.map(s => s.source_type);
-      }
+    if (agentConfig && activeDataSources.length === 0) {
+      const vectorConfig = agentConfig.vector_db_config as Record<string, unknown> || {};
+      const configSources = (vectorConfig.enabled_data_sources as string[]) || [];
+      activeDataSources = configSources;
+    }
+
+    // Default to all sources if none specified
+    if (activeDataSources.length === 0) {
+      activeDataSources = ['inventory', 'faq'];
     }
 
     console.log('[ai-agent-chat] Active data sources:', activeDataSources);

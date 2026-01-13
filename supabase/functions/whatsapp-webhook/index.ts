@@ -270,17 +270,63 @@ async function processWithAIAgent(
 
   console.log('Found AI agent:', agent.id, agent.name);
 
+  // Note: Human takeover check is done after conversation is retrieved
+  // since the table uses conversation_id
+
+  // Get or create conversation first (needed for human takeover check)
+  const sessionId = `whatsapp_${phone}_${new Date().toISOString().split('T')[0]}`;
+  
+  let { data: conversation } = await supabase
+    .from('ai_agent_conversations')
+    .select('id')
+    .eq('agent_id', agent.id)
+    .eq('session_id', sessionId)
+    .eq('status', 'active')
+    .single();
+
+  if (!conversation) {
+    const { data: newConv, error: convError } = await supabase
+      .from('ai_agent_conversations')
+      .insert({
+        agent_id: agent.id,
+        session_id: sessionId,
+        lead_id: leadId,
+        channel: 'whatsapp',
+        status: 'active',
+        customer_phone: phone,
+        metadata: { phone, instance_id: instanceId },
+      })
+      .select()
+      .single();
+    
+    if (convError) {
+      console.error('Error creating conversation:', convError);
+      return;
+    }
+    conversation = newConv;
+  }
+
+  if (!conversation) {
+    console.error('Failed to create conversation');
+    return;
+  }
+
   // Check if human takeover is active for this conversation
   const { data: takeover } = await supabase
-    .from('ai_agent_human_takeovers')
+    .from('ai_agent_human_takeover')
     .select('id')
-    .eq('phone', phone)
-    .eq('instance_id', instanceId)
-    .is('released_at', null)
+    .eq('conversation_id', conversation.id)
+    .is('resolved_at', null)
     .single();
 
   if (takeover) {
-    console.log('Human takeover active for phone:', phone, '- skipping AI response');
+    console.log('Human takeover active for conversation:', conversation.id, '- skipping AI response');
+    // Still save the message for the human to see
+    await supabase.from('ai_agent_messages').insert({
+      conversation_id: conversation.id,
+      role: 'user',
+      content: messageContent,
+    });
     return;
   }
 
@@ -293,12 +339,11 @@ async function processWithAIAgent(
 
     if (shouldTransfer) {
       console.log('Transfer keyword detected, creating human takeover');
-      await supabase.from('ai_agent_human_takeovers').insert({
-        phone,
-        instance_id: instanceId,
-        lead_id: leadId,
+      
+      // Create human takeover with correct schema
+      await supabase.from('ai_agent_human_takeover').insert({
+        conversation_id: conversation.id,
         reason: `Usuário solicitou transferência: "${messageContent}"`,
-        taken_over_at: new Date().toISOString(),
       });
 
       // Send transfer message
@@ -329,39 +374,6 @@ async function processWithAIAgent(
 
       return;
     }
-  }
-
-  // Get or create conversation
-  const sessionId = `whatsapp_${phone}_${new Date().toISOString().split('T')[0]}`;
-  
-  let { data: conversation } = await supabase
-    .from('ai_agent_conversations')
-    .select('id')
-    .eq('agent_id', agent.id)
-    .eq('session_id', sessionId)
-    .eq('status', 'active')
-    .single();
-
-  if (!conversation) {
-    const { data: newConv } = await supabase
-      .from('ai_agent_conversations')
-      .insert({
-        agent_id: agent.id,
-        session_id: sessionId,
-        lead_id: leadId,
-        channel: 'whatsapp',
-        status: 'active',
-        started_at: new Date().toISOString(),
-        metadata: { phone, instance_id: instanceId },
-      })
-      .select()
-      .single();
-    conversation = newConv;
-  }
-
-  if (!conversation) {
-    console.error('Failed to create conversation');
-    return;
   }
 
   // Save user message to conversation

@@ -124,35 +124,50 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
       leadId = await createLeadWithRoundRobin(supabase, phone, pushName || 'WhatsApp', origin);
       console.log('Created lead:', leadId);
     } else {
-      // Check if this message reveals campaign origin (customer might mention ad later)
+      // Check if this message reveals campaign origin (only for first 5 messages from lead)
       const { data: existingLead } = await supabase
         .from('leads')
         .select('source')
         .eq('id', leadId)
         .single();
       
-      // Only update if current source is 'whatsapp' (organic) and message indicates campaign
+      // Only check origin if current source is 'whatsapp' (organic)
       if (existingLead?.source === 'whatsapp') {
-        const origin = await detectLeadOrigin(supabase, content);
-        if (origin.source !== 'whatsapp') {
-          console.log('[Lead Origin] Updating existing lead source from whatsapp to:', origin.source);
-          await supabase
-            .from('leads')
-            .update({ 
-              source: origin.source,
-              meta_campaign_id: origin.meta_campaign_id,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', leadId);
+        // Count how many incoming messages from this lead exist
+        const { count: messageCount } = await supabase
+          .from('whatsapp_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('lead_id', leadId)
+          .eq('is_from_me', false);
+        
+        // Only check origin for first 5 messages
+        if ((messageCount || 0) <= 5) {
+          const origin = await detectLeadOrigin(supabase, content);
+          if (origin.source !== 'whatsapp') {
+            console.log('[Lead Origin] Updating existing lead source from whatsapp to:', origin.source, '(message #' + (messageCount || 0) + ')');
+            await supabase
+              .from('leads')
+              .update({ 
+                source: origin.source,
+                meta_campaign_id: origin.meta_campaign_id,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', leadId);
+          } else {
+            await supabase
+              .from('leads')
+              .update({ updated_at: new Date().toISOString() })
+              .eq('id', leadId);
+          }
         } else {
-          // Just update timestamp
+          // Beyond first 5 messages, just update timestamp
           await supabase
             .from('leads')
             .update({ updated_at: new Date().toISOString() })
             .eq('id', leadId);
         }
       } else {
-        // Update existing lead's last contact
+        // Already has non-whatsapp source, just update timestamp
         console.log('Updating existing lead:', leadId);
         await supabase
           .from('leads')

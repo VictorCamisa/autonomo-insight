@@ -149,6 +149,7 @@ export interface AIAgent {
   // Voice Config (TTS/STT)
   enable_voice: boolean;
   voice_id: string | null;
+  elevenlabs_api_key: string | null;
   
   // Deployment
   deployment_channels: string[];

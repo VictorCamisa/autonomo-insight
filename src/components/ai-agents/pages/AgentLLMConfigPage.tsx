@@ -32,6 +32,7 @@ const formSchema = z.object({
   system_prompt: z.string().optional(),
   enable_voice: z.boolean(),
   voice_id: z.string().optional(),
+  elevenlabs_api_key: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -51,6 +52,8 @@ export default function AgentLLMConfigPage() {
   const validateKey = useValidateAPIKey();
   const { data: voices, isLoading: voicesLoading, error: voicesError } = useElevenLabsVoices();
 
+  const [showElevenLabsKey, setShowElevenLabsKey] = useState(false);
+  
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -62,6 +65,7 @@ export default function AgentLLMConfigPage() {
       system_prompt: DEFAULT_AGENT.system_prompt || '',
       enable_voice: false,
       voice_id: 'sB6li6v6ltCgOxFxqdo5',
+      elevenlabs_api_key: '',
     },
   });
 
@@ -79,6 +83,7 @@ export default function AgentLLMConfigPage() {
         system_prompt: agent.system_prompt || '',
         enable_voice: agent.enable_voice,
         voice_id: agent.voice_id || 'sB6li6v6ltCgOxFxqdo5',
+        elevenlabs_api_key: agent.elevenlabs_api_key || '',
       });
     }
   }, [agent, form]);
@@ -328,6 +333,31 @@ export default function AgentLLMConfigPage() {
 
             {form.watch('enable_voice') && (
               <div className="space-y-4">
+                {/* ElevenLabs API Key */}
+                <div className="space-y-2">
+                  <Label htmlFor="elevenlabs_api_key">ElevenLabs API Key *</Label>
+                  <div className="relative">
+                    <Input
+                      id="elevenlabs_api_key"
+                      type={showElevenLabsKey ? 'text' : 'password'}
+                      placeholder="sk_..."
+                      {...form.register('elevenlabs_api_key')}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full"
+                      onClick={() => setShowElevenLabsKey(!showElevenLabsKey)}
+                    >
+                      {showElevenLabsKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Obtenha sua API key em <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary underline">elevenlabs.io</a>
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label>Voz</Label>
                   {voicesLoading ? (

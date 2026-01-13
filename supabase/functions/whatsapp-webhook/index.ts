@@ -1249,6 +1249,10 @@ async function detectLeadOrigin(
 
   console.log('[Lead Origin] Campaign pattern detected in message');
 
+  // Detect if message mentions Instagram specifically (check before campaign lookup)
+  const isInstagram = /instagram|insta/i.test(firstMessage);
+  const defaultSource = isInstagram ? 'instagram' : 'facebook';
+
   // Try to find an active Meta campaign to link
   const { data: activeCampaign, error } = await supabase
     .from('meta_campaigns')
@@ -1259,19 +1263,15 @@ async function detectLeadOrigin(
     .single();
 
   if (error || !activeCampaign) {
-    console.log('[Lead Origin] No active Meta campaign found, but marking as facebook source');
-    // Still mark as facebook since the message pattern indicates campaign
-    return { source: 'facebook', meta_campaign_id: null, campaign_name: null };
+    console.log('[Lead Origin] No active Meta campaign found, but marking as', defaultSource, 'source (from ad pattern)');
+    // Still mark as facebook/instagram since the message pattern indicates campaign
+    return { source: defaultSource, meta_campaign_id: null, campaign_name: null };
   }
 
-  // Detect if message mentions Instagram specifically
-  const isInstagram = /instagram|insta/i.test(firstMessage);
-  const source = isInstagram ? 'instagram' : 'facebook';
-
-  console.log('[Lead Origin] Linked to campaign:', activeCampaign.name, 'source:', source);
+  console.log('[Lead Origin] Linked to campaign:', activeCampaign.name, 'source:', defaultSource);
 
   return {
-    source,
+    source: defaultSource,
     meta_campaign_id: activeCampaign.id,
     campaign_name: activeCampaign.name,
   };

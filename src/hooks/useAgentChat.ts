@@ -9,6 +9,7 @@ export interface ChatMessage {
   timestamp: Date;
   isLoading?: boolean;
   audioUrl?: string;
+  imageUrl?: string;
   dataSourcesUsed?: string[];
 }
 
@@ -18,12 +19,17 @@ interface UseAgentChatOptions {
   onError?: (error: Error) => void;
 }
 
+interface SendMessageOptions {
+  isAudio?: boolean;
+  imageUrl?: string;
+}
+
 export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, options: SendMessageOptions = {}) => {
     if (!content.trim() || isLoading) return;
 
     const userMessage: ChatMessage = {
@@ -31,6 +37,7 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
       role: 'user',
       content: content.trim(),
       timestamp: new Date(),
+      imageUrl: options.imageUrl,
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -64,6 +71,7 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
             agent_id: agentId,
             conversation_history: conversationHistory.slice(0, -1), // Exclude the current message
             session_id: sessionId,
+            is_audio_message: options.isAudio || false,
           },
         });
         data = result.data;
@@ -86,6 +94,13 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
 
       const aiResponse = data?.response || data?.content || 'Desculpe, não consegui processar sua mensagem.';
       const dataSourcesUsed = data?.data_sources_used || [];
+      const audioContent = data?.audio_content;
+
+      // Create audio URL from base64 if present
+      let audioUrl: string | undefined;
+      if (audioContent) {
+        audioUrl = `data:audio/mpeg;base64,${audioContent}`;
+      }
 
       // Remove loading and add real response
       setMessages(prev => {
@@ -96,8 +111,17 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
           content: aiResponse,
           timestamp: new Date(),
           dataSourcesUsed,
+          audioUrl,
         }];
       });
+
+      // Auto-play audio if it was an audio message and we got audio back
+      if (audioUrl && options.isAudio) {
+        setTimeout(() => {
+          const audio = new Audio(audioUrl);
+          audio.play().catch(e => console.warn('Auto-play blocked:', e));
+        }, 100);
+      }
 
     } catch (error) {
       console.error('Chat error:', error);

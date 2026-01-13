@@ -247,12 +247,70 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
   // ===== AI AGENT INTEGRATION =====
   // Check if there's an active AI agent linked to this WhatsApp instance
   if (instance?.id) {
-    await processWithAIAgent(supabase, instance.id, instanceName, content, effectivePhone, leadId, contact?.id || null, remoteJidToStore || remoteJid || null, audioUrl);
+    await processWithAIAgent(supabase, instance.id, instanceName, content, effectivePhone, leadId, contact?.id || null, remoteJidToStore || remoteJid || null, messageId, isAudio);
+  }
+}
+
+// ===== DOWNLOAD AUDIO VIA EVOLUTION API =====
+async function downloadAudioFromEvolution(instanceName: string, messageId: string): Promise<Blob | null> {
+  const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+  const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+
+  if (!evolutionUrl || !evolutionApiKey) {
+    console.error('[DownloadAudio] Evolution API not configured');
+    return null;
+  }
+
+  try {
+    // Use Evolution API to get base64 media
+    console.log('[DownloadAudio] Fetching audio via Evolution API for message:', messageId);
+    
+    const response = await fetch(`${evolutionUrl}/chat/getBase64FromMediaMessage/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': evolutionApiKey,
+      },
+      body: JSON.stringify({
+        message: {
+          key: {
+            id: messageId
+          }
+        },
+        convertToMp4: false
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[DownloadAudio] Evolution API error:', response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('[DownloadAudio] Got base64 response, length:', data.base64?.length || 0);
+    
+    if (!data.base64) {
+      console.error('[DownloadAudio] No base64 in response');
+      return null;
+    }
+
+    // Convert base64 to blob
+    const binaryStr = atob(data.base64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    
+    return new Blob([bytes], { type: data.mimetype || 'audio/ogg' });
+  } catch (error) {
+    console.error('[DownloadAudio] Error:', error);
+    return null;
   }
 }
 
 // ===== TRANSCRIBE AUDIO FROM WHATSAPP =====
-async function transcribeWhatsAppAudio(audioUrl: string, mediaKey: string): Promise<string | null> {
+async function transcribeWhatsAppAudio(instanceName: string, messageId: string): Promise<string | null> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
   if (!OPENAI_API_KEY) {
@@ -261,16 +319,15 @@ async function transcribeWhatsAppAudio(audioUrl: string, mediaKey: string): Prom
   }
 
   try {
-    console.log('[Transcribe] Downloading audio from:', audioUrl.substring(0, 100));
+    console.log('[Transcribe] Getting audio for message:', messageId);
     
-    // Download the audio file
-    const audioResponse = await fetch(audioUrl);
-    if (!audioResponse.ok) {
-      console.error('[Transcribe] Failed to download audio:', audioResponse.status);
+    // Download the audio file via Evolution API
+    const audioBlob = await downloadAudioFromEvolution(instanceName, messageId);
+    if (!audioBlob) {
+      console.error('[Transcribe] Failed to download audio');
       return null;
     }
 
-    const audioBlob = await audioResponse.blob();
     console.log('[Transcribe] Audio downloaded, size:', audioBlob.size);
 
     // Create form data for Whisper API
@@ -312,15 +369,15 @@ async function processWithAIAgent(
   leadId: string | null,
   contactId: string | null,
   remoteJid: string | null,
-  audioUrl?: string
+  messageId: string,
+  isAudio: boolean = false
 ) {
-  // Check if content is just media placeholder - try to transcribe audio
-  let isAudioMessage = messageContent === '[Mídia]';
+  // Check if content is audio placeholder - try to transcribe
   let actualMessage = messageContent;
   
-  if (isAudioMessage && audioUrl) {
-    console.log('[AI Agent] Audio message detected, attempting transcription...');
-    const transcription = await transcribeWhatsAppAudio(audioUrl, '');
+  if (isAudio || messageContent === '[Áudio]') {
+    console.log('[AI Agent] Audio message detected, attempting transcription via Evolution API...');
+    const transcription = await transcribeWhatsAppAudio(instanceName, messageId);
     if (transcription) {
       actualMessage = transcription;
       console.log('[AI Agent] Transcribed audio to:', actualMessage);
@@ -488,15 +545,15 @@ Você é Léo, assistente virtual da MATHEUS VEÍCULOS.
 1. Sempre se apresente como Léo da Matheus Veículos
 2. Seja BREVE e DIRETO - máximo 2-3 frases por resposta
 3. NUNCA mande mensagens longas - quebre em parágrafos curtos
-4. Use linguagem amigável mas profissional
+4. Use linguagem amigável e descontraída
 
 ===== MENSAGEM INICIAL =====
-Quando for a primeira mensagem do cliente, responda APENAS:
+Se for a PRIMEIRA mensagem do cliente (ele disse apenas "oi", "olá", "bom dia", etc):
 "Opa! Sou o Léo da Matheus Veículos 🚗
 
-Qual carro te interessa?"
+O que você está buscando hoje?"
 
-NÃO ESCREVA MAIS DO QUE ISSO na primeira resposta.
+⚠️ MAS se o cliente já chegou falando de um carro específico (ex: "tem Polo?", "quanto tá o Civic?"), responda sobre o carro DIRETO, sem essa apresentação genérica!
 
 ===== REGRA DE FOTOS =====
 Se pedirem foto de um veículo:

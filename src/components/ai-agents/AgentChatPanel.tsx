@@ -242,26 +242,32 @@ function MessageBubble({
             : "bg-muted",
           message.isLoading && "animate-pulse"
         )}>
-          {message.isLoading ? (
+        {message.isLoading ? (
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Pensando...</span>
             </div>
           ) : (
             <div className="space-y-2">
-              {/* Image if present */}
+              {/* Image if present - show prominently */}
               {message.imageUrl && (
-                <img 
-                  src={message.imageUrl} 
-                  alt="Imagem enviada" 
-                  className="rounded-md max-w-full max-h-48 object-cover"
-                />
+                <div className="relative">
+                  <img 
+                    src={message.imageUrl} 
+                    alt="Foto do veículo" 
+                    className="rounded-md max-w-full max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => window.open(message.imageUrl, '_blank')}
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">Clique para ampliar</p>
+                </div>
               )}
               
               {/* Text content - render with proper formatting */}
-              <div className="text-sm whitespace-pre-wrap leading-relaxed">
-                {formatMessageContent(message.content)}
-              </div>
+              {message.content && (
+                <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                  {message.content}
+                </div>
+              )}
               
               {/* Audio button if present */}
               {message.audioUrl && (

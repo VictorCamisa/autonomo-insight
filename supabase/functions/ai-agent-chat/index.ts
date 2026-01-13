@@ -114,12 +114,12 @@ serve(async (req) => {
     // Fetch data based on active sources
     const contextData: Record<string, unknown> = {};
 
-    // INVENTORY - Estoque de veículos
+    // INVENTORY - Estoque de veículos com fotos
     if (activeDataSources.includes('inventory')) {
       console.log('[ai-agent-chat] Fetching vehicles from inventory...');
       const { data: vehicles, error: vehiclesError } = await supabase
         .from('vehicles')
-        .select('id, brand, model, version, year_fabrication, year_model, sale_price, purchase_price, color, fuel_type, transmission, km, status, notes')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, purchase_price, color, fuel_type, transmission, km, status, notes, images')
         .eq('status', 'disponivel')
         .order('created_at', { ascending: false })
         .limit(50);
@@ -143,6 +143,8 @@ serve(async (req) => {
           km: v.km ? `${Number(v.km).toLocaleString('pt-BR')} km` : 'N/A',
           ano: v.year_model || v.year_fabrication,
           observacoes: v.notes,
+          foto_principal: v.images && v.images.length > 0 ? v.images[0] : null,
+          todas_fotos: v.images || [],
         })) || [],
       };
     }
@@ -264,11 +266,29 @@ Regras importantes:
 - Se não souber algo, ofereça transferir para um vendedor humano
 - Colete dados de contato de forma natural na conversa`;
 
+    // Instruções especiais para fotos
+    const photoInstructions = `
+
+=== INSTRUÇÃO ESPECIAL: ENVIO DE FOTOS ===
+Quando o cliente pedir para ver fotos de um veículo específico, você DEVE:
+1. Identificar o veículo no estoque
+2. Se houver fotos disponíveis (campo "foto_principal" ou "todas_fotos"), responda com:
+   [ENVIAR_FOTO: URL_DA_FOTO]
+   
+Exemplo: Se o cliente pedir "me manda foto do Civic", responda:
+"Claro! Aqui está a foto do Civic:
+
+[ENVIAR_FOTO: https://exemplo.com/foto-civic.jpg]
+
+Gostou? Quer ver de outro ângulo?"
+
+IMPORTANTE: Use APENAS URLs de fotos que existem no campo "todas_fotos" do veículo. Nunca invente URLs.`;
+
     const contextString = Object.keys(contextData).length > 0 
       ? `\n\n=== DADOS ATUALIZADOS DO SISTEMA ===\n${JSON.stringify(contextData, null, 2)}\n=== FIM DOS DADOS ===\n\nUse estes dados para responder perguntas sobre estoque, preços, vendas, etc. Seja preciso e use os valores reais.`
       : '';
 
-    const fullSystemPrompt = defaultSystemPrompt + contextString;
+    const fullSystemPrompt = defaultSystemPrompt + photoInstructions + contextString;
 
     // Build messages array
     const messages = [
@@ -337,15 +357,33 @@ Regras importantes:
 
     console.log('[ai-agent-chat] Response generated successfully');
 
+    // Extract images from response using [ENVIAR_FOTO: URL] pattern
+    const photoRegex = /\[ENVIAR_FOTO:\s*(https?:\/\/[^\]]+)\]/gi;
+    const extractedImages: string[] = [];
+    let cleanContent = content;
+    
+    let match;
+    while ((match = photoRegex.exec(content)) !== null) {
+      extractedImages.push(match[1].trim());
+    }
+    
+    // Remove the photo tags from the text content
+    cleanContent = content.replace(photoRegex, '').trim();
+    
+    console.log('[ai-agent-chat] Extracted images:', extractedImages.length);
+
     // Generate voice audio if enabled and user sent audio message
     let audioContent: string | null = null;
     if (agentConfig?.enable_voice && agentConfig?.voice_id && is_audio_message) {
-      audioContent = await generateVoiceAudio(content, agentConfig.voice_id);
+      console.log('[ai-agent-chat] Generating voice response...');
+      audioContent = await generateVoiceAudio(cleanContent, agentConfig.voice_id);
+      console.log('[ai-agent-chat] Voice audio generated:', audioContent ? 'success' : 'failed');
     }
 
     return new Response(
       JSON.stringify({
-        response: content,
+        response: cleanContent,
+        images: extractedImages,
         audio_content: audioContent,
         data_sources_used: Object.keys(contextData),
         tokens_used: aiResponse.usage?.total_tokens || 0,

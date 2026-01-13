@@ -29,6 +29,26 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
 
+  // Split a response into multiple messages based on double newlines
+  const splitIntoMessages = (content: string): string[] => {
+    // Split by double newlines (paragraph breaks)
+    const parts = content.split(/\n\n+/).filter(p => p.trim());
+    
+    // If we get very long single parts, try splitting by single newlines too
+    const result: string[] = [];
+    for (const part of parts) {
+      if (part.length > 200) {
+        // Long part - split further by single newlines
+        const subParts = part.split(/\n/).filter(p => p.trim());
+        result.push(...subParts);
+      } else {
+        result.push(part.trim());
+      }
+    }
+    
+    return result.length > 0 ? result : [content];
+  };
+
   const sendMessage = useCallback(async (content: string, options: SendMessageOptions = {}) => {
     if (!content.trim() || isLoading) return;
 
@@ -61,6 +81,8 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
         content: m.content,
       }));
 
+      console.log('[useAgentChat] Sending message, isAudio:', options.isAudio);
+
       // Try the dedicated ai-agent-chat function first
       let data, error;
       
@@ -76,6 +98,12 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
         });
         data = result.data;
         error = result.error;
+        
+        console.log('[useAgentChat] Response received:', {
+          hasResponse: !!data?.response,
+          hasAudio: !!data?.audio_content,
+          imagesCount: data?.images?.length || 0,
+        });
       } catch (e) {
         console.warn('[useAgentChat] ai-agent-chat failed, trying generate-report:', e);
         
@@ -95,32 +123,62 @@ export function useAgentChat({ agentId, sessionId, onError }: UseAgentChatOption
       const aiResponse = data?.response || data?.content || 'Desculpe, não consegui processar sua mensagem.';
       const dataSourcesUsed = data?.data_sources_used || [];
       const audioContent = data?.audio_content;
+      const extractedImages: string[] = data?.images || [];
 
+      // Split response into multiple messages
+      const messageParts = splitIntoMessages(aiResponse);
+      
       // Create audio URL from base64 if present
       let audioUrl: string | undefined;
       if (audioContent) {
         audioUrl = `data:audio/mpeg;base64,${audioContent}`;
+        console.log('[useAgentChat] Audio URL created');
       }
 
-      // Remove loading and add real response
+      // Remove loading and add real response(s)
       setMessages(prev => {
         const filtered = prev.filter(m => m.id !== loadingId);
-        return [...filtered, {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: aiResponse,
-          timestamp: new Date(),
-          dataSourcesUsed,
-          audioUrl,
-        }];
+        const now = Date.now();
+        
+        const newMessages: ChatMessage[] = [];
+        
+        // Add text messages (split into parts)
+        messageParts.forEach((part, index) => {
+          const isLastTextMessage = index === messageParts.length - 1 && extractedImages.length === 0;
+          newMessages.push({
+            id: `assistant-${now}-${index}`,
+            role: 'assistant',
+            content: part,
+            timestamp: new Date(now + index * 100),
+            dataSourcesUsed: isLastTextMessage ? dataSourcesUsed : undefined,
+            audioUrl: isLastTextMessage ? audioUrl : undefined,
+          });
+        });
+        
+        // Add image messages
+        extractedImages.forEach((imgUrl, index) => {
+          const isLast = index === extractedImages.length - 1;
+          newMessages.push({
+            id: `assistant-img-${now}-${index}`,
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(now + messageParts.length * 100 + index * 100),
+            imageUrl: imgUrl,
+            dataSourcesUsed: isLast ? dataSourcesUsed : undefined,
+            audioUrl: isLast && !audioUrl ? undefined : (isLast ? audioUrl : undefined),
+          });
+        });
+        
+        return [...filtered, ...newMessages];
       });
 
       // Auto-play audio if it was an audio message and we got audio back
       if (audioUrl && options.isAudio) {
+        console.log('[useAgentChat] Auto-playing audio response');
         setTimeout(() => {
           const audio = new Audio(audioUrl);
           audio.play().catch(e => console.warn('Auto-play blocked:', e));
-        }, 100);
+        }, 300);
       }
 
     } catch (error) {

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Brain, Save, ArrowRight, Eye, EyeOff, CheckCircle, Loader2, Volume2 } from 'lucide-react';
+import { Brain, Save, ArrowRight, Eye, EyeOff, CheckCircle, Loader2, Volume2, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAIAgent, useUpdateAIAgent, useValidateAPIKey } from '@/hooks/useAIAgents';
-import { LLM_PROVIDERS, LLM_MODELS, DEFAULT_AGENT, ELEVENLABS_VOICES } from '@/types/ai-agents';
+import { useElevenLabsVoices } from '@/hooks/useElevenLabsVoices';
+import { LLM_PROVIDERS, LLM_MODELS, DEFAULT_AGENT } from '@/types/ai-agents';
 
 const formSchema = z.object({
   llm_provider: z.enum(['openai', 'google']),
@@ -39,10 +40,13 @@ export default function AgentLLMConfigPage() {
   const { agentId } = useParams();
   const navigate = useNavigate();
   const [showApiKey, setShowApiKey] = useState(false);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   
   const { data: agent, isLoading } = useAIAgent(agentId);
   const updateAgent = useUpdateAIAgent();
   const validateKey = useValidateAPIKey();
+  const { data: voices, isLoading: voicesLoading, error: voicesError } = useElevenLabsVoices();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -299,26 +303,78 @@ export default function AgentLLMConfigPage() {
             </div>
 
             {form.watch('enable_voice') && (
-              <div className="space-y-2">
-                <Label>Voz</Label>
-                <Select
-                  value={form.watch('voice_id')}
-                  onValueChange={(value) => form.setValue('voice_id', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a voz" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ELEVENLABS_VOICES.map((voice) => (
-                      <SelectItem key={voice.value} value={voice.value}>
-                        {voice.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Requer ELEVENLABS_API_KEY configurada nas secrets do projeto
-                </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Voz</Label>
+                  {voicesLoading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : voicesError ? (
+                    <p className="text-sm text-destructive">Erro ao carregar vozes. Verifique se a ELEVENLABS_API_KEY está configurada.</p>
+                  ) : (
+                    <Select
+                      value={form.watch('voice_id')}
+                      onValueChange={(value) => form.setValue('voice_id', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a voz" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {voices?.map((voice) => (
+                          <SelectItem key={voice.voice_id} value={voice.voice_id}>
+                            <div className="flex items-center justify-between w-full gap-2">
+                              <span>{voice.name}</span>
+                              {voice.category && (
+                                <span className="text-xs text-muted-foreground">({voice.category})</span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                {/* Voice Preview */}
+                {voices && form.watch('voice_id') && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const voice = voices.find(v => v.voice_id === form.watch('voice_id'));
+                        if (voice?.preview_url) {
+                          if (playingVoiceId === voice.voice_id && audioElement) {
+                            audioElement.pause();
+                            setPlayingVoiceId(null);
+                          } else {
+                            if (audioElement) audioElement.pause();
+                            const audio = new Audio(voice.preview_url);
+                            audio.onended = () => setPlayingVoiceId(null);
+                            audio.play();
+                            setAudioElement(audio);
+                            setPlayingVoiceId(voice.voice_id);
+                          }
+                        }
+                      }}
+                    >
+                      {playingVoiceId === form.watch('voice_id') ? (
+                        <>
+                          <Pause className="h-4 w-4 mr-1" />
+                          Pausar
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4 mr-1" />
+                          Ouvir prévia
+                        </>
+                      )}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      {voices.find(v => v.voice_id === form.watch('voice_id'))?.name}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

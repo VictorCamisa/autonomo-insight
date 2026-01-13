@@ -66,13 +66,20 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
   const remoteJid = message.key?.remoteJid;
   const fromMe = message.key?.fromMe;
   
-  // Extract audio URL if present
-  const audioUrl = message.message?.audioMessage?.url || null;
+  // Extract audio URL - check multiple possible locations
+  const audioMessage = message.message?.audioMessage;
+  const audioUrl = audioMessage?.url || 
+                   audioMessage?.directPath || 
+                   message.message?.pttMessage?.url ||
+                   null;
+  
+  // Check if it's an audio message
+  const isAudio = !!(audioMessage || message.message?.pttMessage);
   
   const content =
     message.message?.conversation ||
     message.message?.extendedTextMessage?.text ||
-    (audioUrl ? '[Áudio]' : '[Mídia]');
+    (isAudio ? '[Áudio]' : '[Mídia]');
   const pushName = message.pushName;
   const messageId = message.key?.id;
 
@@ -86,6 +93,9 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
     pushName,
     content: content?.substring(0, 50),
     messageId,
+    isAudio,
+    hasAudioUrl: !!audioUrl,
+    audioMessage: audioMessage ? 'present' : 'none',
   });
 
   // Skip outgoing messages for lead creation
@@ -469,38 +479,42 @@ async function processWithAIAgent(
   // Build system prompt with vehicles INCLUDING PHOTOS
   let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
   
-  // CRITICAL: Add photo instructions - MUITO EXPLÍCITO
+  // Add Matheus Veículos context and photo instructions
   systemPrompt += `
 
-###############################################
-# REGRA CRÍTICA E OBRIGATÓRIA PARA FOTOS #####
-###############################################
+Você é Léo, assistente virtual da MATHEUS VEÍCULOS.
 
-SE O CLIENTE PEDIR FOTO DE UM VEÍCULO (usando palavras como "foto", "imagem", "ver", "mostra", "manda foto", "tem foto", etc):
+===== REGRAS DE COMUNICAÇÃO =====
+1. Sempre se apresente como Léo da Matheus Veículos
+2. Seja BREVE e DIRETO - máximo 2-3 frases por resposta
+3. NUNCA mande mensagens longas - quebre em parágrafos curtos
+4. Use linguagem amigável mas profissional
 
-1. Localize o veículo no ESTOQUE abaixo
-2. Pegue a URL da "foto_principal" do veículo
-3. OBRIGATORIAMENTE inclua esta tag na sua resposta:
+===== MENSAGEM INICIAL =====
+Quando for a primeira mensagem do cliente, responda APENAS:
+"Opa! Sou o Léo da Matheus Veículos 🚗
 
-[ENVIAR_FOTO: URL_DA_FOTO]
+Qual carro te interessa?"
 
-EXEMPLO CORRETO quando pedem foto do Polo:
-"Claro! Segue a foto do Polo:
+NÃO ESCREVA MAIS DO QUE ISSO na primeira resposta.
 
-[ENVIAR_FOTO: https://ahfoixzdnpswuqavbmgf.supabase.co/storage/v1/object/public/vehicle-images/xxx/foto.jpeg]
+===== REGRA DE FOTOS =====
+Se pedirem foto de um veículo:
+1. Localize no estoque abaixo
+2. Use a tag: [ENVIAR_FOTO: URL_DA_FOTO]
+3. Copie a URL EXATA do campo "foto_principal"
 
-Bonito, né? Posso agendar uma visita pra você ver pessoalmente?"
+Exemplo: "Olha só o Polo! 👇
 
-⚠️ NUNCA responda "vou enviar" ou "aqui está" sem incluir a tag [ENVIAR_FOTO: URL].
-⚠️ A URL DEVE ser copiada EXATAMENTE do campo "foto_principal" do veículo.
-⚠️ Se o veículo não tiver foto, diga "Infelizmente não temos foto desse modelo no momento."
+[ENVIAR_FOTO: https://url-da-foto.jpg]
 
-###############################################
+Bonito né? Quer agendar visita?"
+
+⚠️ Se não tiver foto: "Esse modelo não tem foto no sistema ainda, mas posso te mostrar pessoalmente!"
 `;
 
   if (vehicles?.length) {
-    systemPrompt += '\n\n=== ESTOQUE DISPONÍVEL (COM FOTOS) ===\n';
-    systemPrompt += `Total: ${vehicles.length} veículos\n\n`;
+    systemPrompt += '\n\n=== ESTOQUE MATHEUS VEÍCULOS ===\n';
     
     vehicles.forEach((v: any, i: number) => {
       const preco = v.sale_price ? `R$ ${Number(v.sale_price).toLocaleString('pt-BR')}` : 'Consultar';
@@ -509,21 +523,13 @@ Bonito, né? Posso agendar uma visita pra você ver pessoalmente?"
       const versao = v.version ? ` ${v.version}` : '';
       const fotos = v.images && v.images.length > 0 ? v.images : [];
       
-      systemPrompt += `VEÍCULO ${i + 1}: ${v.brand} ${v.model}${versao} ${ano}\n`;
-      systemPrompt += `  - Preco: ${preco}\n`;
-      systemPrompt += `  - KM: ${km} | Cor: ${v.color || 'N/A'}\n`;
-      systemPrompt += `  - Cambio: ${v.transmission || 'N/A'} | Combustivel: ${v.fuel_type || 'N/A'}\n`;
+      systemPrompt += `${v.brand} ${v.model}${versao} ${ano} | ${preco} | ${km}`;
       if (fotos.length > 0) {
-        systemPrompt += `  - 📸 foto_principal: ${fotos[0]}\n`;
-        if (fotos.length > 1) {
-          systemPrompt += `  - 📸 mais_fotos: ${fotos.slice(1, 3).join(' | ')}\n`;
-        }
-      } else {
-        systemPrompt += `  - ⚠️ SEM FOTOS\n`;
+        systemPrompt += ` | foto_principal: ${fotos[0]}`;
       }
       systemPrompt += '\n';
     });
-    systemPrompt += '=== FIM DO ESTOQUE ===\n';
+    systemPrompt += '=== FIM ===\n';
   }
 
   // Call AI using Lovable Gateway (preferred)
@@ -600,13 +606,50 @@ Bonito, né? Posso agendar uma visita pra você ver pessoalmente?"
     for (const photoUrl of extractedPhotos) {
       console.log('[AI Agent] Sending photo:', photoUrl);
       await sendWhatsAppImage(instanceName, targetJid, photoUrl);
-      // Small delay between messages
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
 
-    // ===== SEND TEXT RESPONSE =====
+    // ===== SEND TEXT RESPONSE IN MULTIPLE MESSAGES =====
     if (cleanResponse) {
-      await sendWhatsAppMessage(instanceName, targetJid, cleanResponse);
+      // Split response into multiple messages by paragraphs
+      const paragraphs = cleanResponse
+        .split(/\n\n+/)
+        .map((p: string) => p.trim())
+        .filter((p: string) => p.length > 0);
+      
+      // If there are multiple paragraphs, send each as separate message
+      if (paragraphs.length > 1) {
+        console.log('[AI Agent] Sending', paragraphs.length, 'separate messages');
+        for (const paragraph of paragraphs) {
+          await sendWhatsAppMessage(instanceName, targetJid, paragraph);
+          await new Promise(resolve => setTimeout(resolve, 600));
+        }
+      } else {
+        // Single paragraph - check if it's too long (>300 chars) and split by sentences
+        if (cleanResponse.length > 300) {
+          const sentences = cleanResponse.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim());
+          const chunks: string[] = [];
+          let currentChunk = '';
+          
+          for (const sentence of sentences) {
+            if (currentChunk.length + sentence.length > 250) {
+              if (currentChunk) chunks.push(currentChunk.trim());
+              currentChunk = sentence;
+            } else {
+              currentChunk += (currentChunk ? ' ' : '') + sentence;
+            }
+          }
+          if (currentChunk) chunks.push(currentChunk.trim());
+          
+          console.log('[AI Agent] Split long message into', chunks.length, 'chunks');
+          for (const chunk of chunks) {
+            await sendWhatsAppMessage(instanceName, targetJid, chunk);
+            await new Promise(resolve => setTimeout(resolve, 600));
+          }
+        } else {
+          await sendWhatsAppMessage(instanceName, targetJid, cleanResponse);
+        }
+      }
     }
 
     // Get instance for saving message

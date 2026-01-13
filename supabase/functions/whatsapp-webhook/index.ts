@@ -1295,28 +1295,56 @@ async function detectLeadOrigin(
   const isInstagram = /instagram|insta/i.test(firstMessage);
   const defaultSource = isInstagram ? 'instagram' : 'facebook';
 
-  // Try to find an active Meta campaign to link
-  const { data: activeCampaign, error } = await supabase
-    .from('meta_campaigns')
-    .select('id, name')
-    .eq('status', 'ACTIVE')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .single();
+  // Try to extract car/vehicle name from message
+  // Patterns like "anúncio do polo", "vi o civic", "propaganda da hilux"
+  const carNamePatterns = [
+    /an[uú]ncio\s+(?:do|da|de)\s+(\w+)/i,
+    /vi\s+(?:o|a|um|uma)\s+(\w+)/i,
+    /propaganda\s+(?:do|da|de)\s+(\w+)/i,
+    /interesse\s+(?:no|na|pelo|pela)\s+(\w+)/i,
+    /sobre\s+(?:o|a)\s+(\w+)/i,
+  ];
 
-  if (error || !activeCampaign) {
-    console.log('[Lead Origin] No active Meta campaign found, but marking as', defaultSource, 'source (from ad pattern)');
-    // Still mark as facebook/instagram since the message pattern indicates campaign
-    return { source: defaultSource, meta_campaign_id: null, campaign_name: null };
+  let extractedCarName: string | null = null;
+  for (const pattern of carNamePatterns) {
+    const match = firstMessage.match(pattern);
+    if (match && match[1]) {
+      // Ignore common words that aren't car names
+      const commonWords = ['carro', 'veiculo', 'veículo', 'anuncio', 'anúncio', 'esse', 'este', 'aquele'];
+      if (!commonWords.includes(match[1].toLowerCase())) {
+        extractedCarName = match[1].toLowerCase();
+        break;
+      }
+    }
   }
 
-  console.log('[Lead Origin] Linked to campaign:', activeCampaign.name, 'source:', defaultSource);
+  console.log('[Lead Origin] Extracted car name from message:', extractedCarName);
 
-  return {
-    source: defaultSource,
-    meta_campaign_id: activeCampaign.id,
-    campaign_name: activeCampaign.name,
-  };
+  // Only try to link campaign if we extracted a car name
+  if (extractedCarName) {
+    // Search for active campaign that contains the car name
+    const { data: matchingCampaigns } = await supabase
+      .from('meta_campaigns')
+      .select('id, name')
+      .eq('status', 'ACTIVE')
+      .ilike('name', `%${extractedCarName}%`);
+
+    if (matchingCampaigns && matchingCampaigns.length > 0) {
+      const matchedCampaign = matchingCampaigns[0];
+      console.log('[Lead Origin] Matched campaign by car name:', matchedCampaign.name, 'source:', defaultSource);
+      return {
+        source: defaultSource,
+        meta_campaign_id: matchedCampaign.id,
+        campaign_name: matchedCampaign.name,
+      };
+    } else {
+      console.log('[Lead Origin] No campaign found matching car name:', extractedCarName);
+    }
+  }
+
+  // No matching campaign found, just set source without campaign link
+  console.log('[Lead Origin] Setting source as', defaultSource, 'without campaign link');
+  return { source: defaultSource, meta_campaign_id: null, campaign_name: null };
 }
 
 // Create lead WITHOUT vendor (vendor assigned after qualification)

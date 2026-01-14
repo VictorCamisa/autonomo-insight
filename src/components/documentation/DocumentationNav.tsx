@@ -8,7 +8,8 @@ import {
   GraduationCap,
   Boxes,
   Route,
-  Code2
+  Code2,
+  Bot
 } from "lucide-react";
 import type { DocSection } from "./DocumentationLayout";
 
@@ -19,6 +20,7 @@ interface DocumentationNavProps {
 
 const navItems: { id: DocSection; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
+  { id: "ai-agent", label: "AI Agent (Técnico)", icon: Bot },
   { id: "modules", label: "Módulos do Sistema", icon: Boxes },
   { id: "database", label: "Banco de Dados", icon: Database },
   { id: "edge-functions", label: "Edge Functions", icon: Cloud },

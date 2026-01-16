@@ -1475,10 +1475,21 @@ async function extractAndSaveQualificationData(
 
   if (Object.keys(updates).length > 0) {
     console.log('[Qualification] Extracted data:', updates);
+    
+    // Update lead_qualification_data
     await supabase
       .from('lead_qualification_data')
       .update(updates)
       .eq('lead_id', leadId);
+    
+    // Also update vehicle_interest in leads table for visibility in CRM
+    if (updates.vehicle_interest) {
+      console.log('[Qualification] Updating vehicle_interest in leads table:', updates.vehicle_interest);
+      await supabase
+        .from('leads')
+        .update({ vehicle_interest: updates.vehicle_interest })
+        .eq('id', leadId);
+    }
   }
 
   // Check if lead is now qualified

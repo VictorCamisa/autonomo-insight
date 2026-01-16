@@ -691,46 +691,12 @@ Você prefere à vista ou financiado?
     systemPrompt += '=== FIM ===\n';
   }
 
-  // Call AI using Lovable Gateway (preferred)
+  // Call AI using OpenAI directly
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     let aiResponse: string | null = null;
 
-    if (LOVABLE_API_KEY) {
-      console.log('[AI Agent] Using Lovable AI Gateway');
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-3-flash-preview',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages,
-          ],
-          temperature: agent.temperature || 0.7,
-          max_tokens: agent.max_tokens || 2048,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        aiResponse = data.choices?.[0]?.message?.content || null;
-      } else {
-        console.error('[AI Agent] Lovable Gateway error:', await response.text());
-      }
-    }
-
-    // Fallback to OpenAI/Gemini if Lovable Gateway fails
-    if (!aiResponse) {
-      if (agent.llm_provider === 'openai') {
-        aiResponse = await callOpenAI(agent, systemPrompt, messages);
-      } else if (agent.llm_provider === 'google') {
-        aiResponse = await callGemini(agent, systemPrompt, messages);
-      }
-    }
+    console.log('[AI Agent] Calling OpenAI API directly');
+    aiResponse = await callOpenAI(agent, systemPrompt, messages);
 
     if (!aiResponse) {
       console.error('No response from AI');

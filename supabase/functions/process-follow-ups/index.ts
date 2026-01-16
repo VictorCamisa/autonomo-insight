@@ -170,8 +170,17 @@ serve(async (req) => {
     }
 
     // Filtrar apenas conversas onde a última mensagem foi da IA (assistant)
+    // E que a última mensagem da IA foi nas últimas 2 horas (janela máxima para follow-up)
+    const MAX_FOLLOW_UP_WINDOW_MINUTES = 120; // 2 horas
+    
     const leadsWaitingResponse = conversationDetails.filter(conv => {
       if (!conv.last_assistant_message_at) return false;
+      
+      // Verificar se a última mensagem da IA está dentro da janela de tempo
+      const minutesSinceLastBotMessage = (Date.now() - new Date(conv.last_assistant_message_at).getTime()) / (1000 * 60);
+      if (minutesSinceLastBotMessage > MAX_FOLLOW_UP_WINDOW_MINUTES) {
+        return false; // Muito antigo, não processar
+      }
       
       // Se não tem mensagem do usuário, ou se a última do assistant é depois da última do user
       if (!conv.last_user_message_at) return true;
@@ -179,7 +188,7 @@ serve(async (req) => {
       return new Date(conv.last_assistant_message_at) > new Date(conv.last_user_message_at);
     });
 
-    console.log(`${leadsWaitingResponse.length} leads waiting for response (last msg from bot)`);
+    console.log(`${leadsWaitingResponse.length} leads waiting for response within ${MAX_FOLLOW_UP_WINDOW_MINUTES}min window`);
 
     // 4. Buscar dados dos leads elegíveis
     const eligibleLeadIds = leadsWaitingResponse.map(c => c.lead_id);

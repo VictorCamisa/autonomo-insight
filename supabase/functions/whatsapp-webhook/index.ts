@@ -1313,7 +1313,7 @@ async function detectLeadOrigin(
   return { source: defaultSource, meta_campaign_id: null, campaign_name: null };
 }
 
-// Create lead WITHOUT vendor (vendor assigned after qualification)
+// Create lead WITH vendor assigned immediately (via round-robin), but no notification yet
 async function createLeadWithRoundRobin(
   supabase: any,
   phone: string,
@@ -1326,7 +1326,18 @@ async function createLeadWithRoundRobin(
 ): Promise<string | null> {
   console.log('[Lead Creation] Creating lead with origin:', origin.source, 'campaign:', origin.campaign_name || 'none');
 
-  // Create lead WITHOUT assigned_to, WITH origin information
+  // Get next salesperson from Round Robin IMMEDIATELY
+  const assignedTo = await getNextRoundRobinSalesperson(supabase);
+  
+  if (assignedTo) {
+    console.log('[Lead Creation] Pre-assigned salesperson via round-robin:', assignedTo);
+    // Increment round-robin counters right away
+    await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: assignedTo });
+  } else {
+    console.log('[Lead Creation] No salesperson available in round-robin');
+  }
+
+  // Create lead WITH assigned_to set immediately
   const { data: lead, error: leadError } = await supabase
     .from('leads')
     .insert({
@@ -1334,7 +1345,7 @@ async function createLeadWithRoundRobin(
       name,
       source: origin.source,
       status: 'novo',
-      assigned_to: null, // NOT assigning vendor yet - wait for qualification
+      assigned_to: assignedTo, // ASSIGN NOW, but don't notify until qualified
       qualification_status: 'nao_qualificado',
       meta_campaign_id: origin.meta_campaign_id,
     })
@@ -1346,22 +1357,33 @@ async function createLeadWithRoundRobin(
     return null;
   }
 
-  console.log('[Lead Creation] Lead created:', lead.id, 'source:', origin.source);
+  console.log('[Lead Creation] Lead created:', lead.id, 'source:', origin.source, 'assigned_to:', assignedTo);
 
-  // Create negotiation in "em_andamento" status (no salesperson yet)
+  // Create negotiation in "em_andamento" status WITH salesperson already set
   const { error: negError } = await supabase.from('negotiations').insert({
     lead_id: lead.id,
-    salesperson_id: null, // Will be assigned after qualification
+    salesperson_id: assignedTo, // Already assigned, but Gabi is still handling
     status: 'em_andamento',
     notes: origin.meta_campaign_id 
-      ? `Negociação criada automaticamente via ${origin.source.toUpperCase()} - Campanha: ${origin.campaign_name}` 
-      : 'Negociação criada automaticamente via WhatsApp orgânico',
+      ? `Negociação criada automaticamente via ${origin.source.toUpperCase()} - Campanha: ${origin.campaign_name} - Aguardando qualificação` 
+      : 'Negociação criada automaticamente via WhatsApp orgânico - Aguardando qualificação',
   });
 
   if (negError) {
     console.error('Error creating negotiation:', negError);
   } else {
-    console.log('[Lead Creation] Negotiation created for lead:', lead.id);
+    console.log('[Lead Creation] Negotiation created for lead:', lead.id, 'with salesperson:', assignedTo);
+  }
+
+  // Create lead assignment record (but no notification)
+  if (assignedTo) {
+    await supabase.from('lead_assignments').insert({
+      lead_id: lead.id,
+      salesperson_id: assignedTo,
+      assignment_type: 'round_robin',
+      notes: 'Atribuído na criação do lead - aguardando qualificação pelo bot',
+    });
+    console.log('[Lead Creation] Lead assignment record created');
   }
 
   // Create qualification data tracker
@@ -1542,19 +1564,48 @@ async function extractAndSaveQualificationData(
   return { isQualified: false, newlyQualified: false };
 }
 
-// Assign salesperson after lead qualification
+// Transfer to salesperson after lead qualification (salesperson already assigned at creation)
 async function assignSalespersonOnQualification(
   supabase: any,
   leadId: string
 ): Promise<{ id: string; name: string } | null> {
-  console.log('[Qualification] Lead qualified! Assigning salesperson via round-robin...');
+  console.log('[Qualification] Lead qualified! Transferring to pre-assigned salesperson...');
 
-  // Get next salesperson from Round Robin
-  const assignedTo = await getNextRoundRobinSalesperson(supabase);
-  
+  // Get lead to find ALREADY ASSIGNED salesperson
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('assigned_to, name, phone, vehicle_interest')
+    .eq('id', leadId)
+    .single();
+
+  let assignedTo = lead?.assigned_to;
+
+  // Fallback: if somehow no salesperson was assigned, do it now
   if (!assignedTo) {
-    console.error('[Qualification] No salesperson available in round-robin');
-    return null;
+    console.log('[Qualification] No pre-assigned salesperson, assigning now via round-robin...');
+    assignedTo = await getNextRoundRobinSalesperson(supabase);
+    
+    if (!assignedTo) {
+      console.error('[Qualification] No salesperson available in round-robin');
+      return null;
+    }
+    
+    // Increment round-robin counters
+    await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: assignedTo });
+    
+    // Update lead with assigned salesperson
+    await supabase
+      .from('leads')
+      .update({ assigned_to: assignedTo })
+      .eq('id', leadId);
+    
+    // Create lead assignment record
+    await supabase.from('lead_assignments').insert({
+      lead_id: leadId,
+      salesperson_id: assignedTo,
+      assignment_type: 'round_robin',
+      notes: 'Atribuído na qualificação (fallback)',
+    });
   }
 
   // Get salesperson details including phone for notification
@@ -1565,44 +1616,22 @@ async function assignSalespersonOnQualification(
     .single();
 
   const salespersonName = salesperson?.full_name || 'Nosso atendente';
-  console.log('[Qualification] Assigned to:', salespersonName, '(', assignedTo, ')');
+  console.log('[Qualification] Transferring to:', salespersonName, '(', assignedTo, ')');
 
-  // Update lead with assigned salesperson
+  // Update lead status to qualified
   await supabase
     .from('leads')
-    .update({
-      assigned_to: assignedTo,
-      qualification_status: 'qualificado',
-    })
+    .update({ qualification_status: 'qualificado' })
     .eq('id', leadId);
 
-  // Update negotiation status to "negociando" and assign salesperson
+  // Update negotiation status to "negociando" (salesperson already set)
   await supabase
     .from('negotiations')
     .update({
-      salesperson_id: assignedTo,
       status: 'negociando',
-      notes: 'Lead qualificado pelo bot - atribuído ao vendedor',
+      notes: 'Lead qualificado pelo bot - transferido ao vendedor',
     })
     .eq('lead_id', leadId);
-
-  // Create lead assignment record
-  await supabase.from('lead_assignments').insert({
-    lead_id: leadId,
-    salesperson_id: assignedTo,
-    assignment_type: 'round_robin',
-    notes: 'Atribuído após qualificação pelo bot (WhatsApp)',
-  });
-
-  // Increment round-robin counters
-  await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: assignedTo });
-
-  // Get lead info for notification
-  const { data: lead } = await supabase
-    .from('leads')
-    .select('name, phone, vehicle_interest')
-    .eq('id', leadId)
-    .single();
 
   // Get qualification data for notification
   const { data: qualData } = await supabase
@@ -1619,6 +1648,8 @@ async function assignSalespersonOnQualification(
     message: `${lead?.name || 'Novo lead'} foi qualificado! Veículo: ${qualData?.vehicle_interest || 'Não informado'}. Orçamento: R$ ${qualData?.budget?.toLocaleString('pt-BR') || 'Não informado'}`,
     link: '/crm',
   });
+
+  console.log('[Qualification] Notification created for salesperson:', assignedTo);
 
   // Send WhatsApp notification to salesperson if they have a phone registered
   if (salesperson?.phone) {

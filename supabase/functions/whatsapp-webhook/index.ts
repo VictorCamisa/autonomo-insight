@@ -615,19 +615,24 @@ O que você está buscando hoje?"
 
 ⚠️ MAS se o cliente já chegou falando de um carro específico (ex: "tem Polo?", "quanto tá o Civic?"), responda sobre o carro DIRETO, sem essa apresentação genérica!
 
-===== REGRA DE FOTOS =====
+===== REGRA CRÍTICA DE FOTOS =====
+⚠️ ATENÇÃO MÁXIMA: NUNCA envie foto de um veículo diferente do que o cliente pediu!
+
 Se pedirem foto de um veículo:
-1. Localize no estoque abaixo
-2. Use a tag: [ENVIAR_FOTO: URL_DA_FOTO]
-3. Copie a URL EXATA do campo "foto_principal"
+1. Localize o veículo EXATO no estoque abaixo pelo NOME
+2. Verifique se esse veículo TEM "foto:" na linha dele
+3. Se TEM foto: Use [ENVIAR_FOTO: URL] copiando a URL EXATA
+4. Se NÃO TEM foto (não aparece "foto:" na linha): DIGA que não tem foto disponível!
 
-Exemplo: "Olha só o Polo! 👇
+⚠️ PROIBIDO: Mandar foto de outro carro! Se o cliente quer Ford Ka e o Ka não tem foto, NÃO mande foto de Uno, Polo, ou qualquer outro!
 
+Exemplo CORRETO quando TEM foto:
+"Olha só o Polo! 👇
 [ENVIAR_FOTO: https://url-da-foto.jpg]
+Bonito né?"
 
-Bonito né? Quer agendar visita?"
-
-⚠️ Se não tiver foto: "Esse modelo não tem foto no sistema ainda, mas posso te mostrar pessoalmente!"
+Exemplo CORRETO quando NÃO TEM foto:
+"O Ford Ka 2021 ainda não tem foto no sistema, mas posso te mostrar pessoalmente! Quer agendar uma visita? 📅"
 
 ===== 🎯 QUALIFICAÇÃO DO CLIENTE (MUITO IMPORTANTE!) =====
 Seu objetivo é COLETAR informações para qualificar o cliente. Conduza a conversa naturalmente para descobrir:
@@ -682,9 +687,12 @@ Você prefere à vista ou financiado?
       const versao = v.version ? ` ${v.version}` : '';
       const fotos = v.images && v.images.length > 0 ? v.images : [];
       
-      systemPrompt += `${v.brand} ${v.model}${versao} ${ano} | ${preco} | ${km}`;
+      // Formato mais claro: mostra explicitamente se tem ou não tem foto
+      systemPrompt += `• ${v.brand} ${v.model}${versao} ${ano} | ${preco} | ${km}`;
       if (fotos.length > 0) {
-        systemPrompt += ` | foto_principal: ${fotos[0]}`;
+        systemPrompt += ` | foto: ${fotos[0]}`;
+      } else {
+        systemPrompt += ` | ⚠️ SEM FOTO DISPONÍVEL`;
       }
       systemPrompt += '\n';
     });

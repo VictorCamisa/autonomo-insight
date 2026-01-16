@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,13 +28,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { triggerTypeLabels, triggerTypeDescriptions } from '@/types/followUp';
+import { triggerTypeDescriptions } from '@/types/followUp';
 import { leadSourceLabels } from '@/types/crm';
-import { X, Settings2, Filter, ListOrdered, Plus, ArrowRight } from 'lucide-react';
+import { X, Settings2, Filter, ListOrdered, Plus, ArrowRight, MessageCircle } from 'lucide-react';
 import type { TriggerType } from '@/types/followUp';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FollowUpStepEditor, type FollowUpStep } from './FollowUpStepEditor';
+
+// Hook para buscar instâncias WhatsApp
+function useWhatsAppInstances() {
+  return useQuery({
+    queryKey: ['whatsapp-instances'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('whatsapp_instances')
+        .select('id, instance_name, status, is_default')
+        .order('is_default', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
 
 // Etapas do pipeline
 const pipelineStages = [
@@ -56,6 +72,7 @@ const formSchema = z.object({
   target_lead_sources: z.array(z.string()).default([]),
   trigger_type: z.string().default('no_response_to_bot'),
   priority: z.number().default(0),
+  whatsapp_instance_id: z.string().optional().nullable(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -73,6 +90,7 @@ export interface FollowUpFlowFormNewProps {
     priority?: number;
     steps?: FollowUpStep[];
     pipeline_stages?: string[];
+    whatsapp_instance_id?: string | null;
   };
   onSubmit: (data: FormData & { steps: FollowUpStep[] }) => void;
   onCancel: () => void;
@@ -126,6 +144,8 @@ export function FollowUpFlowFormNew({
   onCancel,
   isLoading,
 }: FollowUpFlowFormNewProps) {
+  const { data: whatsappInstances } = useWhatsAppInstances();
+  
   const initialPipelineStages = initialData?.pipeline_stages || 
     convertToPipelineStages(initialData?.target_lead_status, initialData?.target_negotiation_status);
 
@@ -145,6 +165,7 @@ export function FollowUpFlowFormNew({
       target_lead_sources: initialData?.target_lead_sources || [],
       trigger_type: initialData?.trigger_type || 'no_response_to_bot',
       priority: initialData?.priority || 0,
+      whatsapp_instance_id: initialData?.whatsapp_instance_id || null,
     },
   });
 
@@ -318,6 +339,47 @@ export function FollowUpFlowFormNew({
                             {triggerTypeDescriptions[field.value as TriggerType]}
                           </FormDescription>
                         )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="whatsapp_instance_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <MessageCircle className="h-4 w-4" />
+                          Instância WhatsApp
+                        </FormLabel>
+                        <Select 
+                          onValueChange={(value) => field.onChange(value === 'auto' ? null : value)} 
+                          defaultValue={field.value || 'auto'}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione a instância" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="auto">
+                              Automático (primeira conectada)
+                            </SelectItem>
+                            {whatsappInstances?.map((instance) => (
+                              <SelectItem key={instance.id} value={instance.id}>
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-2 h-2 rounded-full ${instance.status === 'connected' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                  {instance.instance_name}
+                                  {instance.is_default && <Badge variant="secondary" className="text-[10px] py-0">Padrão</Badge>}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription className="text-xs">
+                          Escolha qual instância será usada para enviar as mensagens deste fluxo
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

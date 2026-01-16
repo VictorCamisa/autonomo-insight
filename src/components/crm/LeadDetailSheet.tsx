@@ -2,24 +2,23 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent } from '@/components/ui/card';
 import { 
   Phone, Mail, Calendar, User, Car, MessageSquare, 
-  Plus, Clock, CheckCircle2, AlertCircle 
+  Plus, Clock, MapPin, Tag, ExternalLink, TrendingUp,
+  Brain, History, Handshake
 } from 'lucide-react';
 import type { Lead } from '@/types/crm';
 import { leadStatusLabels, leadStatusColors, leadSourceLabels } from '@/types/crm';
-import { useLeadInteractions, useCreateInteraction, useCompleteFollowUp } from '@/hooks/useLeadInteractions';
 import { useNegotiations } from '@/hooks/useNegotiations';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState } from 'react';
 import { negotiationStatusLabels, negotiationStatusColors } from '@/types/negotiations';
 import { WhatsAppChatModal } from '@/components/whatsapp/WhatsAppChatModal';
+import { LeadQualificationPanel } from './LeadQualificationPanel';
+import { cn } from '@/lib/utils';
 
 interface LeadDetailSheetProps {
   lead: Lead | null;
@@ -29,319 +28,392 @@ interface LeadDetailSheetProps {
 }
 
 export function LeadDetailSheet({ lead, open, onOpenChange, onStartNegotiation }: LeadDetailSheetProps) {
-  const { data: interactions = [] } = useLeadInteractions(lead?.id || '');
   const { data: allNegotiations = [] } = useNegotiations();
-  const createInteraction = useCreateInteraction();
-  const completeFollowUp = useCompleteFollowUp();
-
-  const [interactionType, setInteractionType] = useState('ligacao');
-  const [interactionDescription, setInteractionDescription] = useState('');
-  const [followUpDate, setFollowUpDate] = useState('');
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
 
   const leadNegotiations = allNegotiations.filter(n => n.lead_id === lead?.id);
-
-  const handleAddInteraction = () => {
-    if (!lead || !interactionDescription.trim()) return;
-    
-    createInteraction.mutate({
-      lead_id: lead.id,
-      type: interactionType,
-      description: interactionDescription,
-      follow_up_date: followUpDate || undefined,
-    }, {
-      onSuccess: () => {
-        setInteractionDescription('');
-        setFollowUpDate('');
-      }
-    });
-  };
+  const activeNegotiations = leadNegotiations.filter(n => !['perdida', 'venda_concluida'].includes(n.status));
 
   if (!lead) return null;
 
-  const interactionTypeLabels: Record<string, string> = {
-    ligacao: 'Ligação',
-    whatsapp: 'WhatsApp',
-    email: 'E-mail',
-    visita: 'Visita',
-    reuniao: 'Reunião',
-    outro: 'Outro',
-  };
-
-  // Find last incoming message for SLA calculation
-  const lastCustomerMessageAt = undefined; // Will be calculated from messages
+  const createdAgo = formatDistanceToNow(new Date(lead.created_at), { addSuffix: true, locale: ptBR });
+  const qualificationLabel = lead.qualification_status === 'qualificado' 
+    ? 'Qualificado' 
+    : lead.qualification_status === 'desqualificado' 
+      ? 'Desqualificado' 
+      : 'Em qualificação';
+  const qualificationColor = lead.qualification_status === 'qualificado'
+    ? 'bg-green-500'
+    : lead.qualification_status === 'desqualificado'
+      ? 'bg-red-500'
+      : 'bg-amber-500';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-3xl overflow-hidden flex flex-col p-0">
-        <SheetHeader className="px-6 py-4 border-b flex-shrink-0">
-          <div className="flex items-start justify-between">
-            <div>
-              <SheetTitle className="text-xl">{lead.name}</SheetTitle>
-              <div className="flex items-center gap-2 mt-2">
+      <SheetContent className="w-full sm:max-w-2xl overflow-hidden flex flex-col p-0">
+        {/* Header */}
+        <SheetHeader className="px-6 py-4 border-b flex-shrink-0 bg-gradient-to-r from-muted/50 to-transparent">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="text-xl truncate">{lead.name}</SheetTitle>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Badge className={leadStatusColors[lead.status]}>
                   {leadStatusLabels[lead.status]}
                 </Badge>
-                <Badge variant="outline">{leadSourceLabels[lead.source]}</Badge>
+                <Badge className={qualificationColor}>
+                  {qualificationLabel}
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  <Tag className="h-3 w-3 mr-1" />
+                  {leadSourceLabels[lead.source]}
+                </Badge>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                <Clock className="h-3 w-3 inline mr-1" />
+                Criado {createdAgo}
+              </p>
             </div>
           </div>
         </SheetHeader>
 
-        <Tabs defaultValue="info" className="flex-1 overflow-hidden flex flex-col min-h-0">
-          <TabsList className="grid w-full grid-cols-3 mx-6 mt-4" style={{ width: 'calc(100% - 3rem)' }}>
-            <TabsTrigger value="info" className="text-xs sm:text-sm">Info</TabsTrigger>
-            <TabsTrigger value="history" className="text-xs sm:text-sm">Histórico</TabsTrigger>
-            <TabsTrigger value="negotiations" className="text-xs sm:text-sm">Negociações</TabsTrigger>
+        {/* Quick Actions Bar */}
+        <div className="px-6 py-3 border-b flex gap-2 flex-shrink-0 bg-muted/30">
+          <Button
+            size="sm"
+            className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+            onClick={() => setWhatsappModalOpen(true)}
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            WhatsApp
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1"
+            onClick={() => window.open(`tel:${lead.phone}`, '_self')}
+          >
+            <Phone className="h-4 w-4 mr-2" />
+            Ligar
+          </Button>
+          {activeNegotiations.length === 0 && (
+            <Button
+              size="sm"
+              variant="default"
+              className="flex-1"
+              onClick={() => onStartNegotiation?.(lead.id, lead.assigned_to || undefined)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Negociar
+            </Button>
+          )}
+        </div>
+
+        {/* WhatsApp Modal */}
+        <WhatsAppChatModal
+          open={whatsappModalOpen}
+          onOpenChange={setWhatsappModalOpen}
+          leadId={lead.id}
+          phone={lead.phone}
+          leadName={lead.name}
+        />
+
+        {/* Tabs */}
+        <Tabs defaultValue="qualification" className="flex-1 overflow-hidden flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-3 mx-6 mt-4 flex-shrink-0" style={{ width: 'calc(100% - 3rem)' }}>
+            <TabsTrigger value="qualification" className="text-xs sm:text-sm gap-1">
+              <Brain className="h-3 w-3" />
+              Qualificação
+            </TabsTrigger>
+            <TabsTrigger value="info" className="text-xs sm:text-sm gap-1">
+              <User className="h-3 w-3" />
+              Dados
+            </TabsTrigger>
+            <TabsTrigger value="negotiations" className="text-xs sm:text-sm gap-1">
+              <Handshake className="h-3 w-3" />
+              Negociações
+              {leadNegotiations.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-4 w-4 p-0 text-[10px] flex items-center justify-center">
+                  {leadNegotiations.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
-          {/* WhatsApp Modal */}
-          <WhatsAppChatModal
-            open={whatsappModalOpen}
-            onOpenChange={setWhatsappModalOpen}
-            leadId={lead.id}
-            phone={lead.phone}
-            leadName={lead.name}
-            lastCustomerMessageAt={lastCustomerMessageAt}
-          />
+          {/* Qualification Tab - Real-time AI Panel */}
+          <TabsContent value="qualification" className="flex-1 overflow-hidden mt-4 m-0 data-[state=active]:flex data-[state=active]:flex-col min-h-0">
+            <ScrollArea className="flex-1 min-h-0 px-6 pb-6">
+              <LeadQualificationPanel leadId={lead.id} />
+            </ScrollArea>
+          </TabsContent>
 
-
+          {/* Info Tab */}
           <TabsContent value="info" className="flex-1 overflow-hidden mt-4 m-0 data-[state=active]:flex data-[state=active]:flex-col min-h-0">
             <ScrollArea className="flex-1 min-h-0 px-6 pb-6">
               <div className="space-y-4">
-                {/* WhatsApp Button */}
-                <Button
-                  variant="default"
-                  className="w-full bg-emerald-500 hover:bg-emerald-600"
-                  onClick={() => setWhatsappModalOpen(true)}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Abrir Chat WhatsApp
-                </Button>
-
                 {/* Contact Info */}
                 <Card>
-                  <CardContent className="p-4 space-y-3">
-                    <h4 className="font-medium text-sm text-muted-foreground">Contato</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        <a href={`tel:${lead.phone}`} className="hover:text-primary">{lead.phone}</a>
-                      </div>
-                      {lead.email && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          <a href={`mailto:${lead.email}`} className="hover:text-primary">{lead.email}</a>
-                        </div>
-                      )}
-                    </div>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      Contato
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <a 
+                      href={`tel:${lead.phone}`} 
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors"
+                    >
+                      <Phone className="h-4 w-4 text-emerald-500" />
+                      <span className="font-mono">{lead.phone}</span>
+                      <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
+                    </a>
+                    {lead.email && (
+                      <a 
+                        href={`mailto:${lead.email}`} 
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <Mail className="h-4 w-4 text-blue-500" />
+                        <span className="truncate">{lead.email}</span>
+                        <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
+                      </a>
+                    )}
                   </CardContent>
                 </Card>
 
                 {/* Vehicle Interest */}
                 {lead.vehicle_interest && (
                   <Card>
-                    <CardContent className="p-4 space-y-2">
-                      <h4 className="font-medium text-sm text-muted-foreground">Interesse</h4>
-                      <div className="flex items-center gap-2 text-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
                         <Car className="h-4 w-4 text-muted-foreground" />
-                        <span>{lead.vehicle_interest}</span>
+                        Interesse em Veículo
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
+                        <Car className="h-5 w-5 text-primary" />
+                        <span className="font-medium">{lead.vehicle_interest}</span>
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Assigned To */}
+                {/* Assigned Salesperson */}
                 <Card>
-                  <CardContent className="p-4 space-y-2">
-                    <h4 className="font-medium text-sm text-muted-foreground">Responsável</h4>
-                    <div className="flex items-center gap-2 text-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
-                      <span>{lead.assigned_profile?.full_name || 'Não atribuído'}</span>
+                      Vendedor Responsável
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">
+                          {lead.assigned_profile?.full_name || 'Não atribuído'}
+                        </p>
+                        {lead.qualification_status === 'qualificado' ? (
+                          <p className="text-xs text-green-600">Lead transferido</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Pré-atribuído (Round-Robin)</p>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* UTM / Source Info */}
+                {(lead.utm_source || lead.utm_campaign || lead.utm_medium) && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        Origem do Lead
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {lead.utm_source && (
+                          <div className="p-2 bg-muted rounded">
+                            <span className="text-muted-foreground">Source:</span>{' '}
+                            <span className="font-medium">{lead.utm_source}</span>
+                          </div>
+                        )}
+                        {lead.utm_medium && (
+                          <div className="p-2 bg-muted rounded">
+                            <span className="text-muted-foreground">Medium:</span>{' '}
+                            <span className="font-medium">{lead.utm_medium}</span>
+                          </div>
+                        )}
+                        {lead.utm_campaign && (
+                          <div className="p-2 bg-muted rounded col-span-2">
+                            <span className="text-muted-foreground">Campaign:</span>{' '}
+                            <span className="font-medium">{lead.utm_campaign}</span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Notes */}
                 {lead.notes && (
                   <Card>
-                    <CardContent className="p-4 space-y-2">
-                      <h4 className="font-medium text-sm text-muted-foreground">Observações</h4>
-                      <p className="text-sm">{lead.notes}</p>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Observações</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.notes}</p>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Quick Interaction Form */}
+                {/* Timestamps */}
                 <Card>
-                  <CardContent className="p-4 space-y-3">
-                    <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
-                      <Plus className="h-4 w-4" />
-                      Registrar Contato
-                    </h4>
-                    <div className="space-y-3">
-                      <Select value={interactionType} onValueChange={setInteractionType}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(interactionTypeLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Textarea
-                        placeholder="Descreva o contato..."
-                        value={interactionDescription}
-                        onChange={(e) => setInteractionDescription(e.target.value)}
-                        rows={2}
-                      />
-                      <div className="flex gap-2">
-                        <Input
-                          type="datetime-local"
-                          placeholder="Follow-up"
-                          value={followUpDate}
-                          onChange={(e) => setFollowUpDate(e.target.value)}
-                          className="flex-1"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={handleAddInteraction}
-                          disabled={!interactionDescription.trim() || createInteraction.isPending}
-                        >
-                          Salvar
-                        </Button>
-                      </div>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <History className="h-4 w-4 text-muted-foreground" />
+                      Timeline
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Criado em</span>
+                      <span>{format(new Date(lead.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Atualizado em</span>
+                      <span>{format(new Date(lead.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                    </div>
+                    {lead.first_response_at && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Primeira resposta</span>
+                        <span>{format(new Date(lead.first_response_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-
-                {/* Start Negotiation Button */}
-                <Button
-                  className="w-full"
-                  onClick={() => onStartNegotiation?.(lead.id, lead.assigned_to || undefined)}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Iniciar Negociação
-                </Button>
               </div>
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="history" className="flex-1 overflow-hidden mt-4 m-0 data-[state=active]:flex data-[state=active]:flex-col min-h-0">
-            <ScrollArea className="flex-1 min-h-0 px-6 pb-6">
-              <div className="space-y-3">
-                {interactions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Nenhuma interação registrada</p>
-                  </div>
-                ) : (
-                  interactions.map((interaction) => (
-                    <Card key={interaction.id}>
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="outline" className="text-xs">
-                                {interactionTypeLabels[interaction.type] || interaction.type}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {format(new Date(interaction.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                              </span>
-                            </div>
-                            <p className="text-sm">{interaction.description}</p>
-                            {interaction.user_profile?.full_name && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Por: {interaction.user_profile.full_name}
-                              </p>
-                            )}
-                          </div>
-                          {/* Follow-up indicator */}
-                          {'follow_up_date' in interaction && interaction.follow_up_date && (
-                            <div className="shrink-0">
-                              {'follow_up_completed' in interaction && interaction.follow_up_completed ? (
-                                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-6 px-2"
-                                  onClick={() => completeFollowUp.mutate(interaction.id)}
-                                >
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  <span className="text-xs">
-                                    {format(new Date(interaction.follow_up_date as string), 'dd/MM', { locale: ptBR })}
-                                  </span>
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
+          {/* Negotiations Tab */}
           <TabsContent value="negotiations" className="flex-1 overflow-hidden mt-4 m-0 data-[state=active]:flex data-[state=active]:flex-col min-h-0">
             <ScrollArea className="flex-1 min-h-0 px-6 pb-6">
               <div className="space-y-3">
                 {leadNegotiations.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Nenhuma negociação</p>
+                  <div className="text-center py-12">
+                    <Handshake className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+                    <p className="text-muted-foreground mb-4">Nenhuma negociação iniciada</p>
                     <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
                       onClick={() => onStartNegotiation?.(lead.id, lead.assigned_to || undefined)}
                     >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Iniciar Primeira Negociação
+                      <Plus className="h-4 w-4 mr-2" />
+                      Iniciar Negociação
                     </Button>
                   </div>
                 ) : (
-                  leadNegotiations.map((negotiation) => (
-                    <Card key={negotiation.id}>
-                      <CardContent className="p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Badge className={negotiationStatusColors[negotiation.status]}>
-                            {negotiationStatusLabels[negotiation.status]}
-                          </Badge>
-                          {negotiation.estimated_value && (
-                            <span className="font-semibold text-sm">
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(negotiation.estimated_value)}
-                            </span>
-                          )}
-                        </div>
-                        {negotiation.vehicle && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Car className="h-3 w-3" />
-                            <span>{negotiation.vehicle.brand} {negotiation.vehicle.model}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
-                          <span>Criada em {format(new Date(negotiation.created_at), 'dd/MM/yyyy', { locale: ptBR })}</span>
-                        </div>
-                        {negotiation.loss_reason && (
-                          <p className="text-xs text-destructive bg-destructive/10 rounded p-2">
-                            Motivo da perda: {negotiation.loss_reason}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))
+                  <>
+                    {/* Active Negotiations First */}
+                    {activeNegotiations.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Ativas ({activeNegotiations.length})
+                        </p>
+                        {activeNegotiations.map((negotiation) => (
+                          <NegotiationCard key={negotiation.id} negotiation={negotiation} />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Closed Negotiations */}
+                    {leadNegotiations.filter(n => ['perdida', 'venda_concluida'].includes(n.status)).length > 0 && (
+                      <div className="space-y-2 mt-4">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Encerradas
+                        </p>
+                        {leadNegotiations
+                          .filter(n => ['perdida', 'venda_concluida'].includes(n.status))
+                          .map((negotiation) => (
+                            <NegotiationCard key={negotiation.id} negotiation={negotiation} />
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Start New */}
+                    <Button
+                      variant="outline"
+                      className="w-full mt-4"
+                      onClick={() => onStartNegotiation?.(lead.id, lead.assigned_to || undefined)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nova Negociação
+                    </Button>
+                  </>
                 )}
               </div>
             </ScrollArea>
           </TabsContent>
-
         </Tabs>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function NegotiationCard({ negotiation }: { negotiation: any }) {
+  const isWon = negotiation.status === 'venda_concluida';
+  const isLost = negotiation.status === 'perdida';
+
+  return (
+    <Card className={cn(
+      "transition-colors",
+      isWon && "border-green-500/30 bg-green-500/5",
+      isLost && "border-destructive/30 bg-destructive/5"
+    )}>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <Badge className={negotiationStatusColors[negotiation.status]}>
+            {negotiationStatusLabels[negotiation.status]}
+          </Badge>
+          {negotiation.estimated_value && (
+            <span className="font-semibold">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(negotiation.estimated_value)}
+            </span>
+          )}
+        </div>
+        
+        {negotiation.vehicle && (
+          <div className="flex items-center gap-2 text-sm">
+            <Car className="h-4 w-4 text-muted-foreground" />
+            <span>{negotiation.vehicle.brand} {negotiation.vehicle.model} {negotiation.vehicle.year}</span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Calendar className="h-3 w-3" />
+          <span>
+            {format(new Date(negotiation.created_at), "dd/MM/yyyy", { locale: ptBR })}
+          </span>
+          {negotiation.next_follow_up && !isWon && !isLost && (
+            <>
+              <span className="mx-1">•</span>
+              <Clock className="h-3 w-3 text-amber-500" />
+              <span className="text-amber-600">
+                Follow-up: {format(new Date(negotiation.next_follow_up), "dd/MM", { locale: ptBR })}
+              </span>
+            </>
+          )}
+        </div>
+
+        {negotiation.loss_reason && (
+          <p className="text-xs bg-destructive/10 text-destructive rounded-lg p-2">
+            Motivo: {negotiation.loss_reason}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

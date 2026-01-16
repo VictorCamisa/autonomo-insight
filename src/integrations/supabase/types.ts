@@ -1287,6 +1287,33 @@ export type Database = {
           },
         ]
       }
+      follow_up_settings: {
+        Row: {
+          automation_enabled: boolean
+          id: string
+          interval_minutes: number
+          last_execution_at: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          automation_enabled?: boolean
+          id?: string
+          interval_minutes?: number
+          last_execution_at?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          automation_enabled?: boolean
+          id?: string
+          interval_minutes?: number
+          last_execution_at?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       follow_up_step_executions: {
         Row: {
           error_message: string | null

@@ -181,7 +181,7 @@ const edgeFunctions = [
     description: "Gera relatórios com IA baseado em perguntas do usuário",
     method: "POST",
     auth: "Requer autenticação",
-    secrets: ["LOVABLE_API_KEY"],
+    secrets: ["OPENAI_API_KEY"],
     requestBody: `{
   "question": "Qual foi o faturamento do mês?"
 }`,
@@ -209,7 +209,7 @@ const configuredSecrets = [
   { name: "GOOGLE_ADS_DEVELOPER_TOKEN", description: "Token de desenvolvedor" },
   { name: "GOOGLE_ADS_CUSTOMER_ID", description: "ID do cliente Google Ads" },
   { name: "GOOGLE_ADS_REFRESH_TOKEN", description: "Refresh token OAuth" },
-  { name: "LOVABLE_API_KEY", description: "API Key do Lovable para IA" },
+  { name: "OPENAI_API_KEY", description: "API Key da OpenAI para IA" },
 ];
 
 export const EdgeFunctionsSection = ({ searchTerm }: EdgeFunctionsSectionProps) => {

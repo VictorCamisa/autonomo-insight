@@ -391,8 +391,8 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -443,15 +443,15 @@ Seu objetivo é atender clientes, apresentar veículos do estoque e qualificar l
       { role: 'user', content: message },
     ];
 
-    // Chama a Lovable AI Gateway
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Chama a OpenAI API diretamente
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: \`Bearer \${LOVABLE_API_KEY}\`,
+        Authorization: \`Bearer \${OPENAI_API_KEY}\`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: agentConfig?.llm_model || 'google/gemini-3-flash-preview',
+        model: agentConfig?.llm_model || 'gpt-4o-mini',
         messages,
         temperature: agentConfig?.temperature || 0.7,
         max_tokens: agentConfig?.max_tokens || 2048,
@@ -504,7 +504,7 @@ Seu objetivo é atender clientes, apresentar veículos do estoque e qualificar l
           <div className="bg-muted/50 p-4 rounded-lg">
             <h4 className="font-medium mb-2">Secrets Necessários</h4>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• <code>LOVABLE_API_KEY</code> - Chave da Lovable AI Gateway (obrigatório)</li>
+              <li>• <code>OPENAI_API_KEY</code> - Chave da API OpenAI (obrigatório)</li>
               <li>• <code>ELEVENLABS_API_KEY</code> - Para geração de voz (opcional)</li>
             </ul>
           </div>

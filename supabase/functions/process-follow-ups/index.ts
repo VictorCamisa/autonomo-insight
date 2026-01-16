@@ -49,15 +49,24 @@ interface StepExecution {
   executed_at: string;
 }
 
-// Substitui variáveis no template
+// Substitui variáveis no template - suporta {{var}} e {var}
 function processTemplate(template: string, lead: Lead, salespersonName?: string): string {
   let message = template;
   
-  message = message.replace(/\{nome\}/gi, lead.name.split(' ')[0]);
+  const firstName = lead.name.split(' ')[0];
+  
+  // Suporte para {{var}} (duplo) e {var} (simples)
+  message = message.replace(/\{\{nome\}\}/gi, firstName);
+  message = message.replace(/\{nome\}/gi, firstName);
+  
+  message = message.replace(/\{\{nome_completo\}\}/gi, lead.name);
   message = message.replace(/\{nome_completo\}/gi, lead.name);
+  
+  message = message.replace(/\{\{veiculo\}\}/gi, lead.vehicle_interest || 'veículo de interesse');
   message = message.replace(/\{veiculo\}/gi, lead.vehicle_interest || 'veículo de interesse');
   
   if (salespersonName) {
+    message = message.replace(/\{\{vendedor\}\}/gi, salespersonName);
     message = message.replace(/\{vendedor\}/gi, salespersonName);
   }
   
@@ -112,11 +121,11 @@ serve(async (req) => {
       steps: (stepsData || []).filter(s => s.flow_id === flow.id)
     }));
 
-    // 3. Buscar leads elegíveis (não convertidos, não perdidos por padrão)
+    // 3. Buscar leads elegíveis (não convertidos por padrão)
     const { data: leadsData, error: leadsError } = await supabase
       .from('leads')
       .select('*')
-      .not('status', 'eq', 'converted');
+      .not('status', 'eq', 'convertido');
 
     if (leadsError) throw leadsError;
     
@@ -166,10 +175,10 @@ serve(async (req) => {
       // Filtrar leads elegíveis para este fluxo
       const eligibleLeads = (leadsData || []).filter(lead => {
         // Excluir convertidos se configurado
-        if (flow.exclude_converted_leads && lead.status === 'converted') return false;
+        if (flow.exclude_converted_leads && lead.status === 'convertido') return false;
         
         // Excluir perdidos se configurado
-        if (flow.exclude_lost_leads && lead.status === 'lost') return false;
+        if (flow.exclude_lost_leads && lead.status === 'perdido') return false;
         
         // Filtrar por status se definido
         if (flow.target_lead_status?.length > 0 && !flow.target_lead_status.includes(lead.status)) {

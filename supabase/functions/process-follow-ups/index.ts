@@ -49,6 +49,14 @@ interface StepExecution {
   executed_at: string;
 }
 
+interface AIConversation {
+  id: string;
+  lead_id: string;
+  status: string;
+  last_assistant_message_at: string | null;
+  last_user_message_at: string | null;
+}
+
 // Substitui variáveis no template - suporta {{var}} e {var}
 function processTemplate(template: string, lead: Lead, salespersonName?: string): string {
   let message = template;
@@ -121,20 +129,88 @@ serve(async (req) => {
       steps: (stepsData || []).filter(s => s.flow_id === flow.id)
     }));
 
-    // 3. Buscar leads elegíveis (não convertidos por padrão)
+    // 3. Buscar conversas ativas com a IA para trigger "no_response_to_bot"
+    // Isso inclui a última mensagem de cada conversa para verificar se foi da IA
+    const { data: conversations, error: convError } = await supabase
+      .from('ai_agent_conversations')
+      .select('id, lead_id, status, updated_at')
+      .eq('status', 'active');
+
+    if (convError) throw convError;
+
+    console.log(`Found ${conversations?.length || 0} active AI conversations`);
+
+    // Para cada conversa, buscar a última mensagem
+    const conversationDetails: AIConversation[] = [];
+    
+    for (const conv of (conversations || [])) {
+      // Buscar última mensagem da conversa
+      const { data: lastMessages } = await supabase
+        .from('ai_agent_messages')
+        .select('role, created_at')
+        .eq('conversation_id', conv.id)
+        .order('created_at', { ascending: false })
+        .limit(2);
+
+      if (lastMessages && lastMessages.length > 0) {
+        const lastMessage = lastMessages[0];
+        const lastAssistant = lastMessages.find(m => m.role === 'assistant');
+        const lastUser = lastMessages.find(m => m.role === 'user');
+        
+        conversationDetails.push({
+          id: conv.id,
+          lead_id: conv.lead_id,
+          status: conv.status,
+          last_assistant_message_at: lastAssistant?.created_at || null,
+          last_user_message_at: lastUser?.created_at || null
+        });
+
+        console.log(`Conv ${conv.lead_id}: last msg by ${lastMessage.role} at ${lastMessage.created_at}`);
+      }
+    }
+
+    // Filtrar apenas conversas onde a última mensagem foi da IA (assistant)
+    const leadsWaitingResponse = conversationDetails.filter(conv => {
+      if (!conv.last_assistant_message_at) return false;
+      
+      // Se não tem mensagem do usuário, ou se a última do assistant é depois da última do user
+      if (!conv.last_user_message_at) return true;
+      
+      return new Date(conv.last_assistant_message_at) > new Date(conv.last_user_message_at);
+    });
+
+    console.log(`${leadsWaitingResponse.length} leads waiting for response (last msg from bot)`);
+
+    // 4. Buscar dados dos leads elegíveis
+    const eligibleLeadIds = leadsWaitingResponse.map(c => c.lead_id);
+    
+    if (eligibleLeadIds.length === 0) {
+      console.log('No leads waiting for response');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No leads waiting for response', processed: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { data: leadsData, error: leadsError } = await supabase
       .from('leads')
       .select('*')
+      .in('id', eligibleLeadIds)
       .not('status', 'eq', 'convertido');
 
     if (leadsError) throw leadsError;
     
-    console.log(`Found ${leadsData?.length || 0} potential leads`);
+    console.log(`Found ${leadsData?.length || 0} eligible leads`);
 
-    // 4. Buscar execuções existentes para não repetir
+    // Criar mapa de conversa por lead
+    const convByLead = new Map<string, AIConversation>();
+    leadsWaitingResponse.forEach(c => convByLead.set(c.lead_id, c));
+
+    // 5. Buscar execuções existentes para não repetir
     const { data: executionsData, error: execError } = await supabase
       .from('follow_up_step_executions')
-      .select('lead_id, flow_id, step_id, step_order, executed_at');
+      .select('lead_id, flow_id, step_id, step_order, executed_at')
+      .in('lead_id', eligibleLeadIds);
 
     if (execError) throw execError;
 
@@ -148,7 +224,7 @@ serve(async (req) => {
       executionMap.get(key)!.push(exec);
     });
 
-    // 5. Buscar perfis de vendedores para substituição de template
+    // 6. Buscar perfis de vendedores para substituição de template
     const { data: profilesData } = await supabase
       .from('profiles')
       .select('id, full_name');
@@ -158,13 +234,19 @@ serve(async (req) => {
       profilesMap.set(p.id, p.full_name || '');
     });
 
-    // 6. Processar cada fluxo
+    // 7. Processar cada fluxo
     let totalProcessed = 0;
     let totalSent = 0;
     let totalSkipped = 0;
     const errors: string[] = [];
 
     for (const flow of flows) {
+      // Só processar fluxos com trigger "no_response_to_bot"
+      if (flow.trigger_type !== 'no_response_to_bot') {
+        console.log(`Flow "${flow.name}" has trigger "${flow.trigger_type}", skipping (only no_response_to_bot supported)`);
+        continue;
+      }
+
       if (flow.steps.length === 0) {
         console.log(`Flow "${flow.name}" has no steps, skipping`);
         continue;
@@ -199,7 +281,13 @@ serve(async (req) => {
         totalProcessed++;
         const leadFlowKey = `${lead.id}-${flow.id}`;
         const executions = executionMap.get(leadFlowKey) || [];
+        const conversation = convByLead.get(lead.id);
         
+        if (!conversation) {
+          console.log(`  Lead ${lead.name}: no conversation found, skipping`);
+          continue;
+        }
+
         // Verificar qual é o próximo passo
         const executedStepOrders = executions.map(e => e.step_order);
         const lastExecutedOrder = Math.max(0, ...executedStepOrders);
@@ -210,22 +298,31 @@ serve(async (req) => {
         
         if (!nextStep) {
           // Todos os passos já foram executados
+          console.log(`  Lead ${lead.name}: all steps already executed`);
           continue;
         }
 
-        // Calcular se já passou tempo suficiente desde último passo (ou criação do lead)
-        const referenceTime = lastExecution 
-          ? new Date(lastExecution.executed_at) 
-          : new Date(lead.created_at);
+        // Calcular tempo desde a última mensagem da IA (não desde criação do lead!)
+        const lastBotMessageTime = conversation.last_assistant_message_at 
+          ? new Date(conversation.last_assistant_message_at) 
+          : null;
+
+        if (!lastBotMessageTime) {
+          console.log(`  Lead ${lead.name}: no bot message found, skipping`);
+          continue;
+        }
+
+        const minutesSinceLastBotMessage = (Date.now() - lastBotMessageTime.getTime()) / (1000 * 60);
         
-        const minutesSinceReference = (Date.now() - referenceTime.getTime()) / (1000 * 60);
-        
-        if (minutesSinceReference < nextStep.delay_minutes) {
+        console.log(`  Lead ${lead.name}: ${minutesSinceLastBotMessage.toFixed(1)}min since last bot message, step needs ${nextStep.delay_minutes}min`);
+
+        if (minutesSinceLastBotMessage < nextStep.delay_minutes) {
           // Ainda não é hora de executar este passo
+          console.log(`    -> Not time yet, skipping`);
           continue;
         }
 
-        console.log(`Lead ${lead.name}: ready for step ${nextStep.step_order} (${nextStep.delay_minutes}min delay)`);
+        console.log(`  Lead ${lead.name}: ready for step ${nextStep.step_order}`);
 
         // Verificar condições de parada
         let shouldSkip = false;
@@ -251,22 +348,21 @@ serve(async (req) => {
           skipReason = 'Lead atribuído a vendedor';
         }
 
-        // Verificar se lead respondeu desde última execução
+        // Verificar se lead respondeu desde última execução deste fluxo
         if (!shouldSkip && nextStep.stop_if_responded && lastExecution) {
-          const { data: hasResponded } = await supabase
-            .rpc('lead_has_responded_since', {
-              p_lead_id: lead.id,
-              p_since: lastExecution.executed_at
-            });
-          
-          if (hasResponded) {
+          const lastExecTime = new Date(lastExecution.executed_at);
+          const lastUserTime = conversation.last_user_message_at 
+            ? new Date(conversation.last_user_message_at) 
+            : null;
+
+          if (lastUserTime && lastUserTime > lastExecTime) {
             shouldSkip = true;
-            skipReason = 'Lead respondeu';
+            skipReason = 'Lead respondeu após último follow-up';
           }
         }
 
         if (shouldSkip) {
-          console.log(`  ⏭️ Skipping: ${skipReason}`);
+          console.log(`    ⏭️ Skipping: ${skipReason}`);
           totalSkipped++;
           
           // Registrar skip
@@ -334,7 +430,7 @@ serve(async (req) => {
 
           // Enviar mensagem
           const sendUrl = `${evolutionUrl}/message/sendText/${instanceName}`;
-          console.log(`  📤 Sending to ${phone}: "${message.substring(0, 50)}..."`);
+          console.log(`    📤 Sending to ${phone}: "${message.substring(0, 50)}..."`);
 
           const response = await fetch(sendUrl, {
             method: 'POST',
@@ -354,7 +450,7 @@ serve(async (req) => {
             throw new Error(result.message || 'Erro ao enviar WhatsApp');
           }
 
-          console.log(`  ✅ Sent successfully!`);
+          console.log(`    ✅ Sent successfully!`);
           totalSent++;
 
           // Registrar execução
@@ -370,7 +466,7 @@ serve(async (req) => {
               status: 'sent'
             });
 
-          // Salvar mensagem no histórico
+          // Salvar mensagem no histórico de WhatsApp
           const { data: contact } = await supabase
             .from('whatsapp_contacts')
             .select('id')
@@ -403,7 +499,7 @@ serve(async (req) => {
 
         } catch (sendError) {
           const errorMsg = sendError instanceof Error ? sendError.message : 'Erro desconhecido';
-          console.error(`  ❌ Send error: ${errorMsg}`);
+          console.error(`    ❌ Send error: ${errorMsg}`);
           errors.push(`Lead ${lead.name}: ${errorMsg}`);
 
           // Registrar falha

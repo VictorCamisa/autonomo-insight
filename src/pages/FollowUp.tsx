@@ -1,4 +1,45 @@
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Icons
+import { 
+  Search, 
+  XCircle, 
+  Phone, 
+  User, 
+  Car, 
+  Calendar,
+  MessageCircle,
+  Bell,
+  BellOff,
+  Check,
+  Trash2,
+  Plus,
+  Workflow,
+  Zap,
+  MessageSquare,
+} from 'lucide-react';
+
+// Follow-up Flows components
+import { FollowUpFlowCard } from '@/components/crm/FollowUpFlowCard';
+import { FollowUpFlowForm } from '@/components/crm/FollowUpFlowForm';
+import {
+  useFollowUpFlows,
+  useCreateFollowUpFlow,
+  useUpdateFollowUpFlow,
+  useDeleteFollowUpFlow,
+  useToggleFollowUpFlow,
+} from '@/hooks/useFollowUpFlows';
+
+// Loss Recovery components
+import { LossRecoveryRuleForm } from '@/components/crm/LossRecoveryRuleForm';
+import { LossRecoveryRuleCard } from '@/components/crm/LossRecoveryRuleCard';
 import { useNegotiations } from '@/hooks/useNegotiations';
 import { 
   useVehicleInterestAlerts, 
@@ -16,34 +57,37 @@ import {
   useToggleLossRecoveryRule,
   LossRecoveryRule,
 } from '@/hooks/useLossRecoveryRules';
-import { LossRecoveryRuleForm } from '@/components/crm/LossRecoveryRuleForm';
-import { LossRecoveryRuleCard } from '@/components/crm/LossRecoveryRuleCard';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  Search, 
-  XCircle, 
-  Phone, 
-  User, 
-  Car, 
-  Calendar,
-  MessageCircle,
-  Bell,
-  BellOff,
-  Check,
-  Trash2,
-  Plus,
-  Workflow,
-  Zap,
-} from 'lucide-react';
+
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { lossReasonLabels, LossReasonType, Negotiation } from '@/types/negotiations';
+
+// Types
+interface FlowFormData {
+  id?: string;
+  name: string;
+  description?: string;
+  is_active?: boolean;
+  target_lead_status?: string[];
+  target_lead_sources?: string[];
+  target_vehicle_interests?: string;
+  target_negotiation_status?: string[];
+  trigger_type?: string;
+  delay_days?: number;
+  delay_hours?: number;
+  specific_time?: string;
+  days_of_week?: number[];
+  message_template: string;
+  include_vehicle_info?: boolean;
+  include_salesperson_name?: boolean;
+  include_company_name?: boolean;
+  whatsapp_button_text?: string;
+  min_days_since_last_contact?: number;
+  max_contacts_per_lead?: number;
+  exclude_converted_leads?: boolean;
+  exclude_lost_leads?: boolean;
+  priority?: number;
+}
 
 // Status labels for alerts
 const alertStatusLabels: Record<string, string> = {
@@ -60,9 +104,16 @@ const alertStatusColors: Record<string, string> = {
   converted: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
 };
 
-export default function LostNegotiations() {
+export default function FollowUp() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('perdas');
+  const [activeTab, setActiveTab] = useState('fluxos');
+  
+  // Follow-up Flows state
+  const [isFlowFormOpen, setIsFlowFormOpen] = useState(false);
+  const [editingFlow, setEditingFlow] = useState<FlowFormData | null>(null);
+  const [flowFilter, setFlowFilter] = useState('all');
+  
+  // Loss Recovery state
   const [selectedReason, setSelectedReason] = useState<LossReasonType | 'all'>('all');
   const [selectedNegotiation, setSelectedNegotiation] = useState<Negotiation | null>(null);
   const [showCreateAlert, setShowCreateAlert] = useState(false);
@@ -71,7 +122,14 @@ export default function LostNegotiations() {
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [editingRule, setEditingRule] = useState<LossRecoveryRule | null>(null);
 
-  // Queries
+  // ========== Follow-up Flows Queries ==========
+  const { data: flows, isLoading: isLoadingFlows } = useFollowUpFlows();
+  const createFlowMutation = useCreateFollowUpFlow();
+  const updateFlowMutation = useUpdateFollowUpFlow();
+  const deleteFlowMutation = useDeleteFollowUpFlow();
+  const toggleFlowMutation = useToggleFollowUpFlow();
+
+  // ========== Loss Recovery Queries ==========
   const { data: negotiations = [], isLoading: isLoadingNegotiations } = useNegotiations();
   const { data: alerts = [], isLoading: isLoadingAlerts } = useVehicleInterestAlerts();
   const { data: matchingVehicles = [] } = useMatchingVehicles(showMatchingVehicles ? selectedAlert : null);
@@ -88,10 +146,63 @@ export default function LostNegotiations() {
   const deleteRule = useDeleteLossRecoveryRule();
   const toggleRule = useToggleLossRecoveryRule();
 
-  // Filter only lost negotiations
+  // ========== Follow-up Flows Logic ==========
+  const filteredFlows = flows?.filter((flow) => {
+    const matchesSearch =
+      flow.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      flow.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (flowFilter === 'active') return matchesSearch && flow.is_active;
+    if (flowFilter === 'inactive') return matchesSearch && !flow.is_active;
+    return matchesSearch;
+  });
+
+  const activeFlowsCount = flows?.filter((f) => f.is_active).length || 0;
+  const inactiveFlowsCount = flows?.filter((f) => !f.is_active).length || 0;
+
+  const handleCreateFlow = (data: FlowFormData) => {
+    createFlowMutation.mutate(data as never, {
+      onSuccess: () => setIsFlowFormOpen(false),
+    });
+  };
+
+  const handleUpdateFlow = (data: FlowFormData) => {
+    if (!editingFlow?.id) return;
+    const payload = { id: editingFlow.id, ...data };
+    updateFlowMutation.mutate(payload as never, {
+      onSuccess: () => {
+        setEditingFlow(null);
+        setIsFlowFormOpen(false);
+      },
+    });
+  };
+
+  const handleEditFlow = (flow: FlowFormData & { id: string }) => {
+    setEditingFlow({
+      ...flow,
+      target_vehicle_interests: Array.isArray(flow.target_vehicle_interests)
+        ? (flow.target_vehicle_interests as unknown as string[]).join(', ')
+        : flow.target_vehicle_interests,
+    });
+    setIsFlowFormOpen(true);
+  };
+
+  const handleDeleteFlow = (id: string) => {
+    deleteFlowMutation.mutate(id);
+  };
+
+  const handleToggleFlow = (id: string, is_active: boolean) => {
+    toggleFlowMutation.mutate({ id, is_active });
+  };
+
+  const handleCloseFlowForm = () => {
+    setIsFlowFormOpen(false);
+    setEditingFlow(null);
+  };
+
+  // ========== Loss Recovery Logic ==========
   const lostNegotiations = negotiations.filter(n => n.status === 'perdido');
 
-  // Filter by search and reason
   const filteredNegotiations = lostNegotiations.filter(n => {
     const matchesSearch = 
       n.lead?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -104,7 +215,6 @@ export default function LostNegotiations() {
     return matchesSearch && matchesReason;
   });
 
-  // Filter alerts by search
   const filteredAlerts = alerts.filter(a => 
     a.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     a.customer_phone.includes(searchTerm) ||
@@ -112,20 +222,13 @@ export default function LostNegotiations() {
     a.vehicle_model?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filter rules by search
   const filteredRules = rules.filter(r =>
     r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Stats
   const activeAlerts = alerts.filter(a => a.status === 'active').length;
-  const activeRules = rules.filter(r => r.is_active).length;
-  const reasonCounts = lostNegotiations.reduce((acc, n) => {
-    const reason = n.structured_loss_reason || 'outros';
-    acc[reason] = (acc[reason] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const activeRulesCount = rules.filter(r => r.is_active).length;
 
   const handleCreateAlertFromNegotiation = (negotiation: Negotiation) => {
     if (!negotiation.lead) return;
@@ -200,65 +303,97 @@ export default function LostNegotiations() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
+  // Get button based on active tab
+  const renderActionButton = () => {
+    if (activeTab === 'fluxos') {
+      return (
+        <Button onClick={() => setIsFlowFormOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Novo Fluxo
+        </Button>
+      );
+    }
+    if (activeTab === 'automacoes') {
+      return (
+        <Button onClick={() => setShowRuleForm(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Nova Regra
+        </Button>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <XCircle className="h-6 w-6 text-destructive" />
-            Negociações Perdidas
+            <MessageSquare className="h-6 w-6" />
+            Follow Up
           </h1>
           <p className="text-muted-foreground">
-            Analise motivos de perda e crie automações de reengajamento
+            Gerencie fluxos de follow-up e recuperação de negociações perdidas
           </p>
         </div>
-        {activeTab === 'automacoes' && (
-          <Button onClick={() => setShowRuleForm(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Nova Regra
-          </Button>
-        )}
+        {renderActionButton()}
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{lostNegotiations.length}</div>
-            <p className="text-sm text-muted-foreground">Total Perdidas</p>
+            <div className="text-2xl font-bold">{flows?.length || 0}</div>
+            <p className="text-sm text-muted-foreground">Fluxos</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{activeRules}</div>
+            <div className="text-2xl font-bold text-green-600">{activeFlowsCount}</div>
+            <p className="text-sm text-muted-foreground">Fluxos Ativos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-2xl font-bold">{lostNegotiations.length}</div>
+            <p className="text-sm text-muted-foreground">Negociações Perdidas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-2xl font-bold text-green-600">{activeRulesCount}</div>
             <p className="text-sm text-muted-foreground">Regras Ativas</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{activeAlerts}</div>
+            <div className="text-2xl font-bold text-amber-600">{activeAlerts}</div>
             <p className="text-sm text-muted-foreground">Alertas Ativos</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{reasonCounts['veiculo_vendido'] || 0}</div>
-            <p className="text-sm text-muted-foreground">Veículo Vendido</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs */}
+      {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <TabsList>
-            <TabsTrigger value="perdas">Perdas ({lostNegotiations.length})</TabsTrigger>
-            <TabsTrigger value="automacoes">
-              <Workflow className="h-4 w-4 mr-1" />
+            <TabsTrigger value="fluxos" className="gap-1">
+              <Workflow className="h-4 w-4" />
+              Fluxos ({flows?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger value="perdas" className="gap-1">
+              <XCircle className="h-4 w-4" />
+              Perdas ({lostNegotiations.length})
+            </TabsTrigger>
+            <TabsTrigger value="automacoes" className="gap-1">
+              <Zap className="h-4 w-4" />
               Automações ({rules.length})
             </TabsTrigger>
-            <TabsTrigger value="alertas">Alertas ({alerts.length})</TabsTrigger>
+            <TabsTrigger value="alertas" className="gap-1">
+              <Bell className="h-4 w-4" />
+              Alertas ({alerts.length})
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex gap-2">
@@ -271,6 +406,19 @@ export default function LostNegotiations() {
                 className="pl-9"
               />
             </div>
+            
+            {activeTab === 'fluxos' && (
+              <select
+                value={flowFilter}
+                onChange={(e) => setFlowFilter(e.target.value)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="all">Todos</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+              </select>
+            )}
+            
             {activeTab === 'perdas' && (
               <select
                 value={selectedReason}
@@ -286,7 +434,48 @@ export default function LostNegotiations() {
           </div>
         </div>
 
-        {/* Lost Negotiations Tab */}
+        {/* ========== Fluxos Tab ========== */}
+        <TabsContent value="fluxos" className="mt-4">
+          {isLoadingFlows ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-48" />
+              ))}
+            </div>
+          ) : filteredFlows?.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Workflow className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-semibold mb-2">Nenhum fluxo encontrado</h3>
+                <p className="text-muted-foreground mb-4">
+                  {searchTerm
+                    ? 'Tente ajustar sua busca'
+                    : 'Crie seu primeiro fluxo de follow-up para WhatsApp'}
+                </p>
+                {!searchTerm && (
+                  <Button onClick={() => setIsFlowFormOpen(true)} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Criar Primeiro Fluxo
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredFlows?.map((flow) => (
+                <FollowUpFlowCard
+                  key={flow.id}
+                  flow={flow}
+                  onEdit={handleEditFlow as never}
+                  onDelete={handleDeleteFlow}
+                  onToggle={handleToggleFlow}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ========== Perdas Tab ========== */}
         <TabsContent value="perdas" className="mt-4">
           {isLoadingNegotiations ? (
             <div className="grid gap-4 md:grid-cols-2">
@@ -382,7 +571,7 @@ export default function LostNegotiations() {
           )}
         </TabsContent>
 
-        {/* Automations Tab */}
+        {/* ========== Automações Tab ========== */}
         <TabsContent value="automacoes" className="mt-4">
           {isLoadingRules ? (
             <div className="grid gap-4 md:grid-cols-2">
@@ -391,7 +580,7 @@ export default function LostNegotiations() {
           ) : filteredRules.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <Workflow className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <Zap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <h3 className="font-semibold mb-2">Nenhuma regra de automação</h3>
                 <p className="text-muted-foreground mb-4">
                   Crie regras para automatizar ações baseadas no motivo de perda
@@ -417,7 +606,7 @@ export default function LostNegotiations() {
           )}
         </TabsContent>
 
-        {/* Vehicle Alerts Tab */}
+        {/* ========== Alertas Tab ========== */}
         <TabsContent value="alertas" className="mt-4">
           {isLoadingAlerts ? (
             <div className="grid gap-4 md:grid-cols-2">
@@ -534,6 +723,25 @@ export default function LostNegotiations() {
         </TabsContent>
       </Tabs>
 
+      {/* ========== Dialogs ========== */}
+      
+      {/* Flow Form Dialog */}
+      <Dialog open={isFlowFormOpen} onOpenChange={handleCloseFlowForm}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingFlow ? 'Editar Fluxo de Follow-up' : 'Novo Fluxo de Follow-up'}
+            </DialogTitle>
+          </DialogHeader>
+          <FollowUpFlowForm
+            initialData={editingFlow || undefined}
+            onSubmit={editingFlow ? handleUpdateFlow : handleCreateFlow}
+            onCancel={handleCloseFlowForm}
+            isLoading={createFlowMutation.isPending || updateFlowMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* Create Alert Dialog */}
       <Dialog open={showCreateAlert} onOpenChange={setShowCreateAlert}>
         <DialogContent>
@@ -593,17 +801,17 @@ export default function LostNegotiations() {
                 <Card key={vehicle.id} className="hover:bg-muted/50 transition-colors">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                                    {vehicle.images?.[0] ? (
-                                        <img 
-                                          src={vehicle.images[0]} 
-                                          alt={`${vehicle.brand} ${vehicle.model}`}
-                                          className="w-16 h-12 object-cover rounded"
-                                        />
-                                      ) : (
-                                        <div className="w-16 h-12 bg-muted rounded flex items-center justify-center">
-                                          <Car className="h-6 w-6 text-muted-foreground" />
-                                        </div>
-                                      )}
+                      {vehicle.images?.[0] ? (
+                        <img 
+                          src={vehicle.images[0]} 
+                          alt={`${vehicle.brand} ${vehicle.model}`}
+                          className="w-16 h-12 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-16 h-12 bg-muted rounded flex items-center justify-center">
+                          <Car className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
                       <div>
                         <p className="font-medium">
                           {vehicle.brand} {vehicle.model}

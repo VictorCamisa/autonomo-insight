@@ -30,8 +30,7 @@ const ImportVehicles = lazy(() => import("./pages/ImportVehicles"));
 const BulkPhotoUpload = lazy(() => import("./pages/BulkPhotoUpload"));
 const CRMHome = lazy(() => import("./pages/CRMHome"));
 const CRMAnalytics = lazy(() => import("./pages/CRMAnalytics"));
-const FollowUps = lazy(() => import("./pages/FollowUps"));
-const LostNegotiations = lazy(() => import("./pages/LostNegotiations"));
+const FollowUp = lazy(() => import("./pages/FollowUp"));
 const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Reports = lazy(() => import("./pages/Reports"));
@@ -163,8 +162,7 @@ const App = () => (
                   }>
                     <Route index element={<CRMHome />} />
                     <Route path="leads" element={<Leads />} />
-                    <Route path="follow-ups" element={<FollowUps />} />
-                    <Route path="perdas" element={<LostNegotiations />} />
+                    <Route path="follow-up" element={<FollowUp />} />
                     <Route path="analytics" element={<CRMAnalytics />} />
                   </Route>
                   

@@ -744,8 +744,8 @@ Você prefere à vista ou financiado?
         }
       }
 
-      // 1. Extract qualification data from AI response (using ORIGINAL response with tags)
-      const qualResult = await extractAndSaveQualificationData(supabase, leadId, aiResponse);
+      // 1. Extract qualification data from AI response (using ORIGINAL response with tags + AI analysis)
+      const qualResult = await extractAndSaveQualificationData(supabase, leadId, aiResponse, conversation.id);
       
       // 2. Check and progress negotiation status based on message count
       await checkAndProgressNegotiation(supabase, conversation.id, leadId);
@@ -1473,49 +1473,30 @@ async function checkAndProgressNegotiation(
   }
 }
 
-// Extract qualification data from AI response
+// Extract qualification data using AI analysis of the conversation
 async function extractAndSaveQualificationData(
   supabase: any,
   leadId: string,
-  aiResponse: string
+  aiResponse: string,
+  conversationId?: string
 ): Promise<{ isQualified: boolean; newlyQualified: boolean; salespersonName?: string }> {
-  // Extract data tags from AI response [DADO:field=value]
-  const regex = /\[DADO:(\w+)=([^\]]+)\]/g;
-  const updates: Record<string, any> = {};
+  // First, try to extract from tags in the AI response (legacy method)
+  const tagUpdates = extractDataFromTags(aiResponse);
   
-  let match;
-  while ((match = regex.exec(aiResponse)) !== null) {
-    const [_, field, value] = match;
-    
-    // Map field names to database columns
-    switch (field) {
-      case 'veiculo_interesse':
-        updates.vehicle_interest = value;
-        break;
-      case 'orcamento':
-        updates.budget = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
-        break;
-      case 'parcela':
-        updates.desired_installment = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
-        break;
-      case 'entrada':
-        updates.down_payment = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
-        break;
-      case 'tem_troca':
-        updates.has_trade_in = value.toLowerCase() === 'sim' || value.toLowerCase() === 'true';
-        break;
-      case 'veiculo_troca':
-        updates.trade_in_vehicle = value;
-        break;
-      case 'nome_limpo':
-        updates.clean_credit = value.toLowerCase() === 'sim' || value.toLowerCase() === 'true';
-        break;
-      case 'cpf':
-        updates.cpf = value.replace(/[^\d]/g, '');
-        break;
+  // If we have a conversation ID, also use AI to analyze the full conversation for more robust extraction
+  let aiExtractedUpdates: Record<string, any> = {};
+  
+  if (conversationId) {
+    try {
+      aiExtractedUpdates = await extractDataWithAI(supabase, conversationId, leadId);
+    } catch (e) {
+      console.error('[Qualification] AI extraction failed:', e);
     }
   }
-
+  
+  // Merge updates: AI extraction takes precedence as it analyzes full context
+  const updates = { ...tagUpdates, ...aiExtractedUpdates };
+  
   if (Object.keys(updates).length > 0) {
     console.log('[Qualification] Extracted data:', updates);
     
@@ -1583,6 +1564,187 @@ async function extractAndSaveQualificationData(
   }
 
   return { isQualified: false, newlyQualified: false };
+}
+
+// Extract data from [DADO:field=value] tags (legacy method)
+function extractDataFromTags(aiResponse: string): Record<string, any> {
+  const regex = /\[DADO:(\w+)=([^\]]+)\]/g;
+  const updates: Record<string, any> = {};
+  
+  let match;
+  while ((match = regex.exec(aiResponse)) !== null) {
+    const [_, field, value] = match;
+    
+    switch (field) {
+      case 'veiculo_interesse':
+        updates.vehicle_interest = value;
+        break;
+      case 'orcamento':
+        updates.budget = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
+        break;
+      case 'parcela':
+        updates.desired_installment = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
+        break;
+      case 'entrada':
+        updates.down_payment = parseFloat(value.replace(/[^\d.,]/g, '').replace(',', '.')) || null;
+        break;
+      case 'tem_troca':
+        updates.has_trade_in = value.toLowerCase() === 'sim' || value.toLowerCase() === 'true';
+        break;
+      case 'veiculo_troca':
+        updates.trade_in_vehicle = value;
+        break;
+      case 'nome_limpo':
+        updates.clean_credit = value.toLowerCase() === 'sim' || value.toLowerCase() === 'true';
+        break;
+      case 'cpf':
+        updates.cpf = value.replace(/[^\d]/g, '');
+        break;
+    }
+  }
+  
+  return updates;
+}
+
+// Use AI to analyze conversation and extract qualification data
+async function extractDataWithAI(
+  supabase: any,
+  conversationId: string,
+  leadId: string
+): Promise<Record<string, any>> {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    console.log('[Qualification] LOVABLE_API_KEY not set, skipping AI extraction');
+    return {};
+  }
+  
+  // Get current qualification data
+  const { data: currentQual } = await supabase
+    .from('lead_qualification_data')
+    .select('*')
+    .eq('lead_id', leadId)
+    .single();
+  
+  // Only run AI extraction every 3 messages to save API calls
+  const messageCount = currentQual?.message_count || 0;
+  if (messageCount < 3 || messageCount % 3 !== 0) {
+    console.log('[Qualification] Skipping AI extraction (msg count:', messageCount, ')');
+    return {};
+  }
+  
+  // Get last 10 messages from conversation
+  const { data: messages } = await supabase
+    .from('ai_agent_messages')
+    .select('role, content, created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true })
+    .limit(10);
+  
+  if (!messages || messages.length < 2) {
+    return {};
+  }
+  
+  // Build conversation text
+  const conversationText = messages
+    .map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Vendedor'}: ${m.content}`)
+    .join('\n\n');
+  
+  console.log('[Qualification] Running AI extraction on', messages.length, 'messages');
+  
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é um extrator de dados de conversas de vendas de veículos.
+Analise a conversa e extraia APENAS informações que o CLIENTE confirmou explicitamente.
+NÃO invente dados. Se não tiver certeza, retorne null.
+
+Retorne um JSON com APENAS os campos que você encontrou na conversa:
+- vehicle_interest: string (carro que o cliente quer, modelo/ano se mencionou)
+- budget: number (orçamento total em reais, sem formatação)
+- down_payment: number (valor de entrada em reais)
+- desired_installment: number (valor da parcela em reais)
+- has_trade_in: boolean (se tem carro para dar na troca)
+- trade_in_vehicle: string (qual carro vai dar na troca)
+- clean_credit: boolean (se disse que nome está limpo)
+- cpf: string (apenas números)
+
+Retorne APENAS o JSON, sem explicações.`
+          },
+          {
+            role: 'user',
+            content: conversationText
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.1,
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error('[Qualification] AI API error:', response.status);
+      return {};
+    }
+    
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    
+    // Parse JSON from response
+    let parsed: any = {};
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      }
+    } catch (e) {
+      console.error('[Qualification] Failed to parse AI response:', e);
+      return {};
+    }
+    
+    // Build updates only for fields that have values
+    const updates: Record<string, any> = {};
+    
+    if (parsed.vehicle_interest && typeof parsed.vehicle_interest === 'string') {
+      updates.vehicle_interest = parsed.vehicle_interest;
+    }
+    if (parsed.budget && typeof parsed.budget === 'number') {
+      updates.budget = parsed.budget;
+    }
+    if (parsed.down_payment && typeof parsed.down_payment === 'number') {
+      updates.down_payment = parsed.down_payment;
+    }
+    if (parsed.desired_installment && typeof parsed.desired_installment === 'number') {
+      updates.desired_installment = parsed.desired_installment;
+    }
+    if (parsed.has_trade_in !== undefined && typeof parsed.has_trade_in === 'boolean') {
+      updates.has_trade_in = parsed.has_trade_in;
+    }
+    if (parsed.trade_in_vehicle && typeof parsed.trade_in_vehicle === 'string') {
+      updates.trade_in_vehicle = parsed.trade_in_vehicle;
+    }
+    if (parsed.clean_credit !== undefined && typeof parsed.clean_credit === 'boolean') {
+      updates.clean_credit = parsed.clean_credit;
+    }
+    if (parsed.cpf && typeof parsed.cpf === 'string') {
+      updates.cpf = parsed.cpf.replace(/[^\d]/g, '');
+    }
+    
+    console.log('[Qualification] AI extracted:', updates);
+    return updates;
+    
+  } catch (e) {
+    console.error('[Qualification] AI extraction error:', e);
+    return {};
+  }
 }
 
 // Transfer to salesperson after lead qualification (salesperson already assigned at creation)

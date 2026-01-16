@@ -26,7 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { triggerTypeLabels, daysOfWeekLabels } from '@/types/followUp';
+import { triggerTypeLabels, triggerTypeDescriptions, daysOfWeekLabels } from '@/types/followUp';
 import { leadSourceLabels } from '@/types/crm';
 import { X, MessageSquare, Filter, Clock, Settings2, Info } from 'lucide-react';
 import type { TriggerType } from '@/types/followUp';
@@ -471,13 +471,63 @@ export function FollowUpFlowForm({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {Object.entries(triggerTypeLabels).map(([value, label]) => (
-                              <SelectItem key={value} value={value}>
-                                {label}
-                              </SelectItem>
-                            ))}
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Gatilhos Manuais</div>
+                            <SelectItem value="manual">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.manual}</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="scheduled">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.scheduled}</span>
+                              </div>
+                            </SelectItem>
+                            
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Sem Resposta</div>
+                            <SelectItem value="no_response_to_bot">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.no_response_to_bot}</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="no_response_to_followup">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.no_response_to_followup}</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="no_response_to_salesperson">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.no_response_to_salesperson}</span>
+                              </div>
+                            </SelectItem>
+                            
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Baseado em Eventos</div>
+                            <SelectItem value="after_lead_creation">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.after_lead_creation}</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="after_status_change">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.after_status_change}</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="after_inactivity">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.after_inactivity}</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="lead_stalled_in_stage">
+                              <div className="flex flex-col">
+                                <span>{triggerTypeLabels.lead_stalled_in_stage}</span>
+                              </div>
+                            </SelectItem>
                           </SelectContent>
                         </Select>
+                        {field.value && (
+                          <FormDescription className="text-xs">
+                            {triggerTypeDescriptions[field.value as keyof typeof triggerTypeDescriptions]}
+                          </FormDescription>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -485,7 +535,11 @@ export function FollowUpFlowForm({
 
                   {(watchTriggerType === 'after_lead_creation' ||
                     watchTriggerType === 'after_status_change' ||
-                    watchTriggerType === 'after_inactivity') && (
+                    watchTriggerType === 'after_inactivity' ||
+                    watchTriggerType === 'no_response_to_bot' ||
+                    watchTriggerType === 'no_response_to_followup' ||
+                    watchTriggerType === 'no_response_to_salesperson' ||
+                    watchTriggerType === 'lead_stalled_in_stage') && (
                     <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={form.control}

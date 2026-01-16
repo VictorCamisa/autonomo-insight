@@ -13,5 +13,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    // Disable automatic session detection from URL to prevent re-renders on tab focus
+    detectSessionInUrl: false,
   }
 });

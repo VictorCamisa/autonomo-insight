@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSales, useSaleProfitReports, useDeleteSale } from '@/hooks/useSales';
 import { SaleCard } from '@/components/sales/SaleCard';
@@ -13,12 +14,31 @@ import type { Sale } from '@/types/sales';
 export default function Sales() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { data: sales, isLoading } = useSales();
   const { data: profitReports } = useSaleProfitReports();
   const deleteSale = useDeleteSale();
   const { role } = useAuth();
 
   const isManager = role === 'gerente';
+
+  // Filter sales by search
+  const filteredSales = useMemo(() => {
+    if (!searchQuery.trim() || !sales) return sales;
+    
+    const query = searchQuery.toLowerCase();
+    return sales.filter((sale) => {
+      const customerName = sale.customer?.name?.toLowerCase() || '';
+      const vehicleInfo = sale.vehicle ? `${sale.vehicle.brand} ${sale.vehicle.model}`.toLowerCase() : '';
+      const salespersonName = sale.salesperson?.full_name?.toLowerCase() || '';
+      
+      return (
+        customerName.includes(query) ||
+        vehicleInfo.includes(query) ||
+        salespersonName.includes(query)
+      );
+    });
+  }, [sales, searchQuery]);
 
   const handleEdit = (sale: Sale) => {
     setEditingSale(sale);
@@ -51,12 +71,23 @@ export default function Sales() {
           <TabsTrigger value="profit">Lucro Real</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="sales" className="mt-4">
+        <TabsContent value="sales" className="mt-4 space-y-4">
+          {/* Search Bar */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por cliente, veículo ou vendedor..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
           {isLoading ? (
             <p>Carregando...</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {sales?.map((sale) => (
+              {filteredSales?.map((sale) => (
                 <SaleCard
                   key={sale.id}
                   sale={sale}
@@ -64,9 +95,9 @@ export default function Sales() {
                   onDelete={isManager ? handleDelete : undefined}
                 />
               ))}
-              {sales?.length === 0 && (
+              {filteredSales?.length === 0 && (
                 <p className="text-muted-foreground col-span-full text-center py-8">
-                  Nenhuma venda registrada
+                  {searchQuery ? 'Nenhuma venda encontrada' : 'Nenhuma venda registrada'}
                 </p>
               )}
             </div>

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { UserCircle, User2, Pencil, Trash2 } from 'lucide-react';
+import { UserCircle, User2, Pencil, Trash2, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeads, useCreateLead } from '@/hooks/useLeads';
@@ -46,7 +47,30 @@ export default function CRMHome() {
   const [deleteNegotiationOpen, setDeleteNegotiationOpen] = useState(false);
   const [negotiationToDelete, setNegotiationToDelete] = useState<Negotiation | null>(null);
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+
   const isManager = role === 'gerente';
+
+  // Filter negotiations by search
+  const filteredNegotiations = useMemo(() => {
+    if (!searchQuery.trim()) return negotiations;
+    
+    const query = searchQuery.toLowerCase();
+    return negotiations.filter((neg) => {
+      const leadName = neg.lead?.name?.toLowerCase() || '';
+      const leadPhone = neg.lead?.phone?.toLowerCase() || '';
+      const vehicleInfo = neg.vehicle ? `${neg.vehicle.brand} ${neg.vehicle.model}`.toLowerCase() : '';
+      const salespersonName = neg.salesperson?.full_name?.toLowerCase() || '';
+      
+      return (
+        leadName.includes(query) ||
+        leadPhone.includes(query) ||
+        vehicleInfo.includes(query) ||
+        salespersonName.includes(query)
+      );
+    });
+  }, [negotiations, searchQuery]);
 
   const handleCreateLead = async (data: Record<string, unknown>) => {
     await createLead.mutateAsync({
@@ -139,6 +163,17 @@ export default function CRMHome() {
 
   return (
     <div className="space-y-4">
+      {/* Search Bar */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por lead, veículo ou vendedor..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       {/* Pipeline */}
       {isLoading ? (
         <div className="flex gap-3 overflow-x-auto pb-4">
@@ -153,7 +188,7 @@ export default function CRMHome() {
       ) : (
         <div className="overflow-x-auto pb-4">
           <NegotiationPipeline 
-            negotiations={negotiations}
+            negotiations={filteredNegotiations}
             onNegotiationClick={handleNegotiationClick}
             onCreateNegotiation={() => setCreateNegotiationOpen(true)}
             onCreateLead={() => setCreateLeadOpen(true)}

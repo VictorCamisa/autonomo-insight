@@ -31,11 +31,12 @@ export function usePublicVehicles() {
   return useQuery({
     queryKey: ['public-vehicles'],
     queryFn: async (): Promise<PublicVehicle[]> => {
-      // Buscar TODOS os veículos disponíveis (não apenas featured)
+      // Buscar apenas veículos disponíveis E vinculados ao site (featured = true)
       const { data, error: vehiclesError } = await supabase
         .from('vehicles')
         .select('*')
         .eq('status', 'disponivel')
+        .eq('featured', true)
         .order('created_at', { ascending: false });
 
       if (vehiclesError) {
@@ -111,6 +112,7 @@ export function usePublicVehicle(id: string) {
         .select('*')
         .eq('id', id)
         .eq('status', 'disponivel')
+        .eq('featured', true)
         .single();
 
       if (vehicleError) throw vehicleError;

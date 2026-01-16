@@ -1618,19 +1618,8 @@ async function extractDataWithAI(
     return {};
   }
   
-  // Get current qualification data
-  const { data: currentQual } = await supabase
-    .from('lead_qualification_data')
-    .select('*')
-    .eq('lead_id', leadId)
-    .single();
-  
-  // Only run AI extraction every 3 messages to save API calls
-  const messageCount = currentQual?.message_count || 0;
-  if (messageCount < 3 || messageCount % 3 !== 0) {
-    console.log('[Qualification] Skipping AI extraction (msg count:', messageCount, ')');
-    return {};
-  }
+  // Run AI extraction on every message to ensure real-time updates
+  console.log('[Qualification] Starting AI extraction for lead:', leadId);
   
   // Get last 10 messages from conversation
   const { data: messages } = await supabase

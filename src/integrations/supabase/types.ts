@@ -1217,6 +1217,7 @@ export type Database = {
           trigger_type: string
           updated_at: string
           whatsapp_button_text: string | null
+          whatsapp_instance_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1245,6 +1246,7 @@ export type Database = {
           trigger_type?: string
           updated_at?: string
           whatsapp_button_text?: string | null
+          whatsapp_instance_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1273,8 +1275,85 @@ export type Database = {
           trigger_type?: string
           updated_at?: string
           whatsapp_button_text?: string | null
+          whatsapp_instance_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_flows_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      follow_up_step_executions: {
+        Row: {
+          error_message: string | null
+          executed_at: string
+          flow_id: string
+          id: string
+          lead_id: string
+          message_sent: string | null
+          status: string | null
+          step_id: string
+          step_order: number
+          whatsapp_instance_id: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          executed_at?: string
+          flow_id: string
+          id?: string
+          lead_id: string
+          message_sent?: string | null
+          status?: string | null
+          step_id: string
+          step_order: number
+          whatsapp_instance_id?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          executed_at?: string
+          flow_id?: string
+          id?: string
+          lead_id?: string
+          message_sent?: string | null
+          status?: string | null
+          step_id?: string
+          step_order?: number
+          whatsapp_instance_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_step_executions_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_step_executions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_step_executions_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_step_executions_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       follow_up_steps: {
         Row: {
@@ -1786,6 +1865,7 @@ export type Database = {
           email: string | null
           first_response_at: string | null
           id: string
+          last_follow_up_check: string | null
           meta_ad_id: string | null
           meta_adset_id: string | null
           meta_campaign_id: string | null
@@ -1812,6 +1892,7 @@ export type Database = {
           email?: string | null
           first_response_at?: string | null
           id?: string
+          last_follow_up_check?: string | null
           meta_ad_id?: string | null
           meta_adset_id?: string | null
           meta_campaign_id?: string | null
@@ -1838,6 +1919,7 @@ export type Database = {
           email?: string | null
           first_response_at?: string | null
           id?: string
+          last_follow_up_check?: string | null
           meta_ad_id?: string | null
           meta_adset_id?: string | null
           meta_campaign_id?: string | null
@@ -4025,6 +4107,10 @@ export type Database = {
         Returns: undefined
       }
       is_master_user: { Args: { _user_id: string }; Returns: boolean }
+      lead_has_responded_since: {
+        Args: { p_lead_id: string; p_since: string }
+        Returns: boolean
+      }
       log_activity: {
         Args: {
           p_action: string

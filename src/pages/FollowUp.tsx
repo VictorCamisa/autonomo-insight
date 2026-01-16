@@ -24,6 +24,8 @@ import {
   Workflow,
   Zap,
   MessageSquare,
+  Play,
+  Loader2,
 } from 'lucide-react';
 
 // Follow-up Flows components
@@ -31,12 +33,12 @@ import { FollowUpFlowCard } from '@/components/crm/FollowUpFlowCard';
 import { FollowUpFlowFormNew } from '@/components/crm/FollowUpFlowFormNew';
 import {
   useFollowUpFlows,
-  useFollowUpSteps,
   useCreateFollowUpFlow,
   useUpdateFollowUpFlow,
   useDeleteFollowUpFlow,
   useToggleFollowUpFlow,
 } from '@/hooks/useFollowUpFlows';
+import { useProcessFollowUps } from '@/hooks/useProcessFollowUps';
 
 // Loss Recovery components
 import { LossRecoveryRuleForm } from '@/components/crm/LossRecoveryRuleForm';
@@ -118,6 +120,7 @@ export default function FollowUp() {
   const updateFlowMutation = useUpdateFollowUpFlow();
   const deleteFlowMutation = useDeleteFollowUpFlow();
   const toggleFlowMutation = useToggleFollowUpFlow();
+  const processFollowUpsMutation = useProcessFollowUps();
 
   // ========== Loss Recovery Queries ==========
   const { data: negotiations = [], isLoading: isLoadingNegotiations } = useNegotiations();
@@ -292,10 +295,25 @@ export default function FollowUp() {
   const renderActionButton = () => {
     if (activeTab === 'fluxos') {
       return (
-        <Button onClick={() => setIsFlowFormOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Fluxo
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => processFollowUpsMutation.mutate()}
+            disabled={processFollowUpsMutation.isPending}
+            className="gap-2"
+          >
+            {processFollowUpsMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            Executar Agora
+          </Button>
+          <Button onClick={() => setIsFlowFormOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Fluxo
+          </Button>
+        </div>
       );
     }
     if (activeTab === 'automacoes') {

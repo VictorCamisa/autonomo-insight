@@ -34,9 +34,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 // Etapas unificadas do pipeline comercial (reflete o fluxo real)
 const pipelineStages = [
+  // Atendimento Gabi (bot) - antes de passar para vendedor
+  { value: 'gabi_primeiro_contato', label: 'Gabi: Primeiro Contato', description: 'Lead entrou, aguardando resposta do bot', group: 'gabi' },
+  { value: 'gabi_em_qualificacao', label: 'Gabi: Em Qualificação', description: 'Bot conversando, coletando informações', group: 'gabi' },
+  { value: 'gabi_qualificado', label: 'Gabi: Qualificado', description: 'Bot qualificou, pronto para Round Robin', group: 'gabi' },
+  // Leads manuais (sem negociação)
   { value: 'lead_novo', label: 'Lead Novo', description: 'Lead acabou de entrar, sem contato', group: 'lead' },
   { value: 'lead_contato_inicial', label: 'Contato Inicial', description: 'Primeiro contato realizado', group: 'lead' },
   { value: 'lead_qualificado', label: 'Lead Qualificado', description: 'Lead qualificado, sem negociação', group: 'lead' },
+  // Em negociação com vendedor
   { value: 'negociacao_andamento', label: 'Em Negociação', description: 'Negociação iniciada', group: 'negotiation' },
   { value: 'negociacao_proposta', label: 'Proposta Enviada', description: 'Aguardando retorno', group: 'negotiation' },
   { value: 'negociacao_fechamento', label: 'Fechando Negócio', description: 'Fase final de fechamento', group: 'negotiation' },
@@ -319,9 +325,38 @@ export function FollowUpFlowForm({
                       Selecione as etapas do funil em que este follow-up será enviado
                     </p>
                     
-                    {/* Leads sem negociação */}
+                    {/* Atendimento Gabi (Bot) */}
                     <div className="mb-4">
-                      <p className="text-xs text-muted-foreground mb-2 font-medium">Leads (sem negociação)</p>
+                      <p className="text-xs text-muted-foreground mb-2 font-medium flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-violet-500"></span>
+                        Atendimento Gabi (Bot)
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {pipelineStages.filter(s => s.group === 'gabi').map((stage) => (
+                          <Tooltip key={stage.value}>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant={watchPipelineStages.includes(stage.value) ? 'default' : 'outline'}
+                                className={`cursor-pointer ${watchPipelineStages.includes(stage.value) ? 'bg-violet-600 hover:bg-violet-700' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}`}
+                                onClick={() => toggleArrayValue('pipeline_stages', stage.value)}
+                              >
+                                {stage.label}
+                                {watchPipelineStages.includes(stage.value) && (
+                                  <X className="h-3 w-3 ml-1" />
+                                )}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{stage.description}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Leads manuais (sem negociação) */}
+                    <div className="mb-4">
+                      <p className="text-xs text-muted-foreground mb-2 font-medium">Leads Manuais (sem negociação)</p>
                       <div className="flex flex-wrap gap-2">
                         {pipelineStages.filter(s => s.group === 'lead').map((stage) => (
                           <Tooltip key={stage.value}>
@@ -347,7 +382,7 @@ export function FollowUpFlowForm({
                     
                     {/* Leads em negociação */}
                     <div>
-                      <p className="text-xs text-muted-foreground mb-2 font-medium">Em Negociação</p>
+                      <p className="text-xs text-muted-foreground mb-2 font-medium">Em Negociação (com vendedor)</p>
                       <div className="flex flex-wrap gap-2">
                         {pipelineStages.filter(s => s.group === 'negotiation').map((stage) => (
                           <Tooltip key={stage.value}>

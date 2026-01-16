@@ -206,8 +206,11 @@ export function FollowUpFlowFormNew({
   const handleFormSubmit = (data: FormData) => {
     const converted = convertFromPipelineStages(data.pipeline_stages);
     
+    // Remove pipeline_stages pois não existe na tabela - apenas target_lead_status/target_negotiation_status
+    const { pipeline_stages, ...restData } = data;
+    
     onSubmit({
-      ...data,
+      ...restData,
       ...converted,
       steps,
     } as never);

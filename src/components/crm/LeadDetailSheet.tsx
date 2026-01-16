@@ -52,26 +52,40 @@ export function LeadDetailSheet({ lead, open, onOpenChange, onStartNegotiation }
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-hidden flex flex-col p-0">
         {/* Header */}
-        <SheetHeader className="px-6 py-4 border-b flex-shrink-0 bg-gradient-to-r from-muted/50 to-transparent">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <SheetTitle className="text-xl truncate">{lead.name}</SheetTitle>
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Badge className={leadStatusColors[lead.status]}>
-                  {leadStatusLabels[lead.status]}
-                </Badge>
-                <Badge className={qualificationColor}>
-                  {qualificationLabel}
-                </Badge>
-                <Badge variant="outline" className="text-xs">
-                  <Tag className="h-3 w-3 mr-1" />
-                  {leadSourceLabels[lead.source]}
-                </Badge>
+        <SheetHeader className="px-6 py-5 border-b flex-shrink-0 bg-gradient-to-r from-muted/50 to-transparent">
+          <div className="space-y-3">
+            {/* Name */}
+            <SheetTitle className="text-xl">{lead.name}</SheetTitle>
+            
+            {/* Status Badges */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={leadStatusColors[lead.status]}>
+                {leadStatusLabels[lead.status]}
+              </Badge>
+              <Badge className={qualificationColor}>
+                {qualificationLabel}
+              </Badge>
+            </div>
+
+            {/* Lead Info Grid */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              {/* Origem do Lead */}
+              <div className="flex items-start gap-2 p-2.5 bg-muted/50 rounded-lg">
+                <Tag className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Origem</p>
+                  <p className="text-sm font-medium truncate">{leadSourceLabels[lead.source]}</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                <Clock className="h-3 w-3 inline mr-1" />
-                Criado {createdAgo}
-              </p>
+              
+              {/* Data de Criação */}
+              <div className="flex items-start gap-2 p-2.5 bg-muted/50 rounded-lg">
+                <Clock className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Criado</p>
+                  <p className="text-sm font-medium">{createdAgo}</p>
+                </div>
+              </div>
             </div>
           </div>
         </SheetHeader>

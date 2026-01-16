@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { TriggerType } from '@/types/followUp';
+import type { FollowUpStep } from '@/components/crm/FollowUpStepEditor';
 
 interface FollowUpFlowRow {
   id: string;
@@ -32,6 +33,23 @@ interface FollowUpFlowRow {
   updated_at: string;
 }
 
+interface FollowUpStepRow {
+  id: string;
+  flow_id: string;
+  step_order: number;
+  delay_minutes: number;
+  message_template: string;
+  stop_if_qualified: boolean;
+  stop_if_assigned_to_salesperson: boolean;
+  stop_if_responded: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FollowUpFlowWithSteps extends FollowUpFlowRow {
+  steps: FollowUpStepRow[];
+}
+
 export function useFollowUpFlows() {
   return useQuery({
     queryKey: ['follow-up-flows'],
@@ -44,6 +62,48 @@ export function useFollowUpFlows() {
       if (error) throw error;
       return (data as unknown as FollowUpFlowRow[]) || [];
     },
+  });
+}
+
+export function useFollowUpFlowWithSteps(flowId: string | null) {
+  return useQuery({
+    queryKey: ['follow-up-flow', flowId],
+    queryFn: async () => {
+      if (!flowId) return null;
+      
+      const [flowResult, stepsResult] = await Promise.all([
+        supabase.from('follow_up_flows').select('*').eq('id', flowId).single(),
+        supabase.from('follow_up_steps').select('*').eq('flow_id', flowId).order('step_order'),
+      ]);
+      
+      if (flowResult.error) throw flowResult.error;
+      if (stepsResult.error) throw stepsResult.error;
+      
+      return {
+        ...(flowResult.data as unknown as FollowUpFlowRow),
+        steps: (stepsResult.data as unknown as FollowUpStepRow[]) || [],
+      };
+    },
+    enabled: !!flowId,
+  });
+}
+
+export function useFollowUpSteps(flowId: string | null) {
+  return useQuery({
+    queryKey: ['follow-up-steps', flowId],
+    queryFn: async () => {
+      if (!flowId) return [];
+      
+      const { data, error } = await supabase
+        .from('follow_up_steps')
+        .select('*')
+        .eq('flow_id', flowId)
+        .order('step_order');
+      
+      if (error) throw error;
+      return (data as unknown as FollowUpStepRow[]) || [];
+    },
+    enabled: !!flowId,
   });
 }
 
@@ -60,7 +120,7 @@ export interface CreateFollowUpFlowInput {
   delay_hours?: number;
   specific_time?: string;
   days_of_week?: number[];
-  message_template: string;
+  message_template?: string;
   include_vehicle_info?: boolean;
   include_salesperson_name?: boolean;
   include_company_name?: boolean;
@@ -70,6 +130,7 @@ export interface CreateFollowUpFlowInput {
   exclude_converted_leads?: boolean;
   exclude_lost_leads?: boolean;
   priority?: number;
+  steps?: FollowUpStep[];
 }
 
 export function useCreateFollowUpFlow() {
@@ -77,23 +138,48 @@ export function useCreateFollowUpFlow() {
   
   return useMutation({
     mutationFn: async (input: CreateFollowUpFlowInput) => {
-      // Convert empty string to null for time field
+      const { steps, ...flowData } = input;
+      
+      // Garante um message_template default se não tiver steps
       const sanitizedInput = {
-        ...input,
-        specific_time: input.specific_time || null,
+        ...flowData,
+        specific_time: flowData.specific_time || null,
+        message_template: flowData.message_template || (steps?.[0]?.message_template || 'Mensagem padrão'),
       };
       
-      const { data, error } = await supabase
+      // Cria o fluxo
+      const { data: flow, error: flowError } = await supabase
         .from('follow_up_flows')
         .insert(sanitizedInput as never)
         .select()
         .single();
       
-      if (error) throw error;
-      return data;
+      if (flowError) throw flowError;
+      
+      // Cria os passos
+      if (steps && steps.length > 0) {
+        const stepsToInsert = steps.map((step, index) => ({
+          flow_id: (flow as { id: string }).id,
+          step_order: index + 1,
+          delay_minutes: step.delay_minutes,
+          message_template: step.message_template,
+          stop_if_qualified: step.stop_if_qualified,
+          stop_if_assigned_to_salesperson: step.stop_if_assigned_to_salesperson,
+          stop_if_responded: step.stop_if_responded,
+        }));
+        
+        const { error: stepsError } = await supabase
+          .from('follow_up_steps')
+          .insert(stepsToInsert as never[]);
+        
+        if (stepsError) throw stepsError;
+      }
+      
+      return flow;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follow-up-flows'] });
+      queryClient.invalidateQueries({ queryKey: ['follow-up-steps'] });
       toast.success('Fluxo de follow-up criado com sucesso!');
     },
     onError: (error) => {
@@ -110,13 +196,14 @@ export function useUpdateFollowUpFlow() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, ...input }: UpdateFollowUpFlowInput) => {
+    mutationFn: async ({ id, steps, ...input }: UpdateFollowUpFlowInput) => {
       // Convert empty string to null for time field
       const sanitizedInput = {
         ...input,
         specific_time: input.specific_time || null,
       };
       
+      // Atualiza o fluxo
       const { data, error } = await supabase
         .from('follow_up_flows')
         .update(sanitizedInput as never)
@@ -125,10 +212,38 @@ export function useUpdateFollowUpFlow() {
         .single();
       
       if (error) throw error;
+      
+      // Atualiza os passos se fornecidos
+      if (steps) {
+        // Remove passos antigos
+        await supabase.from('follow_up_steps').delete().eq('flow_id', id);
+        
+        // Insere novos passos
+        if (steps.length > 0) {
+          const stepsToInsert = steps.map((step, index) => ({
+            flow_id: id,
+            step_order: index + 1,
+            delay_minutes: step.delay_minutes,
+            message_template: step.message_template,
+            stop_if_qualified: step.stop_if_qualified,
+            stop_if_assigned_to_salesperson: step.stop_if_assigned_to_salesperson,
+            stop_if_responded: step.stop_if_responded,
+          }));
+          
+          const { error: stepsError } = await supabase
+            .from('follow_up_steps')
+            .insert(stepsToInsert as never[]);
+          
+          if (stepsError) throw stepsError;
+        }
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follow-up-flows'] });
+      queryClient.invalidateQueries({ queryKey: ['follow-up-steps'] });
+      queryClient.invalidateQueries({ queryKey: ['follow-up-flow'] });
       toast.success('Fluxo de follow-up atualizado!');
     },
     onError: (error) => {
@@ -151,6 +266,7 @@ export function useDeleteFollowUpFlow() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follow-up-flows'] });
+      queryClient.invalidateQueries({ queryKey: ['follow-up-steps'] });
       toast.success('Fluxo de follow-up excluído!');
     },
     onError: (error) => {

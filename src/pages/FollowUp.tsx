@@ -28,9 +28,10 @@ import {
 
 // Follow-up Flows components
 import { FollowUpFlowCard } from '@/components/crm/FollowUpFlowCard';
-import { FollowUpFlowForm } from '@/components/crm/FollowUpFlowForm';
+import { FollowUpFlowFormNew } from '@/components/crm/FollowUpFlowFormNew';
 import {
   useFollowUpFlows,
+  useFollowUpSteps,
   useCreateFollowUpFlow,
   useUpdateFollowUpFlow,
   useDeleteFollowUpFlow,
@@ -63,6 +64,8 @@ import { ptBR } from 'date-fns/locale';
 import { lossReasonLabels, LossReasonType, Negotiation } from '@/types/negotiations';
 
 // Types
+import type { FollowUpStep } from '@/components/crm/FollowUpStepEditor';
+
 interface FlowFormData {
   id?: string;
   name: string;
@@ -70,23 +73,10 @@ interface FlowFormData {
   is_active?: boolean;
   target_lead_status?: string[];
   target_lead_sources?: string[];
-  target_vehicle_interests?: string;
   target_negotiation_status?: string[];
   trigger_type?: string;
-  delay_days?: number;
-  delay_hours?: number;
-  specific_time?: string;
-  days_of_week?: number[];
-  message_template: string;
-  include_vehicle_info?: boolean;
-  include_salesperson_name?: boolean;
-  include_company_name?: boolean;
-  whatsapp_button_text?: string;
-  min_days_since_last_contact?: number;
-  max_contacts_per_lead?: number;
-  exclude_converted_leads?: boolean;
-  exclude_lost_leads?: boolean;
   priority?: number;
+  steps?: FollowUpStep[];
 }
 
 // Status labels for alerts
@@ -160,15 +150,15 @@ export default function FollowUp() {
   const activeFlowsCount = flows?.filter((f) => f.is_active).length || 0;
   const inactiveFlowsCount = flows?.filter((f) => !f.is_active).length || 0;
 
-  const handleCreateFlow = (data: FlowFormData) => {
+  const handleCreateFlow = (data: unknown) => {
     createFlowMutation.mutate(data as never, {
       onSuccess: () => setIsFlowFormOpen(false),
     });
   };
 
-  const handleUpdateFlow = (data: FlowFormData) => {
+  const handleUpdateFlow = (data: unknown) => {
     if (!editingFlow?.id) return;
-    const payload = { id: editingFlow.id, ...data };
+    const payload = { id: editingFlow.id, ...(data as object) };
     updateFlowMutation.mutate(payload as never, {
       onSuccess: () => {
         setEditingFlow(null);
@@ -178,12 +168,7 @@ export default function FollowUp() {
   };
 
   const handleEditFlow = (flow: FlowFormData & { id: string }) => {
-    setEditingFlow({
-      ...flow,
-      target_vehicle_interests: Array.isArray(flow.target_vehicle_interests)
-        ? (flow.target_vehicle_interests as unknown as string[]).join(', ')
-        : flow.target_vehicle_interests,
-    });
+    setEditingFlow(flow);
     setIsFlowFormOpen(true);
   };
 
@@ -733,7 +718,7 @@ export default function FollowUp() {
               {editingFlow ? 'Editar Fluxo de Follow-up' : 'Novo Fluxo de Follow-up'}
             </DialogTitle>
           </DialogHeader>
-          <FollowUpFlowForm
+          <FollowUpFlowFormNew
             initialData={editingFlow || undefined}
             onSubmit={editingFlow ? handleUpdateFlow : handleCreateFlow}
             onCancel={handleCloseFlowForm}

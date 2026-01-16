@@ -1276,6 +1276,53 @@ export type Database = {
         }
         Relationships: []
       }
+      follow_up_steps: {
+        Row: {
+          created_at: string
+          delay_minutes: number
+          flow_id: string
+          id: string
+          message_template: string
+          step_order: number
+          stop_if_assigned_to_salesperson: boolean | null
+          stop_if_qualified: boolean | null
+          stop_if_responded: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delay_minutes?: number
+          flow_id: string
+          id?: string
+          message_template: string
+          step_order?: number
+          stop_if_assigned_to_salesperson?: boolean | null
+          stop_if_qualified?: boolean | null
+          stop_if_responded?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delay_minutes?: number
+          flow_id?: string
+          id?: string
+          message_template?: string
+          step_order?: number
+          stop_if_assigned_to_salesperson?: boolean | null
+          stop_if_qualified?: boolean | null
+          stop_if_responded?: boolean | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_steps_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_ad_groups: {
         Row: {
           campaign_id: string | null

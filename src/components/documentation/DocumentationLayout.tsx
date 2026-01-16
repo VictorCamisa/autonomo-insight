@@ -319,7 +319,7 @@ export const DocumentationLayout = () => {
         { name: 'google-ads-sync', method: 'POST', desc: 'Sincroniza campanhas do Google Ads', auth: 'Sim' },
         { name: 'import-vehicles', method: 'POST', desc: 'Importa veículos em lote via CSV/JSON', auth: 'Sim' },
         { name: 'import-vehicle-photos', method: 'POST', desc: 'Importa fotos de veículos de URLs', auth: 'Sim' },
-        { name: 'generate-report', method: 'POST', desc: 'Gera relatórios com IA (Lovable AI)', auth: 'Sim' }
+        { name: 'generate-report', method: 'POST', desc: 'Gera relatórios com IA (OpenAI)', auth: 'Sim' }
       ];
 
       edgeFunctions.forEach((fn) => {

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -73,13 +73,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [roleLoading, setRoleLoading] = useState(false);
+  
+  // Use ref to track initialization without causing re-renders
+  const isInitializedRef = useRef(false);
+  const currentUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    let initialLoadComplete = false;
     console.log('[AuthContext] Initializing...');
 
-    const processSession = async (newSession: Session | null, source: string, isInitialLoad: boolean = false) => {
+    const processSession = async (newSession: Session | null, source: string) => {
       console.log(`[AuthContext] processSession from ${source}:`, !!newSession?.user);
       const sanitized = sanitizeSession(newSession);
       
@@ -88,61 +91,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      // Only update state if there's an actual change to prevent unnecessary re-renders
-      const userChanged = sanitized?.user?.id !== user?.id;
-      const sessionChanged = sanitized?.access_token !== session?.access_token;
-      
-      // For token refresh events, don't update state if user is the same (prevents modal closing)
-      if (!isInitialLoad && !userChanged && source === 'onAuthStateChange') {
-        console.log('[AuthContext] Token refresh - same user, skipping state update to preserve modals');
-        return;
-      }
-      
-      if (sessionChanged || userChanged) {
-        setSession(sanitized);
-        setUser(sanitized?.user ?? null);
-      }
+      setSession(sanitized);
+      setUser(sanitized?.user ?? null);
+      currentUserIdRef.current = sanitized?.user?.id ?? null;
 
       if (sanitized?.user) {
-        // Only fetch role on initial load or if user actually changed
-        if (isInitialLoad || userChanged) {
-          console.log('[AuthContext] User found, fetching role...');
-          setRoleLoading(true);
-          const userRole = await fetchUserRole(sanitized.user.id);
-          console.log('[AuthContext] Role fetched:', userRole);
-          if (isMounted) {
-            setRole(userRole);
-            setRoleLoading(false);
-            setLoading(false);
-            console.log('[AuthContext] State updated - roleLoading: false, loading: false');
-          }
+        console.log('[AuthContext] User found, fetching role...');
+        setRoleLoading(true);
+        const userRole = await fetchUserRole(sanitized.user.id);
+        console.log('[AuthContext] Role fetched:', userRole);
+        if (isMounted) {
+          setRole(userRole);
+          setRoleLoading(false);
+          setLoading(false);
+          isInitializedRef.current = true;
+          console.log('[AuthContext] State updated - initialized: true');
         }
       } else {
         console.log('[AuthContext] No user, clearing state...');
         setRole(null);
         setRoleLoading(false);
         setLoading(false);
+        isInitializedRef.current = true;
       }
     };
 
     // Set up the auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-      console.log('[AuthContext] onAuthStateChange event:', event);
+      console.log('[AuthContext] onAuthStateChange event:', event, 'isInitialized:', isInitializedRef.current);
       
       if ((event as unknown as string) === 'TOKEN_REFRESH_FAILED') {
         supabase.auth.signOut().catch(() => {});
         return;
       }
       
-      // Skip token refresh events after initial load to prevent modal closing
-      if (initialLoadComplete && (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
-        console.log('[AuthContext] Skipping state update for token refresh to preserve UI state');
+      // CRITICAL: After initialization, ONLY respond to SIGNED_OUT events
+      // This prevents re-renders when switching browser tabs (which triggers TOKEN_REFRESHED, SIGNED_IN, etc.)
+      if (isInitializedRef.current) {
+        if (event === 'SIGNED_OUT') {
+          console.log('[AuthContext] User signed out, clearing state...');
+          setSession(null);
+          setUser(null);
+          setRole(null);
+          currentUserIdRef.current = null;
+        } else if (event === 'SIGNED_IN' && newSession?.user?.id !== currentUserIdRef.current) {
+          // Only process SIGNED_IN if it's a DIFFERENT user (actual new login)
+          console.log('[AuthContext] Different user signed in, processing...');
+          setTimeout(() => {
+            processSession(newSession, 'onAuthStateChange');
+          }, 0);
+        } else {
+          console.log('[AuthContext] Ignoring auth event after initialization to preserve UI state (modals, forms, etc.)');
+        }
         return;
       }
       
       // Use setTimeout to defer and avoid Supabase deadlock
       setTimeout(() => {
-        processSession(newSession, 'onAuthStateChange', false);
+        processSession(newSession, 'onAuthStateChange');
       }, 0);
     });
 
@@ -154,12 +160,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isRefreshTokenNotFound(error)) {
           supabase.auth.signOut().catch(() => {});
         }
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          isInitializedRef.current = true;
+        }
         return;
       }
       
-      processSession(currentSession, 'getSession', true);
-      initialLoadComplete = true;
+      processSession(currentSession, 'getSession');
     });
 
     return () => {
@@ -169,6 +177,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    // Reset initialization flag to allow processing the new sign in
+    isInitializedRef.current = false;
+    
     // Limpar todo o cache antes do login para evitar dados de outro usuário
     queryClient.clear();
     // Limpar insights dismissados para nova sessão
@@ -203,6 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryClient.clear();
     await supabase.auth.signOut();
     setRole(null);
+    isInitializedRef.current = false;
   };
 
   return (

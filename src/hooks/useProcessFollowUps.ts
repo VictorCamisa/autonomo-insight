@@ -17,8 +17,10 @@ export function useProcessFollowUps() {
 
   return useMutation({
     mutationFn: async (): Promise<ProcessResult> => {
+      // Execução manual sempre força, ignorando configuração de automação
       const { data, error } = await supabase.functions.invoke('process-follow-ups', {
         method: 'POST',
+        body: { force: true },
       });
 
       if (error) throw error;

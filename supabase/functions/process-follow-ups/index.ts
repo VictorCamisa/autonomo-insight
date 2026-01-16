@@ -95,6 +95,33 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Verificar body para execução manual forçada
+    let forceExecution = false;
+    try {
+      const body = await req.json();
+      forceExecution = body?.force === true;
+    } catch {
+      // Body vazio é ok
+    }
+
+    // Verificar se automação está ativa (a menos que seja execução forçada)
+    if (!forceExecution) {
+      const { data: settings } = await supabase
+        .from('follow_up_settings')
+        .select('automation_enabled')
+        .single();
+
+      if (!settings?.automation_enabled) {
+        console.log('⏸️ Automation is disabled, skipping cron execution');
+        return new Response(
+          JSON.stringify({ success: true, message: 'Automation disabled', processed: 0 }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      console.log('🔧 Force execution requested (manual trigger)');
+    }
+
     // 1. Buscar fluxos ativos
     const { data: flowsData, error: flowsError } = await supabase
       .from('follow_up_flows')
@@ -526,6 +553,12 @@ serve(async (req) => {
         }
       }
     }
+
+    // Atualizar última execução
+    await supabase
+      .from('follow_up_settings')
+      .update({ last_execution_at: new Date().toISOString() })
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Update all rows
 
     const duration = Date.now() - startTime;
     console.log(`\n✅ Processing complete in ${duration}ms`);

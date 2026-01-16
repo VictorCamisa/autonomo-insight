@@ -6,6 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Icons
 import { 
@@ -26,6 +29,8 @@ import {
   MessageSquare,
   Play,
   Loader2,
+  Settings,
+  Clock,
 } from 'lucide-react';
 
 // Follow-up Flows components
@@ -39,6 +44,7 @@ import {
   useToggleFollowUpFlow,
 } from '@/hooks/useFollowUpFlows';
 import { useProcessFollowUps } from '@/hooks/useProcessFollowUps';
+import { useFollowUpSettings } from '@/hooks/useFollowUpSettings';
 
 // Loss Recovery components
 import { LossRecoveryRuleForm } from '@/components/crm/LossRecoveryRuleForm';
@@ -121,6 +127,9 @@ export default function FollowUp() {
   const deleteFlowMutation = useDeleteFollowUpFlow();
   const toggleFlowMutation = useToggleFollowUpFlow();
   const processFollowUpsMutation = useProcessFollowUps();
+  
+  // ========== Automation Settings ==========
+  const { settings: automationSettings, toggleAutomation, updateInterval, isUpdating: isUpdatingSettings } = useFollowUpSettings();
 
   // ========== Loss Recovery Queries ==========
   const { data: negotiations = [], isLoading: isLoadingNegotiations } = useNegotiations();
@@ -342,6 +351,82 @@ export default function FollowUp() {
         </div>
         {renderActionButton()}
       </div>
+
+      {/* Automation Toggle Card */}
+      <Card className="border-2 border-primary/20 bg-primary/5">
+        <CardContent className="py-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-full ${automationSettings?.automation_enabled ? 'bg-green-100 dark:bg-green-900' : 'bg-muted'}`}>
+                {automationSettings?.automation_enabled ? (
+                  <Zap className="h-5 w-5 text-green-600" />
+                ) : (
+                  <Settings className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <div>
+                <div className="font-medium flex items-center gap-2">
+                  Automação de Follow-ups
+                  {automationSettings?.automation_enabled && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                      Ativa
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {automationSettings?.automation_enabled 
+                    ? `Executando a cada ${automationSettings.interval_minutes} minutos` 
+                    : 'Use o botão "Executar Agora" para disparar manualmente'}
+                </p>
+                {automationSettings?.last_execution_at && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                    <Clock className="h-3 w-3" />
+                    Última execução: {format(new Date(automationSettings.last_execution_at), "dd/MM HH:mm", { locale: ptBR })}
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              {automationSettings?.automation_enabled && (
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="interval" className="text-sm whitespace-nowrap">Intervalo:</Label>
+                  <Select
+                    value={String(automationSettings.interval_minutes)}
+                    onValueChange={(val) => updateInterval(Number(val))}
+                    disabled={isUpdatingSettings}
+                  >
+                    <SelectTrigger className="w-[120px]" id="interval">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 minuto</SelectItem>
+                      <SelectItem value="2">2 minutos</SelectItem>
+                      <SelectItem value="5">5 minutos</SelectItem>
+                      <SelectItem value="10">10 minutos</SelectItem>
+                      <SelectItem value="15">15 minutos</SelectItem>
+                      <SelectItem value="30">30 minutos</SelectItem>
+                      <SelectItem value="60">1 hora</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="automation-toggle"
+                  checked={automationSettings?.automation_enabled ?? false}
+                  onCheckedChange={toggleAutomation}
+                  disabled={isUpdatingSettings}
+                />
+                <Label htmlFor="automation-toggle" className="font-medium">
+                  {automationSettings?.automation_enabled ? 'Ligado' : 'Desligado'}
+                </Label>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

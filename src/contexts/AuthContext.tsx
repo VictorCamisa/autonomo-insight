@@ -76,9 +76,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    let initialLoadComplete = false;
     console.log('[AuthContext] Initializing...');
 
-    const processSession = async (newSession: Session | null, source: string) => {
+    const processSession = async (newSession: Session | null, source: string, isInitialLoad: boolean = false) => {
       console.log(`[AuthContext] processSession from ${source}:`, !!newSession?.user);
       const sanitized = sanitizeSession(newSession);
       
@@ -87,19 +88,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      setSession(sanitized);
-      setUser(sanitized?.user ?? null);
+      // Only update state if there's an actual change to prevent unnecessary re-renders
+      const userChanged = sanitized?.user?.id !== user?.id;
+      const sessionChanged = sanitized?.access_token !== session?.access_token;
+      
+      // For token refresh events, don't update state if user is the same (prevents modal closing)
+      if (!isInitialLoad && !userChanged && source === 'onAuthStateChange') {
+        console.log('[AuthContext] Token refresh - same user, skipping state update to preserve modals');
+        return;
+      }
+      
+      if (sessionChanged || userChanged) {
+        setSession(sanitized);
+        setUser(sanitized?.user ?? null);
+      }
 
       if (sanitized?.user) {
-        console.log('[AuthContext] User found, fetching role...');
-        setRoleLoading(true);
-        const userRole = await fetchUserRole(sanitized.user.id);
-        console.log('[AuthContext] Role fetched:', userRole);
-        if (isMounted) {
-          setRole(userRole);
-          setRoleLoading(false);
-          setLoading(false);
-          console.log('[AuthContext] State updated - roleLoading: false, loading: false');
+        // Only fetch role on initial load or if user actually changed
+        if (isInitialLoad || userChanged) {
+          console.log('[AuthContext] User found, fetching role...');
+          setRoleLoading(true);
+          const userRole = await fetchUserRole(sanitized.user.id);
+          console.log('[AuthContext] Role fetched:', userRole);
+          if (isMounted) {
+            setRole(userRole);
+            setRoleLoading(false);
+            setLoading(false);
+            console.log('[AuthContext] State updated - roleLoading: false, loading: false');
+          }
         }
       } else {
         console.log('[AuthContext] No user, clearing state...');
@@ -112,14 +128,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up the auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       console.log('[AuthContext] onAuthStateChange event:', event);
+      
       if ((event as unknown as string) === 'TOKEN_REFRESH_FAILED') {
         supabase.auth.signOut().catch(() => {});
         return;
       }
       
+      // Skip token refresh events after initial load to prevent modal closing
+      if (initialLoadComplete && (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+        console.log('[AuthContext] Skipping state update for token refresh to preserve UI state');
+        return;
+      }
+      
       // Use setTimeout to defer and avoid Supabase deadlock
       setTimeout(() => {
-        processSession(newSession, 'onAuthStateChange');
+        processSession(newSession, 'onAuthStateChange', false);
       }, 0);
     });
 
@@ -135,7 +158,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      processSession(currentSession, 'getSession');
+      processSession(currentSession, 'getSession', true);
+      initialLoadComplete = true;
     });
 
     return () => {

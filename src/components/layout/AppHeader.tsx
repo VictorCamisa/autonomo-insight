@@ -16,6 +16,7 @@ import {
   LogOut,
   ChevronDown,
   Menu,
+  RefreshCw,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -23,11 +24,29 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 import logoMatheusVeiculos from '@/assets/logo-matheus-veiculos.png';
 import { MainNav } from './MainNav';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function AppHeader() {
   const { user, signOut } = useAuth();
   const { isGerente, role } = usePermissions();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // Invalidate all queries to refetch fresh data
+      await queryClient.invalidateQueries();
+      toast.success('Dados atualizados!');
+    } catch (error) {
+      toast.error('Erro ao atualizar dados');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const getRoleLabel = () => {
     switch (role) {
@@ -63,6 +82,24 @@ export function AppHeader() {
 
         {/* Right Section */}
         <div className="flex items-center gap-2">
+          {/* Refresh Button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="h-9 w-9"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Atualizar dados (sem recarregar página)</p>
+            </TooltipContent>
+          </Tooltip>
+          
           <NotificationBell />
           <ThemeToggle />
           

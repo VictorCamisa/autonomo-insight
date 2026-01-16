@@ -1028,7 +1028,7 @@ Se o cliente disser: "falar com humano", "vendedor", "pessoa real", "atendente"
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" className="h-4 w-4" />
-              <span className="text-sm">Configurar secrets (LOVABLE_API_KEY)</span>
+              <span className="text-sm">Configurar secrets (OPENAI_API_KEY)</span>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" className="h-4 w-4" />

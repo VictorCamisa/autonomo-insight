@@ -723,6 +723,27 @@ Você prefere à vista ou financiado?
     let finalResponse = cleanResponse;
     
     if (leadId) {
+      // Get pre-assigned salesperson name to replace [vendedor] placeholder
+      const { data: leadData } = await supabase
+        .from('leads')
+        .select('assigned_to')
+        .eq('id', leadId)
+        .single();
+      
+      if (leadData?.assigned_to) {
+        const { data: salesperson } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', leadData.assigned_to)
+          .single();
+        
+        if (salesperson?.full_name) {
+          // Replace [vendedor] placeholder with actual name
+          finalResponse = finalResponse.replace(/\[vendedor\]/gi, salesperson.full_name);
+          console.log('[AI Agent] Replaced [vendedor] with:', salesperson.full_name);
+        }
+      }
+
       // 1. Extract qualification data from AI response (using ORIGINAL response with tags)
       const qualResult = await extractAndSaveQualificationData(supabase, leadId, aiResponse);
       
@@ -738,7 +759,7 @@ O ${qualResult.salespersonName} vai entrar em contato com você em breve para da
 
 Ele já está com todo o histórico da nossa conversa! 👍`;
         
-        finalResponse = cleanResponse + handoffMessage;
+        finalResponse = finalResponse + handoffMessage;
       }
     }
 

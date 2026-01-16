@@ -1612,9 +1612,9 @@ async function extractDataWithAI(
   conversationId: string,
   leadId: string
 ): Promise<Record<string, any>> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  if (!LOVABLE_API_KEY) {
-    console.log('[Qualification] LOVABLE_API_KEY not set, skipping AI extraction');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+  if (!OPENAI_API_KEY) {
+    console.log('[Qualification] OPENAI_API_KEY not set, skipping AI extraction');
     return {};
   }
   
@@ -1652,14 +1652,14 @@ async function extractDataWithAI(
   console.log('[Qualification] Running AI extraction on', messages.length, 'messages');
   
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',

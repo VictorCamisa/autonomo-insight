@@ -70,6 +70,7 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { lossReasonLabels, LossReasonType, Negotiation } from '@/types/negotiations';
+import { supabase } from '@/integrations/supabase/client';
 
 // Types
 import type { FollowUpStep } from '@/components/crm/FollowUpStepEditor';
@@ -179,8 +180,18 @@ export default function FollowUp() {
     });
   };
 
-  const handleEditFlow = (flow: FlowFormData & { id: string }) => {
-    setEditingFlow(flow);
+  const handleEditFlow = async (flow: FlowFormData & { id: string }) => {
+    // Buscar os steps do banco antes de abrir o formulário
+    const { data: steps } = await supabase
+      .from('follow_up_steps')
+      .select('*')
+      .eq('flow_id', flow.id)
+      .order('step_order');
+    
+    setEditingFlow({
+      ...flow,
+      steps: steps || [],
+    });
     setIsFlowFormOpen(true);
   };
 

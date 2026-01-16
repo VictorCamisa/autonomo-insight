@@ -351,10 +351,11 @@ serve(async (req) => {
           }
         }
 
-        // Verificar se foi atribuído a vendedor
-        if (!shouldSkip && nextStep.stop_if_assigned_to_salesperson && lead.assigned_to) {
+        // Verificar se foi transferido para vendedor (qualification_status = 'qualificado')
+        // Nota: assigned_to sempre existe desde a criação (Round-Robin), então verificamos qualification_status
+        if (!shouldSkip && nextStep.stop_if_assigned_to_salesperson && lead.qualification_status === 'qualificado') {
           shouldSkip = true;
-          skipReason = 'Lead atribuído a vendedor';
+          skipReason = 'Lead já transferido para vendedor (qualificado)';
         }
 
         // Verificar se lead respondeu desde última execução deste fluxo

@@ -367,6 +367,53 @@ export type Database = {
           },
         ]
       }
+      ai_agent_rag_actions: {
+        Row: {
+          action_type: string
+          agent_id: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          max_suggestions: number | null
+          price_tolerance_percent: number | null
+          trigger_keywords: string[] | null
+          updated_at: string | null
+          year_tolerance: number | null
+        }
+        Insert: {
+          action_type: string
+          agent_id: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_suggestions?: number | null
+          price_tolerance_percent?: number | null
+          trigger_keywords?: string[] | null
+          updated_at?: string | null
+          year_tolerance?: number | null
+        }
+        Update: {
+          action_type?: string
+          agent_id?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_suggestions?: number | null
+          price_tolerance_percent?: number | null
+          trigger_keywords?: string[] | null
+          updated_at?: string | null
+          year_tolerance?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_rag_actions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_agent_tests: {
         Row: {
           agent_id: string
@@ -1832,7 +1879,11 @@ export type Database = {
           id: string
           is_qualified: boolean | null
           lead_id: string | null
+          lead_source_confirmed: string | null
           message_count: number | null
+          q1_reached_at: string | null
+          q2_reached_at: string | null
+          qualification_level: string | null
           qualified_at: string | null
           trade_in_vehicle: string | null
           updated_at: string | null
@@ -1850,7 +1901,11 @@ export type Database = {
           id?: string
           is_qualified?: boolean | null
           lead_id?: string | null
+          lead_source_confirmed?: string | null
           message_count?: number | null
+          q1_reached_at?: string | null
+          q2_reached_at?: string | null
+          qualification_level?: string | null
           qualified_at?: string | null
           trade_in_vehicle?: string | null
           updated_at?: string | null
@@ -1868,7 +1923,11 @@ export type Database = {
           id?: string
           is_qualified?: boolean | null
           lead_id?: string | null
+          lead_source_confirmed?: string | null
           message_count?: number | null
+          q1_reached_at?: string | null
+          q2_reached_at?: string | null
+          qualification_level?: string | null
           qualified_at?: string | null
           trade_in_vehicle?: string | null
           updated_at?: string | null
@@ -3380,6 +3439,48 @@ export type Database = {
           },
         ]
       }
+      vehicle_embeddings: {
+        Row: {
+          created_at: string | null
+          embedding: string | null
+          id: string
+          search_text: string
+          updated_at: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          search_text: string
+          updated_at?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          search_text?: string
+          updated_at?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_embeddings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "vehicle_dre"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_embeddings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_images: {
         Row: {
           created_at: string
@@ -4148,6 +4249,20 @@ export type Database = {
         Returns: string
       }
       reset_daily_lead_counts: { Args: never; Returns: undefined }
+      search_similar_vehicles: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+          target_year?: number
+          year_tolerance?: number
+        }
+        Returns: {
+          search_text: string
+          similarity: number
+          vehicle_id: string
+        }[]
+      }
     }
     Enums: {
       app_role: "gerente" | "vendedor" | "marketing"

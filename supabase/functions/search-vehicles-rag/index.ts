@@ -18,9 +18,6 @@ serve(async (req) => {
     );
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
 
     const body = await req.json();
     const { 
@@ -72,92 +69,17 @@ serve(async (req) => {
 
     console.log('[RAG Search] Extracted - Year:', effectiveTargetYear, 'Max Price:', effectiveMaxPrice);
 
-    // Generate embedding for the query
-    const queryEmbedding = await generateEmbedding(query, LOVABLE_API_KEY);
-    
-    if (!queryEmbedding) {
-      console.error('[RAG Search] Failed to generate query embedding');
-      // Fallback to text search
-      return await fallbackTextSearch(supabase, query, max_results, effectiveTargetYear, year_tolerance, effectiveMaxPrice);
-    }
-
-    // Search using pgvector
-    const { data: searchResults, error: searchError } = await supabase
-      .rpc('search_similar_vehicles', {
-        query_embedding: queryEmbedding,
-        match_threshold: 0.5, // Lower threshold for more results
-        match_count: max_results * 2, // Get more to filter
-        year_tolerance: year_tolerance,
-        target_year: effectiveTargetYear
-      });
-
-    if (searchError) {
-      console.error('[RAG Search] Vector search error:', searchError);
-      return await fallbackTextSearch(supabase, query, max_results, effectiveTargetYear, year_tolerance, effectiveMaxPrice);
-    }
-
-    console.log('[RAG Search] Found', searchResults?.length || 0, 'similar vehicles');
-
-    if (!searchResults || searchResults.length === 0) {
-      // No vector matches, try text search
-      return await fallbackTextSearch(supabase, query, max_results, effectiveTargetYear, year_tolerance, effectiveMaxPrice);
-    }
-
-    // Get full vehicle details for matched IDs
-    const vehicleIds = searchResults.map((r: any) => r.vehicle_id);
-    
-    let vehicleQuery = supabase
-      .from('vehicles')
-      .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, images, status')
-      .in('id', vehicleIds)
-      .eq('status', 'disponivel');
-
-    // Apply price filter if specified
-    if (effectiveMaxPrice) {
-      const maxWithTolerance = effectiveMaxPrice * (1 + price_tolerance_percent / 100);
-      vehicleQuery = vehicleQuery.lte('sale_price', maxWithTolerance);
-    }
-
-    const { data: vehicles, error: vehiclesError } = await vehicleQuery;
-
-    if (vehiclesError) {
-      console.error('[RAG Search] Error fetching vehicles:', vehiclesError);
-      throw vehiclesError;
-    }
-
-    // Merge similarity scores and sort by relevance
-    const vehiclesWithScores = (vehicles || []).map((v: any) => {
-      const searchResult = searchResults.find((r: any) => r.vehicle_id === v.id);
-      return {
-        ...v,
-        similarity: searchResult?.similarity || 0,
-        search_text: searchResult?.search_text || '',
-      };
-    }).sort((a: any, b: any) => b.similarity - a.similarity);
-
-    // Limit to max_results
-    const finalVehicles = vehiclesWithScores.slice(0, max_results);
-
-    console.log('[RAG Search] Returning', finalVehicles.length, 'vehicles');
-
-    // If no exact match but we have year, add message about alternatives
-    const hasExactYearMatch = effectiveTargetYear && finalVehicles.some((v: any) => 
-      v.year_model === effectiveTargetYear || v.year_fabrication === effectiveTargetYear
+    // Use text-based search since Lovable AI doesn't support embeddings
+    return await smartTextSearch(
+      supabase, 
+      LOVABLE_API_KEY,
+      query, 
+      max_results, 
+      effectiveTargetYear, 
+      year_tolerance, 
+      effectiveMaxPrice,
+      price_tolerance_percent
     );
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      vehicles: finalVehicles,
-      query_info: {
-        original_query: query,
-        extracted_year: extractedYear,
-        extracted_max_price: extractedMaxPrice,
-        has_exact_year_match: hasExactYearMatch,
-        year_tolerance_applied: !hasExactYearMatch && effectiveTargetYear ? year_tolerance : 0,
-      }
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
 
   } catch (error) {
     console.error('[RAG Search] Error:', error);
@@ -171,59 +93,56 @@ serve(async (req) => {
   }
 });
 
-// Generate embedding using Lovable AI Gateway
-async function generateEmbedding(text: string, apiKey: string): Promise<number[] | null> {
-  try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: text,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[RAG Embedding] API error:', response.status, errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    return data.data?.[0]?.embedding || null;
-  } catch (error) {
-    console.error('[RAG Embedding] Error:', error);
-    return null;
-  }
-}
-
-// Fallback text search when vector search fails
-async function fallbackTextSearch(
+// Smart text search with keyword extraction and scoring
+async function smartTextSearch(
   supabase: any,
+  apiKey: string | undefined,
   query: string,
   maxResults: number,
   targetYear: number | null,
   yearTolerance: number,
-  maxPrice: number | null
+  maxPrice: number | null,
+  priceTolerance: number
 ): Promise<Response> {
-  console.log('[RAG Search] Using fallback text search');
+  console.log('[RAG Search] Using smart text search');
 
-  // Extract keywords from query
-  const keywords = query.toLowerCase()
-    .replace(/[^\w\s]/g, '')
-    .split(/\s+/)
-    .filter(k => k.length > 2 && !['que', 'para', 'com', 'sem', 'até', 'ate', 'mil'].includes(k));
+  // Get all search texts from vehicle_embeddings
+  const { data: embeddings, error: embError } = await supabase
+    .from('vehicle_embeddings')
+    .select('vehicle_id, search_text');
 
+  if (embError) {
+    console.error('[RAG Search] Error fetching embeddings:', embError);
+  }
+
+  // Build search text map
+  const searchTextMap = new Map<string, string>();
+  if (embeddings) {
+    for (const emb of embeddings) {
+      searchTextMap.set(emb.vehicle_id, emb.search_text || '');
+    }
+  }
+
+  // Build base query for vehicles
   let vehicleQuery = supabase
     .from('vehicles')
     .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, images, status')
-    .eq('status', 'disponivel')
-    .limit(50);
+    .eq('status', 'disponivel');
 
-  const { data: allVehicles, error } = await vehicleQuery;
+  // Apply year filter with tolerance if specified
+  if (targetYear) {
+    vehicleQuery = vehicleQuery
+      .gte('year_model', targetYear - yearTolerance)
+      .lte('year_model', targetYear + yearTolerance);
+  }
+
+  // Apply price filter with tolerance
+  if (maxPrice) {
+    const maxWithTolerance = maxPrice * (1 + priceTolerance / 100);
+    vehicleQuery = vehicleQuery.lte('sale_price', maxWithTolerance);
+  }
+
+  const { data: allVehicles, error } = await vehicleQuery.limit(100);
 
   if (error) {
     return new Response(JSON.stringify({ 
@@ -235,15 +154,34 @@ async function fallbackTextSearch(
     });
   }
 
+  // Extract keywords from query
+  const stopWords = ['que', 'para', 'com', 'sem', 'até', 'ate', 'mil', 'carro', 'veículo', 'veiculo', 'procuro', 'quero', 'busco', 'tem', 'tenho', 'interesse', 'um', 'uma'];
+  const keywords = query.toLowerCase()
+    .replace(/[^\w\sáéíóúàèìòùâêîôûãõç]/g, '')
+    .split(/\s+/)
+    .filter(k => k.length > 1 && !stopWords.includes(k));
+
+  console.log('[RAG Search] Keywords:', keywords);
+
   // Score vehicles based on keyword matches
   const scoredVehicles = (allVehicles || []).map((v: any) => {
-    const vehicleText = `${v.brand} ${v.model} ${v.version || ''} ${v.year_model || v.year_fabrication || ''}`.toLowerCase();
+    const searchText = searchTextMap.get(v.id) || `${v.brand} ${v.model} ${v.version || ''} ${v.year_model || v.year_fabrication || ''}`;
+    const vehicleText = searchText.toLowerCase();
     let score = 0;
+    let matchedKeywords: string[] = [];
 
-    // Keyword matching
+    // Keyword matching with weighted scoring
     for (const keyword of keywords) {
       if (vehicleText.includes(keyword)) {
-        score += 10;
+        // Brand/model matches are more important
+        if (v.brand?.toLowerCase().includes(keyword) || v.model?.toLowerCase().includes(keyword)) {
+          score += 25;
+        } else if (v.version?.toLowerCase().includes(keyword)) {
+          score += 15;
+        } else {
+          score += 10;
+        }
+        matchedKeywords.push(keyword);
       }
     }
 
@@ -252,27 +190,84 @@ async function fallbackTextSearch(
       const vehicleYear = v.year_model || v.year_fabrication;
       const yearDiff = Math.abs(vehicleYear - targetYear);
       if (yearDiff === 0) {
-        score += 20;
+        score += 30; // Exact match bonus
       } else if (yearDiff <= yearTolerance) {
-        score += 10 - yearDiff * 2;
+        score += 15 - yearDiff * 5;
       }
     }
 
-    // Price filter
-    if (maxPrice && v.sale_price && v.sale_price > maxPrice * 1.2) {
-      score = 0; // Exclude if way over budget
-    } else if (maxPrice && v.sale_price && v.sale_price <= maxPrice) {
-      score += 5; // Bonus for being within budget
+    // Price within budget bonus
+    if (maxPrice && v.sale_price) {
+      if (v.sale_price <= maxPrice) {
+        score += 20; // Within budget bonus
+      } else if (v.sale_price <= maxPrice * 1.1) {
+        score += 10; // Slightly over budget
+      }
     }
 
-    return { ...v, similarity: score / 30 }; // Normalize to 0-1 range
+    // Extract photo URL from search text
+    let photoUrl = null;
+    const photoMatch = searchText.match(/foto:(https?:\/\/[^\s]+)/);
+    if (photoMatch) {
+      photoUrl = photoMatch[1];
+    } else if (v.images && Array.isArray(v.images) && v.images.length > 0) {
+      photoUrl = v.images[0];
+    }
+
+    return { 
+      ...v, 
+      similarity: score / 100, // Normalize to 0-1 range
+      matched_keywords: matchedKeywords,
+      photo_url: photoUrl
+    };
   });
 
-  // Filter and sort
+  // Filter vehicles with at least some match and sort
   const results = scoredVehicles
     .filter((v: any) => v.similarity > 0)
     .sort((a: any, b: any) => b.similarity - a.similarity)
     .slice(0, maxResults);
+
+  // If no results with keywords, return top vehicles by other criteria
+  if (results.length === 0 && (targetYear || maxPrice)) {
+    console.log('[RAG Search] No keyword matches, returning top vehicles by filters');
+    const fallbackResults = scoredVehicles
+      .sort((a: any, b: any) => {
+        // Sort by year match if target year specified
+        if (targetYear) {
+          const yearDiffA = Math.abs((a.year_model || a.year_fabrication || 0) - targetYear);
+          const yearDiffB = Math.abs((b.year_model || b.year_fabrication || 0) - targetYear);
+          if (yearDiffA !== yearDiffB) return yearDiffA - yearDiffB;
+        }
+        // Then by price (lower first) if max price specified
+        if (maxPrice) {
+          return (a.sale_price || 0) - (b.sale_price || 0);
+        }
+        return 0;
+      })
+      .slice(0, maxResults)
+      .map((v: any) => ({
+        ...v,
+        similarity: 0.3, // Base similarity for filter-only matches
+        photo_url: v.images?.[0] || null
+      }));
+
+    return new Response(JSON.stringify({ 
+      success: true,
+      vehicles: fallbackResults,
+      query_info: {
+        original_query: query,
+        extracted_year: targetYear,
+        extracted_max_price: maxPrice,
+        has_exact_year_match: fallbackResults.some((v: any) => v.year_model === targetYear || v.year_fabrication === targetYear),
+        year_tolerance_applied: yearTolerance,
+        search_method: 'filter_fallback',
+        keywords_searched: keywords
+      }
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   return new Response(JSON.stringify({ 
     success: true,
@@ -282,8 +277,9 @@ async function fallbackTextSearch(
       extracted_year: targetYear,
       extracted_max_price: maxPrice,
       has_exact_year_match: results.some((v: any) => v.year_model === targetYear || v.year_fabrication === targetYear),
-      year_tolerance_applied: yearTolerance,
-      search_method: 'text_fallback'
+      year_tolerance_applied: !results.some((v: any) => v.year_model === targetYear) && targetYear ? yearTolerance : 0,
+      search_method: 'text_search',
+      keywords_searched: keywords
     }
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },

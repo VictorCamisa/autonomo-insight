@@ -17,11 +17,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
     const body = await req.json();
     const { vehicle_id, sync_all } = body;
 
@@ -33,7 +28,7 @@ serve(async (req) => {
       // Sync all available vehicles
       const { data: vehicles, error } = await supabase
         .from('vehicles')
-        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, status')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, status, images')
         .eq('status', 'disponivel');
 
       if (error) throw error;
@@ -43,7 +38,7 @@ serve(async (req) => {
       // Sync single vehicle
       const { data: vehicle, error } = await supabase
         .from('vehicles')
-        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, status')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, status, images')
         .eq('id', vehicle_id)
         .single();
 
@@ -70,21 +65,13 @@ serve(async (req) => {
         const searchText = buildSearchText(vehicle);
         console.log('[RAG Sync] Processing vehicle:', vehicle.id, '-', searchText.substring(0, 100));
 
-        // Generate embedding using Lovable AI Gateway
-        const embedding = await generateEmbedding(searchText, LOVABLE_API_KEY);
-
-        if (!embedding) {
-          console.error('[RAG Sync] Failed to generate embedding for vehicle:', vehicle.id);
-          errors++;
-          continue;
-        }
-
-        // Upsert embedding (insert or update)
+        // Store in vehicle_embeddings table WITHOUT vector embedding
+        // We'll use text-based search instead since Lovable AI doesn't support embeddings
         const { error: upsertError } = await supabase
           .from('vehicle_embeddings')
           .upsert({
             vehicle_id: vehicle.id,
-            embedding: embedding,
+            embedding: null, // No embedding since API doesn't support it
             search_text: searchText,
             updated_at: new Date().toISOString(),
           }, {
@@ -92,7 +79,7 @@ serve(async (req) => {
           });
 
         if (upsertError) {
-          console.error('[RAG Sync] Error upserting embedding:', upsertError);
+          console.error('[RAG Sync] Error upserting:', upsertError);
           errors++;
           continue;
         }
@@ -100,10 +87,6 @@ serve(async (req) => {
         processed++;
         console.log('[RAG Sync] Successfully processed vehicle:', vehicle.id);
 
-        // Rate limiting - wait 100ms between requests
-        if (vehiclesToProcess.length > 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
       } catch (vehicleError) {
         console.error('[RAG Sync] Error processing vehicle:', vehicle.id, vehicleError);
         errors++;
@@ -219,35 +202,10 @@ function buildSearchText(vehicle: any): string {
     }
   }
 
-  return parts.join(' ').trim();
-}
-
-// Generate embedding using Lovable AI Gateway (OpenAI compatible)
-async function generateEmbedding(text: string, apiKey: string): Promise<number[] | null> {
-  try {
-    // Use OpenAI's embedding endpoint via Lovable gateway
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: text,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Embedding] API error:', response.status, errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    return data.data?.[0]?.embedding || null;
-  } catch (error) {
-    console.error('[Embedding] Error:', error);
-    return null;
+  // Add first image URL for reference
+  if (vehicle.images && Array.isArray(vehicle.images) && vehicle.images.length > 0) {
+    parts.push(`foto:${vehicle.images[0]}`);
   }
+
+  return parts.join(' ').trim();
 }

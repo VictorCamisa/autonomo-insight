@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.process-follow-ups]
 verify_jwt = false
+
+[functions.sync-vehicle-embeddings]
+verify_jwt = false
+
+[functions.search-vehicles-rag]
+verify_jwt = false

@@ -575,18 +575,49 @@ async function processWithAIAgent(
     ? history.map((m: any) => ({ role: m.role, content: m.content })) 
     : [{ role: 'user', content: actualMessage }];
 
-  // ===== FETCH VEHICLES WITH PHOTOS =====
-  const { data: vehicles, error: vehiclesError } = await supabase
-    .from('vehicles')
-    .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
-    .eq('status', 'disponivel')
-    .limit(50);
+  // ===== RAG: SEARCH FOR RELEVANT VEHICLES =====
+  let relevantVehicles: any[] = [];
+  let ragQueryInfo: any = null;
+  
+  // Check if message mentions a vehicle (use RAG for semantic search)
+  const vehicleKeywords = ['carro', 'veículo', 'veiculo', 'modelo', 'marca', 'ano', 'preço', 'preco', 
+    'polo', 'gol', 'onix', 'civic', 'corolla', 'hb20', 'hilux', 'toro', 'compass', 'tracker', 'kicks',
+    'toyota', 'volkswagen', 'vw', 'chevrolet', 'gm', 'honda', 'hyundai', 'fiat', 'jeep', 'nissan', 'ford',
+    'sedan', 'hatch', 'suv', 'pickup', 'caminhonete', 'creta', 'tcross', 't-cross', 'ka', 'fiesta'];
+  
+  const messageHasVehicleIntent = vehicleKeywords.some(k => actualMessage.toLowerCase().includes(k));
+  
+  if (messageHasVehicleIntent) {
+    console.log('[RAG] Vehicle intent detected, calling RAG search...');
+    try {
+      // Call the RAG search edge function internally
+      const ragResponse = await searchVehiclesWithRAG(actualMessage);
+      if (ragResponse.vehicles && ragResponse.vehicles.length > 0) {
+        relevantVehicles = ragResponse.vehicles;
+        ragQueryInfo = ragResponse.query_info;
+        console.log('[RAG] Found', relevantVehicles.length, 'relevant vehicles');
+      }
+    } catch (ragError) {
+      console.error('[RAG] Search error:', ragError);
+    }
+  }
+  
+  // Fallback: If no RAG results, fetch all available vehicles (limited)
+  if (relevantVehicles.length === 0) {
+    const { data: vehicles, error: vehiclesError } = await supabase
+      .from('vehicles')
+      .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+      .eq('status', 'disponivel')
+      .limit(30);
 
-  if (vehiclesError) {
-    console.error('Error fetching vehicles:', vehiclesError);
+    if (vehiclesError) {
+      console.error('Error fetching vehicles:', vehiclesError);
+    } else {
+      relevantVehicles = vehicles || [];
+    }
   }
 
-  console.log('[AI Agent] Fetched', vehicles?.length || 0, 'vehicles with images');
+  console.log('[AI Agent] Using', relevantVehicles.length, 'vehicles for context');
 
   // Build system prompt with vehicles INCLUDING PHOTOS
   let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
@@ -615,6 +646,12 @@ O que você está buscando hoje?"
 
 ⚠️ MAS se o cliente já chegou falando de um carro específico (ex: "tem Polo?", "quanto tá o Civic?"), responda sobre o carro DIRETO, sem essa apresentação genérica!
 
+===== 🚗 REGRA DE ANO DO VEÍCULO (MUITO IMPORTANTE!) =====
+Se o cliente pedir um veículo de um ANO ESPECÍFICO (ex: "Civic 2007") e NÃO TIVERMOS EXATAMENTE esse ano:
+1. NUNCA diga apenas "não temos" - isso é ruim!
+2. SEMPRE sugira anos PRÓXIMOS que temos (±2 anos)
+3. Seja proativo: "Não temos o Civic 2007, mas temos o Civic 2008 e 2015! Quer dar uma olhada?"
+
 ===== REGRA CRÍTICA DE FOTOS =====
 ⚠️ ATENÇÃO MÁXIMA: NUNCA envie foto de um veículo diferente do que o cliente pediu!
 
@@ -634,21 +671,16 @@ Bonito né?"
 Exemplo CORRETO quando NÃO TEM foto:
 "O Ford Ka 2021 ainda não tem foto no sistema, mas posso te mostrar pessoalmente! Quer agendar uma visita? 📅"
 
-===== 🎯 QUALIFICAÇÃO DO CLIENTE (MUITO IMPORTANTE!) =====
-Seu objetivo é COLETAR informações para qualificar o cliente. Conduza a conversa naturalmente para descobrir:
+===== 🎯 QUALIFICAÇÃO RÁPIDA (Q2) =====
+Seu objetivo é coletar APENAS 2 informações essenciais:
+1. **Veículo de interesse** - Qual carro ele quer? (OBRIGATÓRIO para Q2)
+2. **Origem** - Como nos encontrou? (opcional, mas pergunte naturalmente)
 
-1. **Veículo de interesse** - Qual carro ele quer? (obrigatório)
-2. **Orçamento** - Quanto quer gastar? (opcional mas importante)
-3. **Valor da entrada** - Quanto pode dar de entrada? (opcional)
-4. **Parcela desejada** - Qual parcela cabe no bolso? (opcional)
-5. **Tem carro para troca?** - Sim ou não? Qual? (opcional)
-6. **Nome limpo?** - Precisa saber se tem restrição (obrigatório)
-7. **CPF** - Para consulta de crédito (obrigatório)
+🔑 SEJA RÁPIDA! Não faça muitas perguntas. Foque em ajudar o cliente a encontrar o carro.
 
-🔑 NÃO peça tudo de uma vez! Vá coletando aos poucos, de forma natural na conversa.
-
-📝 Quando o cliente CONFIRMAR uma informação, adicione a TAG correspondente NO FINAL da sua resposta:
+📝 Quando o cliente CONFIRMAR uma informação, adicione a TAG correspondente NO FINAL:
 - [DADO:veiculo_interesse=Polo 2020 TSI]
+- [DADO:origem=facebook]
 - [DADO:orcamento=50000]
 - [DADO:parcela=2000]
 - [DADO:entrada=10000]
@@ -659,44 +691,44 @@ Seu objetivo é COLETAR informações para qualificar o cliente. Conduza a conve
 
 ⚠️ IMPORTANTE:
 - Só adicione a tag quando o cliente CONFIRMAR a informação
-- Adicione apenas UMA tag por vez se possível
 - NÃO invente dados - só extraia o que o cliente disse
 - As tags serão removidas antes de enviar a mensagem
 
 Exemplo de conversa:
 Cliente: "Tô procurando um Polo até 70 mil"
 Sua resposta: "Temos ótimas opções de Polo nessa faixa! 🚗
-Você prefere à vista ou financiado?
+Quer ver as fotos?
 [DADO:veiculo_interesse=Polo]
 [DADO:orcamento=70000]"
-
-===== PERGUNTAS NATURAIS PARA QUALIFICAR =====
-- "E você tá pensando em dar entrada ou financiar tudo?"
-- "Tem algum carro pra gente avaliar na troca?"
-- "Só pra eu dar uma olhada nas melhores condições, seu nome tá limpo?"
-- "Me passa seu CPF que já consulto as condições pra você! 🔍"
 `;
 
-  if (vehicles?.length) {
-    systemPrompt += '\n\n=== ESTOQUE MATHEUS VEÍCULOS ===\n';
+  // Add RAG context if we found relevant vehicles
+  if (ragQueryInfo && ragQueryInfo.extracted_year && !ragQueryInfo.has_exact_year_match) {
+    systemPrompt += `\n\n⚠️ ATENÇÃO: O cliente pediu ano ${ragQueryInfo.extracted_year}, mas NÃO TEMOS exatamente esse ano. Os veículos abaixo são os mais SIMILARES. SEMPRE sugira essas alternativas!\n`;
+  }
+
+  if (relevantVehicles.length > 0) {
+    systemPrompt += '\n\n=== VEÍCULOS DISPONÍVEIS ===\n';
     
-    vehicles.forEach((v: any, i: number) => {
+    relevantVehicles.forEach((v: any) => {
       const preco = v.sale_price ? `R$ ${Number(v.sale_price).toLocaleString('pt-BR')}` : 'Consultar';
       const km = v.km ? `${Number(v.km).toLocaleString('pt-BR')} km` : 'N/A';
       const ano = v.year_model || v.year_fabrication || 'N/A';
       const versao = v.version ? ` ${v.version}` : '';
       const fotos = v.images && v.images.length > 0 ? v.images : [];
+      const similaridade = v.similarity ? ` (relevância: ${Math.round(v.similarity * 100)}%)` : '';
       
-      // Formato mais claro: mostra explicitamente se tem ou não tem foto
       systemPrompt += `• ${v.brand} ${v.model}${versao} ${ano} | ${preco} | ${km}`;
       if (fotos.length > 0) {
         systemPrompt += ` | foto: ${fotos[0]}`;
       } else {
-        systemPrompt += ` | ⚠️ SEM FOTO DISPONÍVEL`;
+        systemPrompt += ` | ⚠️ SEM FOTO`;
       }
-      systemPrompt += '\n';
+      systemPrompt += `${similaridade}\n`;
     });
     systemPrompt += '=== FIM ===\n';
+  } else {
+    systemPrompt += '\n\n⚠️ Nenhum veículo disponível no momento.\n';
   }
 
   // Call AI using OpenAI directly
@@ -1342,7 +1374,7 @@ async function detectLeadOrigin(
   return { source: defaultSource, meta_campaign_id: null, campaign_name: null };
 }
 
-// Create lead WITH vendor assigned immediately (via round-robin), but no notification yet
+// Create lead - Q0 stage (no salesperson assigned yet, happens at Q1)
 async function createLeadWithRoundRobin(
   supabase: any,
   phone: string,
@@ -1353,20 +1385,12 @@ async function createLeadWithRoundRobin(
     campaign_name: string | null;
   } = { source: 'whatsapp', meta_campaign_id: null, campaign_name: null }
 ): Promise<string | null> {
-  console.log('[Lead Creation] Creating lead with origin:', origin.source, 'campaign:', origin.campaign_name || 'none');
+  console.log('[Lead Creation Q0] Creating lead with origin:', origin.source, 'campaign:', origin.campaign_name || 'none');
 
-  // Get next salesperson from Round Robin IMMEDIATELY
-  const assignedTo = await getNextRoundRobinSalesperson(supabase);
+  // Q0: Lead created with name + phone - DO NOT assign salesperson yet
+  // Salesperson will be assigned at Q1 (when we confirm name + phone in conversation)
   
-  if (assignedTo) {
-    console.log('[Lead Creation] Pre-assigned salesperson via round-robin:', assignedTo);
-    // Increment round-robin counters right away
-    await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: assignedTo });
-  } else {
-    console.log('[Lead Creation] No salesperson available in round-robin');
-  }
-
-  // Create lead WITH assigned_to set immediately
+  // Create lead WITHOUT assigned_to - this will be set at Q1
   const { data: lead, error: leadError } = await supabase
     .from('leads')
     .insert({
@@ -1374,7 +1398,7 @@ async function createLeadWithRoundRobin(
       name,
       source: origin.source,
       status: 'novo',
-      assigned_to: assignedTo, // ASSIGN NOW, but don't notify until qualified
+      assigned_to: null, // NOT assigned until Q1
       qualification_status: 'nao_qualificado',
       meta_campaign_id: origin.meta_campaign_id,
     })
@@ -1386,46 +1410,38 @@ async function createLeadWithRoundRobin(
     return null;
   }
 
-  console.log('[Lead Creation] Lead created:', lead.id, 'source:', origin.source, 'assigned_to:', assignedTo);
+  console.log('[Lead Creation Q0] Lead created:', lead.id, 'source:', origin.source, '- awaiting Q1 for assignment');
 
-  // Create negotiation in "em_andamento" status WITH salesperson already set
+  // Create negotiation WITHOUT salesperson - will be updated at Q1
   const { error: negError } = await supabase.from('negotiations').insert({
     lead_id: lead.id,
-    salesperson_id: assignedTo, // Already assigned, but Gabi is still handling
+    salesperson_id: null, // Will be assigned at Q1
     status: 'em_andamento',
     notes: origin.meta_campaign_id 
-      ? `Negociação criada automaticamente via ${origin.source.toUpperCase()} - Campanha: ${origin.campaign_name} - Aguardando qualificação` 
-      : 'Negociação criada automaticamente via WhatsApp orgânico - Aguardando qualificação',
+      ? `Negociação criada via ${origin.source.toUpperCase()} - Campanha: ${origin.campaign_name} - Q0 (aguardando qualificação)` 
+      : 'Negociação criada via WhatsApp - Q0 (aguardando qualificação)',
   });
 
   if (negError) {
     console.error('Error creating negotiation:', negError);
   } else {
-    console.log('[Lead Creation] Negotiation created for lead:', lead.id, 'with salesperson:', assignedTo);
+    console.log('[Lead Creation Q0] Negotiation created for lead:', lead.id, '- no salesperson yet');
   }
 
-  // Create lead assignment record (but no notification)
-  if (assignedTo) {
-    await supabase.from('lead_assignments').insert({
-      lead_id: lead.id,
-      salesperson_id: assignedTo,
-      assignment_type: 'round_robin',
-      notes: 'Atribuído na criação do lead - aguardando qualificação pelo bot',
-    });
-    console.log('[Lead Creation] Lead assignment record created');
-  }
-
-  // Create qualification data tracker
+  // Create qualification data tracker at Q0 level
   const { error: qualError } = await supabase.from('lead_qualification_data').insert({
     lead_id: lead.id,
     message_count: 0,
     is_qualified: false,
+    qualification_level: 'q0', // Start at Q0
+    q1_reached_at: null,
+    q2_reached_at: null,
   });
 
   if (qualError) {
     console.error('Error creating qualification data:', qualError);
   } else {
-    console.log('[Lead Creation] Qualification tracker created for lead:', lead.id);
+    console.log('[Lead Creation Q0] Qualification tracker created at Q0 level');
   }
 
   // Log campaign attribution if from Meta Ads
@@ -1481,13 +1497,13 @@ async function checkAndProgressNegotiation(
   }
 }
 
-// Extract qualification data using AI analysis of the conversation
+// Extract qualification data and check for Q1/Q2 progression
 async function extractAndSaveQualificationData(
   supabase: any,
   leadId: string,
   aiResponse: string,
   conversationId?: string
-): Promise<{ isQualified: boolean; newlyQualified: boolean; salespersonName?: string }> {
+): Promise<{ isQualified: boolean; newlyQualified: boolean; salespersonName?: string; qualificationLevel: string }> {
   // First, try to extract from tags in the AI response (legacy method)
   const tagUpdates = extractDataFromTags(aiResponse);
   
@@ -1524,7 +1540,7 @@ async function extractAndSaveQualificationData(
     }
   }
 
-  // Check if lead is now qualified
+  // Check current qualification data
   const { data: qualData } = await supabase
     .from('lead_qualification_data')
     .select('*')
@@ -1532,46 +1548,162 @@ async function extractAndSaveQualificationData(
     .single();
 
   if (!qualData) {
-    return { isQualified: false, newlyQualified: false };
+    return { isQualified: false, newlyQualified: false, qualificationLevel: 'q0' };
   }
 
-  // Already qualified? Don't re-assign
-  if (qualData.is_qualified) {
-    return { isQualified: true, newlyQualified: false };
-  }
+  const currentLevel = qualData.qualification_level || 'q0';
 
-  // Required: vehicle_interest, clean_credit, cpf
-  // Optional (need at least 1): budget, desired_installment, down_payment
-  const hasVehicle = !!qualData.vehicle_interest;
-  const hasCredit = qualData.clean_credit !== null;
-  const hasCpf = !!qualData.cpf;
-  const hasFinancial = qualData.budget || qualData.desired_installment || qualData.down_payment;
-
-  const isNowQualified = hasVehicle && hasCredit && hasCpf && hasFinancial;
-
-  console.log('[Qualification] Status check - vehicle:', hasVehicle, 'credit:', hasCredit, 'cpf:', hasCpf, 'financial:', !!hasFinancial, '=> qualified:', isNowQualified);
-
-  if (isNowQualified) {
-    // Assign salesperson via round-robin
-    const salespersonInfo = await assignSalespersonOnQualification(supabase, leadId);
+  // ===== Q1 CHECK: Name + WhatsApp confirmed (we already have this from lead creation) =====
+  // Q1 is auto-achieved when first message is received (we have name from pushName and phone)
+  // At Q1, we assign a salesperson via round-robin
+  if (currentLevel === 'q0') {
+    console.log('[Q1 Check] Lead at Q0, checking for Q1 eligibility...');
     
-    // Mark as qualified
-    await supabase
-      .from('lead_qualification_data')
-      .update({
-        is_qualified: true,
-        qualified_at: new Date().toISOString(),
-      })
-      .eq('lead_id', leadId);
+    // We already have name and phone from the lead - automatically move to Q1
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('name, phone, assigned_to')
+      .eq('id', leadId)
+      .single();
 
-    return { 
-      isQualified: true, 
-      newlyQualified: true,
-      salespersonName: salespersonInfo?.name || undefined,
-    };
+    if (lead?.name && lead?.phone && !lead?.assigned_to) {
+      console.log('[Q1] Name + Phone confirmed, assigning salesperson via round-robin');
+      
+      // Assign salesperson via round-robin NOW
+      const assignedTo = await getNextRoundRobinSalesperson(supabase);
+      
+      if (assignedTo) {
+        // Increment round-robin counters
+        await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: assignedTo });
+        
+        // Update lead with assigned salesperson
+        await supabase
+          .from('leads')
+          .update({ assigned_to: assignedTo })
+          .eq('id', leadId);
+        
+        // Update negotiation with salesperson
+        await supabase
+          .from('negotiations')
+          .update({ salesperson_id: assignedTo })
+          .eq('lead_id', leadId);
+        
+        // Create lead assignment record
+        await supabase.from('lead_assignments').insert({
+          lead_id: leadId,
+          salesperson_id: assignedTo,
+          assignment_type: 'round_robin',
+          notes: 'Atribuído no Q1 - Nome e WhatsApp confirmados',
+        });
+        
+        console.log('[Q1] Salesperson assigned:', assignedTo);
+      }
+      
+      // Update qualification level to Q1
+      await supabase
+        .from('lead_qualification_data')
+        .update({
+          qualification_level: 'q1',
+          q1_reached_at: new Date().toISOString(),
+        })
+        .eq('lead_id', leadId);
+      
+      console.log('[Q1] Lead progressed to Q1');
+    }
   }
 
-  return { isQualified: false, newlyQualified: false };
+  // ===== Q2 CHECK: Q1 + Lead Source + Vehicle Interest =====
+  // Q2 requires: vehicle_interest (filled)
+  // lead_source_confirmed is optional but helps
+  const currentLevelAfterQ1 = currentLevel === 'q0' ? 'q1' : currentLevel;
+  
+  if (currentLevelAfterQ1 === 'q1') {
+    const hasVehicleInterest = !!(qualData.vehicle_interest || updates.vehicle_interest);
+    
+    console.log('[Q2 Check] Has vehicle interest:', hasVehicleInterest);
+    
+    if (hasVehicleInterest) {
+      console.log('[Q2] Vehicle interest confirmed, progressing to Q2');
+      
+      // Get assigned salesperson name for handoff message
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('assigned_to, name, phone, vehicle_interest')
+        .eq('id', leadId)
+        .single();
+      
+      let salespersonName: string | undefined;
+      
+      if (lead?.assigned_to) {
+        const { data: salesperson } = await supabase
+          .from('profiles')
+          .select('id, full_name, phone')
+          .eq('id', lead.assigned_to)
+          .single();
+        
+        salespersonName = salesperson?.full_name || undefined;
+        
+        // Get qualification data for notification
+        const updatedQualData = { ...qualData, ...updates };
+        
+        // Create notification for assigned salesperson
+        await supabase.from('notifications').insert({
+          user_id: lead.assigned_to,
+          type: 'lead_qualified',
+          title: '🔥 Lead Qualificado (Q2)!',
+          message: `${lead.name || 'Novo lead'} interessado em: ${updatedQualData.vehicle_interest || 'Veículo não especificado'}`,
+          link: '/crm',
+        });
+        
+        console.log('[Q2] Notification created for salesperson:', lead.assigned_to);
+        
+        // Send WhatsApp notification to salesperson
+        if (salesperson?.phone) {
+          await sendWhatsAppToSalesperson(supabase, salesperson.phone, lead, updatedQualData);
+        }
+      }
+      
+      // Update to Q2
+      await supabase
+        .from('lead_qualification_data')
+        .update({
+          qualification_level: 'q2',
+          q2_reached_at: new Date().toISOString(),
+          is_qualified: true,
+          qualified_at: new Date().toISOString(),
+        })
+        .eq('lead_id', leadId);
+      
+      // Update lead status
+      await supabase
+        .from('leads')
+        .update({ qualification_status: 'qualificado' })
+        .eq('id', leadId);
+      
+      // Update negotiation status
+      await supabase
+        .from('negotiations')
+        .update({
+          status: 'negociando',
+          notes: 'Lead qualificado (Q2) - transferido ao vendedor',
+        })
+        .eq('lead_id', leadId);
+      
+      return { 
+        isQualified: true, 
+        newlyQualified: true, 
+        qualificationLevel: 'q2',
+        salespersonName 
+      };
+    }
+  }
+
+  // Already at Q2
+  if (qualData.qualification_level === 'q2' || qualData.is_qualified) {
+    return { isQualified: true, newlyQualified: false, qualificationLevel: 'q2' };
+  }
+
+  return { isQualified: false, newlyQualified: false, qualificationLevel: currentLevelAfterQ1 };
 }
 
 // Extract data from [DADO:field=value] tags (legacy method)
@@ -1965,6 +2097,99 @@ ${qualData?.vehicle_interest || 'Não especificado'}
 }
 
 // Get vehicle suggestions from inventory based on client interest
+// Search vehicles using RAG (semantic search via pgvector)
+async function searchVehiclesWithRAG(query: string): Promise<{ vehicles: any[]; query_info: any }> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  
+  if (!LOVABLE_API_KEY) {
+    console.log('[RAG] No LOVABLE_API_KEY, skipping RAG search');
+    return { vehicles: [], query_info: null };
+  }
+  
+  try {
+    // Generate embedding for the query
+    const embeddingResponse = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: query,
+      }),
+    });
+
+    if (!embeddingResponse.ok) {
+      console.error('[RAG] Embedding error:', await embeddingResponse.text());
+      return { vehicles: [], query_info: null };
+    }
+
+    const embeddingData = await embeddingResponse.json();
+    const queryEmbedding = embeddingData.data?.[0]?.embedding;
+    
+    if (!queryEmbedding) {
+      return { vehicles: [], query_info: null };
+    }
+
+    // Extract year from query
+    const yearMatch = query.match(/\b(19|20)\d{2}\b/);
+    const extractedYear = yearMatch ? parseInt(yearMatch[0]) : null;
+
+    // Call Supabase RPC for vector search
+    const supabase = createClient(SUPABASE_URL ?? '', SUPABASE_SERVICE_ROLE_KEY ?? '');
+    
+    const { data: searchResults, error } = await supabase
+      .rpc('search_similar_vehicles', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.5,
+        match_count: 10,
+        year_tolerance: 2,
+        target_year: extractedYear
+      });
+
+    if (error) {
+      console.error('[RAG] Search error:', error);
+      return { vehicles: [], query_info: null };
+    }
+
+    if (!searchResults || searchResults.length === 0) {
+      return { vehicles: [], query_info: { extracted_year: extractedYear } };
+    }
+
+    // Get full vehicle details
+    const vehicleIds = searchResults.map((r: any) => r.vehicle_id);
+    const { data: vehicles } = await supabase
+      .from('vehicles')
+      .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, images')
+      .in('id', vehicleIds)
+      .eq('status', 'disponivel');
+
+    // Merge with similarity scores
+    const vehiclesWithScores = (vehicles || []).map((v: any) => {
+      const sr = searchResults.find((r: any) => r.vehicle_id === v.id);
+      return { ...v, similarity: sr?.similarity || 0 };
+    }).sort((a: any, b: any) => b.similarity - a.similarity).slice(0, 5);
+
+    const hasExactYearMatch = extractedYear && vehiclesWithScores.some((v: any) => 
+      v.year_model === extractedYear || v.year_fabrication === extractedYear
+    );
+
+    return {
+      vehicles: vehiclesWithScores,
+      query_info: {
+        extracted_year: extractedYear,
+        has_exact_year_match: hasExactYearMatch,
+      }
+    };
+  } catch (error) {
+    console.error('[RAG] Error:', error);
+    return { vehicles: [], query_info: null };
+  }
+}
+
 async function getVehicleSuggestions(
   supabase: any,
   vehicleInterest?: string,

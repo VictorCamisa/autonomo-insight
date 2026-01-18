@@ -4,6 +4,23 @@ import type { Vehicle, VehicleCost, VehicleDRE, VehicleStatus, VehicleCostType }
 import { toast } from 'sonner';
 import { syncVehiclePurchase, syncVehicleCost } from './useFinancialSync';
 
+// Sync vehicle to RAG embeddings
+async function syncVehicleToRAG(vehicleId: string) {
+  try {
+    console.log('[RAG Sync] Syncing vehicle to RAG:', vehicleId);
+    const { error } = await supabase.functions.invoke('sync-vehicle-embeddings', {
+      body: { vehicle_id: vehicleId }
+    });
+    if (error) {
+      console.error('[RAG Sync] Error:', error);
+    } else {
+      console.log('[RAG Sync] Vehicle synced successfully');
+    }
+  } catch (err) {
+    console.error('[RAG Sync] Failed to sync vehicle:', err);
+  }
+}
+
 // Shared query options for better caching
 const vehicleQueryOptions = {
   staleTime: 1000 * 60 * 5, // 5 minutes
@@ -221,6 +238,11 @@ export function useCreateVehicle() {
         });
       }
       
+      // Sync to RAG for AI search
+      if (data) {
+        syncVehicleToRAG(data.id);
+      }
+      
       return data;
     },
     onSuccess: () => {
@@ -251,6 +273,12 @@ export function useUpdateVehicle() {
         .single();
 
       if (error) throw error;
+      
+      // Sync to RAG for AI search
+      if (data) {
+        syncVehicleToRAG(data.id);
+      }
+      
       return data;
     },
     onSuccess: () => {

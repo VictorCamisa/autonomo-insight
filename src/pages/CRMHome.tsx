@@ -115,12 +115,14 @@ export default function CRMHome() {
   const handleUpdateNegotiation = async (data: Record<string, unknown>) => {
     if (!selectedNegotiation) return;
     const vehicleId = data.vehicle_id as string | undefined;
+    const salespersonId = data.salesperson_id as string | undefined;
     const expectedCloseDate = data.expected_close_date as string | undefined;
     const appointmentDate = data.appointment_date as string | undefined;
     const appointmentTime = data.appointment_time as string | undefined;
     
     await updateNegotiation.mutateAsync({
       id: selectedNegotiation.id,
+      salesperson_id: salespersonId && salespersonId !== '' ? salespersonId : null,
       vehicle_id: vehicleId && vehicleId !== '' ? vehicleId : null,
       status: data.status as 'em_andamento' | 'proposta_enviada' | 'negociando' | 'ganho' | 'perdido' | 'pausado',
       estimated_value: data.estimated_value ? Number(data.estimated_value) : null,

@@ -115,15 +115,24 @@ export default function CRMHome() {
   const handleUpdateNegotiation = async (data: Record<string, unknown>) => {
     if (!selectedNegotiation) return;
     const vehicleId = data.vehicle_id as string | undefined;
+    const expectedCloseDate = data.expected_close_date as string | undefined;
+    const appointmentDate = data.appointment_date as string | undefined;
+    const appointmentTime = data.appointment_time as string | undefined;
+    
     await updateNegotiation.mutateAsync({
       id: selectedNegotiation.id,
       vehicle_id: vehicleId && vehicleId !== '' ? vehicleId : null,
       status: data.status as 'em_andamento' | 'proposta_enviada' | 'negociando' | 'ganho' | 'perdido' | 'pausado',
       estimated_value: data.estimated_value ? Number(data.estimated_value) : null,
       probability: data.probability ? Number(data.probability) : null,
-      expected_close_date: data.expected_close_date as string | undefined,
-      loss_reason: data.loss_reason as string | undefined,
-      notes: data.notes as string | undefined,
+      expected_close_date: expectedCloseDate && expectedCloseDate !== '' ? expectedCloseDate : null,
+      appointment_date: appointmentDate && appointmentDate !== '' ? appointmentDate : null,
+      appointment_time: appointmentTime && appointmentTime !== '' ? appointmentTime : null,
+      showed_up: data.showed_up as boolean | undefined,
+      loss_reason: data.loss_reason as string | undefined || null,
+      structured_loss_reason: data.structured_loss_reason as 'sem_entrada' | 'sem_credito' | 'curioso' | 'caro' | 'comprou_outro' | 'desistiu' | 'sem_contato' | 'veiculo_vendido' | 'outros' | undefined,
+      notes: data.notes as string | undefined || null,
+      objections: data.objections as string[] | undefined,
     });
     setEditNegotiationOpen(false);
     setSelectedNegotiation(null);

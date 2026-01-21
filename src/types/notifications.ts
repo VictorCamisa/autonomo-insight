@@ -3,7 +3,8 @@ export type NotificationType =
   | 'follow_up_due' 
   | 'approval_pending' 
   | 'goal_alert' 
-  | 'whatsapp_message';
+  | 'whatsapp_message'
+  | 'trade_in_pending';
 
 export interface Notification {
   id: string;
@@ -14,6 +15,7 @@ export interface Notification {
   link?: string;
   read: boolean;
   created_at: string;
+  metadata?: Record<string, unknown>;
 }
 
 export const notificationTypeIcons: Record<NotificationType, string> = {
@@ -22,6 +24,7 @@ export const notificationTypeIcons: Record<NotificationType, string> = {
   approval_pending: '✅',
   goal_alert: '🎯',
   whatsapp_message: '💬',
+  trade_in_pending: '🚗',
 };
 
 export const notificationTypeColors: Record<NotificationType, string> = {
@@ -30,4 +33,5 @@ export const notificationTypeColors: Record<NotificationType, string> = {
   approval_pending: 'bg-green-500',
   goal_alert: 'bg-purple-500',
   whatsapp_message: 'bg-emerald-500',
+  trade_in_pending: 'bg-cyan-500',
 };

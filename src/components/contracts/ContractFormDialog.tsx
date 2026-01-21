@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -17,12 +16,16 @@ import { useContracts, ContractFormData } from '@/hooks/useContracts';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useVehicles } from '@/hooks/useVehicles';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FileText, User, Car, CreditCard } from 'lucide-react';
+import { FileText, User, Car, CreditCard, RefreshCw, HandCoins } from 'lucide-react';
 
 interface ContractFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
 
 export function ContractFormDialog({ open, onOpenChange }: ContractFormDialogProps) {
   const { createContract } = useContracts();
@@ -42,6 +45,49 @@ export function ContractFormDialog({ open, onOpenChange }: ContractFormDialogPro
   const [hasInstallments, setHasInstallments] = useState(false);
 
   const availableVehicles = vehicles.filter(v => v.status === 'disponivel');
+
+  // Gera o texto de negociação automaticamente baseado nos dados de pagamento
+  const generateNegotiationText = useCallback(() => {
+    const lines: string[] = [];
+    const vehicleValue = formData.vehicle_value || 0;
+    
+    lines.push(`Vendido pelo valor total de ${formatCurrency(vehicleValue)}`);
+    lines.push('');
+    lines.push('Forma de pagamento:');
+
+    // Entrada
+    if (formData.down_payment && formData.down_payment > 0) {
+      lines.push(`• Entrada: ${formatCurrency(formData.down_payment)}`);
+    }
+
+    // Veículo de troca
+    if (hasTradeIn && formData.trade_in_brand) {
+      const tradeInDesc = `${formData.trade_in_brand} ${formData.trade_in_model || ''} ${formData.trade_in_year || ''}`.trim();
+      lines.push(`• Veículo como entrada: ${tradeInDesc} - ${formatCurrency(formData.trade_in_value || 0)}`);
+    }
+
+    // Financiamento/Parcelamento
+    if (hasInstallments && formData.installments_count && formData.installments_count > 0) {
+      lines.push(`• Parcelamento: ${formData.installments_count}x de ${formatCurrency(formData.installment_value || 0)} (dia ${formData.installment_due_day || '___'})`);
+    }
+
+    // Calcular restante
+    const totalPaid = (formData.down_payment || 0) + (formData.trade_in_value || 0);
+    const installmentsTotal = (formData.installments_count || 0) * (formData.installment_value || 0);
+    const remaining = vehicleValue - totalPaid - installmentsTotal;
+    
+    if (remaining > 0 && !hasInstallments) {
+      lines.push(`• Restante: ${formatCurrency(remaining)} (financiamento/à vista)`);
+    }
+
+    return lines.join('\n');
+  }, [formData.vehicle_value, formData.down_payment, formData.trade_in_brand, formData.trade_in_model, formData.trade_in_year, formData.trade_in_value, formData.installments_count, formData.installment_value, formData.installment_due_day, hasTradeIn, hasInstallments]);
+
+  // Atualiza o texto de negociação quando os valores mudam
+  const handleRefreshNegotiation = () => {
+    const newText = generateNegotiationText();
+    setFormData(prev => ({ ...prev, negotiation_details: newText }));
+  };
 
   const handleCustomerSelect = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
@@ -84,7 +130,15 @@ export function ContractFormDialog({ open, onOpenChange }: ContractFormDialogPro
       return;
     }
 
-    await createContract.mutateAsync(formData);
+    // Combina notes com negotiation_details
+    const finalNotes = formData.contract_type === 'venda' 
+      ? `NEGOCIAÇÃO:\n${formData.negotiation_details || generateNegotiationText()}\n\n${formData.notes || ''}`.trim()
+      : formData.notes;
+
+    await createContract.mutateAsync({
+      ...formData,
+      notes: finalNotes,
+    });
     onOpenChange(false);
     resetForm();
   };
@@ -527,13 +581,48 @@ export function ContractFormDialog({ open, onOpenChange }: ContractFormDialogPro
               </>
             )}
 
+            {/* Negotiation Details - Only for Sales */}
+            {formData.contract_type === 'venda' && (
+              <>
+                <Separator />
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <HandCoins className="h-4 w-4" />
+                      Negociação (aparece no contrato)
+                    </h3>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleRefreshNegotiation}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Gerar Automaticamente
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={formData.negotiation_details || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, negotiation_details: e.target.value }))}
+                    placeholder="Clique em 'Gerar Automaticamente' para preencher baseado nos dados acima, ou escreva manualmente..."
+                    rows={6}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Este texto será incluído na seção de negociação do contrato. Você pode editar livremente.
+                  </p>
+                </div>
+              </>
+            )}
+
             {/* Notes */}
             <div className="space-y-2">
-              <Label>Observações</Label>
+              <Label>Observações Internas</Label>
               <Textarea
                 value={formData.notes || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Observações adicionais..."
+                placeholder="Observações adicionais (uso interno)..."
                 rows={3}
               />
             </div>

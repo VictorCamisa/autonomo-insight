@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +9,6 @@ import {
   Search, 
   Plus, 
   Download, 
-  Eye,
   Calendar,
   User,
   Car,
@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useContracts } from '@/hooks/useContracts';
 import { ContractFormDialog } from './ContractFormDialog';
+import { TradeInVehicleDialog } from './TradeInVehicleDialog';
 import { downloadContractPDF } from '@/lib/contractPdf';
 
 const statusConfig = {
@@ -34,9 +35,25 @@ const formatCurrency = (value: number) => {
 };
 
 export function ContractsListPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showTradeInDialog, setShowTradeInDialog] = useState(false);
   const { contracts, stats, isLoading } = useContracts();
+
+  // Handle trade_in query param from notification
+  const tradeInContractId = searchParams.get('trade_in');
+  const tradeInContract = tradeInContractId 
+    ? contracts.find(c => c.id === tradeInContractId) 
+    : null;
+
+  useEffect(() => {
+    if (tradeInContract) {
+      setShowTradeInDialog(true);
+      // Clear the query param after opening
+      setSearchParams({});
+    }
+  }, [tradeInContract, setSearchParams]);
 
   const filteredContracts = contracts.filter(contract =>
     contract.contract_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -180,6 +197,11 @@ export function ContractsListPage() {
       )}
 
       <ContractFormDialog open={showForm} onOpenChange={setShowForm} />
+      <TradeInVehicleDialog 
+        open={showTradeInDialog} 
+        onOpenChange={setShowTradeInDialog} 
+        contract={tradeInContract || null}
+      />
     </div>
   );
 }

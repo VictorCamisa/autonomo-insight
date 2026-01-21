@@ -11,13 +11,13 @@ import {
   User,
   Car,
   CreditCard,
-  Loader2
+  Edit
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useContracts } from '@/hooks/useContracts';
 import { useCustomerDetails } from '@/hooks/useCustomers';
 import { useVehicle } from '@/hooks/useVehicles';
-import { toast } from 'sonner';
+import { ContractFormDialog } from '@/components/contracts/ContractFormDialog';
+import { ContractFormData } from '@/hooks/useContracts';
 
 interface ContractReadinessCardProps {
   sale: {
@@ -41,11 +41,10 @@ interface FieldCheck {
 
 export function ContractReadinessCard({ sale }: ContractReadinessCardProps) {
   const navigate = useNavigate();
-  const { createContract } = useContracts();
   const { data: customer } = useCustomerDetails(sale.customer_id);
   const { data: vehicle } = useVehicle(sale.vehicle_id);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
 
   // Define all fields needed for a complete contract
   const fieldChecks: FieldCheck[] = [
@@ -76,7 +75,6 @@ export function ContractReadinessCard({ sale }: ContractReadinessCardProps) {
   const missingOptional = fieldChecks.filter(f => !f.required && (!f.value || f.value.trim() === ''));
 
   const completionPercent = Math.round((presentFields.length / fieldChecks.length) * 100);
-  const canGenerateContract = missingRequired.length === 0;
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -87,162 +85,146 @@ export function ContractReadinessCard({ sale }: ContractReadinessCardProps) {
     }
   };
 
-  const handleGenerateContract = async () => {
-    if (!customer || !vehicle) {
-      toast.error('Dados incompletos para gerar contrato');
-      return;
-    }
-
-    setIsCreating(true);
-    try {
-      await createContract.mutateAsync({
-        contract_type: 'venda',
-        customer_id: customer.id,
-        customer_name: customer.name,
-        customer_cpf: customer.cpf_cnpj || undefined,
-        customer_rg: customer.rg || undefined,
-        customer_phone: customer.phone || undefined,
-        customer_email: customer.email || undefined,
-        customer_address: customer.address || undefined,
-        customer_city: customer.city || undefined,
-        customer_state: customer.state || undefined,
-        vehicle_id: vehicle.id,
-        vehicle_brand: vehicle.brand,
-        vehicle_model: vehicle.model,
-        vehicle_year: `${vehicle.year_fabrication}/${vehicle.year_model}`,
-        vehicle_plate: vehicle.plate || undefined,
-        vehicle_color: vehicle.color || undefined,
-        vehicle_renavam: vehicle.renavam || undefined,
-        vehicle_odometer: vehicle.km || undefined,
-        vehicle_value: sale.sale_price,
-        negotiation_details: sale.payment_details || undefined,
-        notes: sale.notes || undefined,
-      });
-
-      toast.success('Contrato gerado com sucesso!');
-      navigate('/vendas/contratos');
-    } catch (error) {
-      console.error('Error creating contract:', error);
-      toast.error('Erro ao gerar contrato');
-    } finally {
-      setIsCreating(false);
-    }
+  // Prepara os dados iniciais para o formulário de contrato
+  const getInitialContractData = (): Partial<ContractFormData> => {
+    return {
+      contract_type: 'venda',
+      customer_id: customer?.id,
+      customer_name: customer?.name || '',
+      customer_cpf: customer?.cpf_cnpj || '',
+      customer_rg: customer?.rg || '',
+      customer_phone: customer?.phone || '',
+      customer_email: customer?.email || '',
+      customer_address: customer?.address || '',
+      customer_city: customer?.city || '',
+      customer_state: customer?.state || '',
+      vehicle_id: vehicle?.id,
+      vehicle_brand: vehicle?.brand || '',
+      vehicle_model: vehicle?.model || '',
+      vehicle_year: vehicle ? `${vehicle.year_fabrication}/${vehicle.year_model}` : '',
+      vehicle_plate: vehicle?.plate || '',
+      vehicle_color: vehicle?.color || '',
+      vehicle_renavam: vehicle?.renavam || '',
+      vehicle_odometer: vehicle?.km || 0,
+      vehicle_value: sale.sale_price,
+      negotiation_details: sale.payment_details || '',
+      notes: sale.notes || '',
+    };
   };
 
   return (
-    <Card className="border-dashed">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${canGenerateContract ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}>
-              <FileText className={`h-5 w-5 ${canGenerateContract ? 'text-emerald-500' : 'text-amber-500'}`} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-sm">Contrato de Venda</span>
-                <Badge variant="outline" className={canGenerateContract ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'}>
-                  {completionPercent}% completo
-                </Badge>
+    <>
+      <Card className="border-dashed">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${missingRequired.length === 0 ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}>
+                <FileText className={`h-5 w-5 ${missingRequired.length === 0 ? 'text-emerald-500' : 'text-amber-500'}`} />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {missingRequired.length === 0 
-                  ? 'Todos os dados obrigatórios estão preenchidos' 
-                  : `${missingRequired.length} campo(s) obrigatório(s) faltando`}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
-            <Button
-              size="sm"
-              disabled={!canGenerateContract || isCreating}
-              onClick={handleGenerateContract}
-              className={canGenerateContract ? 'bg-primary' : ''}
-            >
-              {isCreating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Gerar Contrato
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {isExpanded && (
-          <div className="mt-4 pt-4 border-t space-y-4">
-            {/* Missing Required Fields */}
-            {missingRequired.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-destructive flex items-center gap-2 mb-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Campos Obrigatórios Faltando ({missingRequired.length})
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {missingRequired.map(field => (
-                    <Badge key={field.field} variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
-                      {getCategoryIcon(field.category)}
-                      <span className="ml-1">{field.label}</span>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Present Fields */}
-            <div>
-              <h4 className="text-sm font-medium text-emerald-600 flex items-center gap-2 mb-2">
-                <CheckCircle2 className="h-4 w-4" />
-                Campos Preenchidos ({presentFields.length})
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {presentFields.map(field => (
-                  <Badge key={field.field} variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                    {getCategoryIcon(field.category)}
-                    <span className="ml-1">{field.label}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">Contrato de Venda</span>
+                  <Badge variant="outline" className={missingRequired.length === 0 ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'}>
+                    {completionPercent}% completo
                   </Badge>
-                ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {missingRequired.length === 0 
+                    ? 'Todos os dados obrigatórios estão preenchidos' 
+                    : `${missingRequired.length} campo(s) obrigatório(s) faltando`}
+                </p>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(!isExpanded)}
+              >
+                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setIsContractDialogOpen(true)}
+                className="bg-primary"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Gerar Contrato
+              </Button>
+            </div>
+          </div>
 
-            {/* Missing Optional Fields */}
-            {missingOptional.length > 0 && (
+          {isExpanded && (
+            <div className="mt-4 pt-4 border-t space-y-4">
+              {/* Missing Required Fields */}
+              {missingRequired.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-destructive flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Campos Obrigatórios Faltando ({missingRequired.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {missingRequired.map(field => (
+                      <Badge key={field.field} variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                        {getCategoryIcon(field.category)}
+                        <span className="ml-1">{field.label}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Present Fields */}
               <div>
-                <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2 mb-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Campos Opcionais Faltando ({missingOptional.length})
+                <h4 className="text-sm font-medium text-emerald-600 flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Campos Preenchidos ({presentFields.length})
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {missingOptional.map(field => (
-                    <Badge key={field.field} variant="outline" className="bg-muted text-muted-foreground">
+                  {presentFields.map(field => (
+                    <Badge key={field.field} variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
                       {getCategoryIcon(field.category)}
                       <span className="ml-1">{field.label}</span>
                     </Badge>
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Action hint */}
-            {missingRequired.length > 0 && (
-              <p className="text-xs text-muted-foreground pt-2 border-t">
-                💡 Complete os dados do cliente em <Button variant="link" className="p-0 h-auto text-xs" onClick={() => navigate(`/clientes/${sale.customer_id}`)}>Clientes</Button> ou do veículo em <Button variant="link" className="p-0 h-auto text-xs" onClick={() => navigate(`/estoque/${sale.vehicle_id}`)}>Estoque</Button>
-              </p>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              {/* Missing Optional Fields */}
+              {missingOptional.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Campos Opcionais Faltando ({missingOptional.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {missingOptional.map(field => (
+                      <Badge key={field.field} variant="outline" className="bg-muted text-muted-foreground">
+                        {getCategoryIcon(field.category)}
+                        <span className="ml-1">{field.label}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action hint */}
+              {missingRequired.length > 0 && (
+                <p className="text-xs text-muted-foreground pt-2 border-t">
+                  💡 Complete os dados faltantes diretamente no formulário do contrato ou em <Button variant="link" className="p-0 h-auto text-xs" onClick={() => navigate(`/clientes/${sale.customer_id}`)}>Clientes</Button> / <Button variant="link" className="p-0 h-auto text-xs" onClick={() => navigate(`/estoque/${sale.vehicle_id}`)}>Estoque</Button>
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Contract Form Dialog */}
+      <ContractFormDialog
+        open={isContractDialogOpen}
+        onOpenChange={setIsContractDialogOpen}
+        initialData={getInitialContractData()}
+      />
+    </>
   );
 }

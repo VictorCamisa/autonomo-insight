@@ -628,7 +628,23 @@ async function processWithAIAgent(
     .eq('is_active', true)
     .order('category', { ascending: true });
 
+  // Fetch current qualification level settings
+  const { data: currentLevelSetting } = await supabase
+    .from('qualification_settings')
+    .select('required_fields')
+    .eq('level', 'CURRENT')
+    .single();
+  
+  const currentQualLevel = currentLevelSetting?.required_fields?.[0] || 'Q2';
+  
+  const { data: qualLevelConfig } = await supabase
+    .from('qualification_settings')
+    .select('*')
+    .eq('level', currentQualLevel)
+    .single();
+
   console.log('[AI Agent] Loaded', knowledgeEntries?.length || 0, 'knowledge base entries');
+  console.log('[AI Agent] Current qualification level:', currentQualLevel);
 
   // Build system prompt dynamically from database configuration
   let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
@@ -733,21 +749,60 @@ Exemplo CORRETO quando NÃO TEM foto:
 `;
   }
 
-  // Add data collection tags if enabled
-  if (specialInstructions.collect_data_tags !== false) {
+  // Add data collection tags based on current qualification level
+  if (specialInstructions.collect_data_tags !== false && qualLevelConfig) {
+    const requiredFields = qualLevelConfig.required_fields || [];
+    const optionalFields = qualLevelConfig.optional_fields || [];
+    
+    // Field labels for prompt
+    const fieldLabels: Record<string, string> = {
+      nome: 'Nome do cliente',
+      telefone: 'Telefone',
+      veiculo_interesse: 'Veículo de interesse',
+      origem: 'Origem (como nos encontrou)',
+      forma_pagamento: 'Forma de pagamento',
+      orcamento: 'Orçamento disponível',
+      entrada: 'Valor da entrada',
+      parcela: 'Parcela desejada',
+      veiculo_troca: 'Veículo na troca',
+      tem_troca: 'Se tem carro para troca',
+      cpf: 'CPF',
+      nome_limpo: 'Nome limpo (SPC/Serasa)',
+      profissao: 'Profissão',
+      renda: 'Renda',
+    };
+    
     systemPrompt += `
 
-===== 🎯 QUALIFICAÇÃO =====
-Quando o cliente CONFIRMAR uma informação, adicione a TAG correspondente NO FINAL:
+===== 🎯 QUALIFICAÇÃO ${currentQualLevel} =====
+Seu objetivo é coletar as seguintes informações de forma NATURAL na conversa:
+
+📌 OBRIGATÓRIOS:
+${requiredFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
+`;
+
+    if (optionalFields.length > 0) {
+      systemPrompt += `
+⭐ BÔNUS (se conseguir):
+${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
+`;
+    }
+
+    systemPrompt += `
+📝 Quando o cliente CONFIRMAR uma informação, adicione a TAG correspondente NO FINAL:
 - [DADO:veiculo_interesse=Polo 2020 TSI]
 - [DADO:origem=facebook]
 - [DADO:orcamento=50000]
+- [DADO:forma_pagamento=financiamento]
 - [DADO:parcela=2000]
 - [DADO:entrada=10000]
 - [DADO:tem_troca=sim]
 - [DADO:veiculo_troca=Gol 2018]
+- [DADO:nome_limpo=sim]
+- [DADO:cpf=12345678900]
 
 ⚠️ Só adicione a tag quando o cliente CONFIRMAR a informação
+🔑 Seja RÁPIDA! Não faça muitas perguntas de uma vez.
 `;
   }
 
@@ -1588,20 +1643,60 @@ async function extractAndSaveQualificationData(
   if (Object.keys(updates).length > 0) {
     console.log('[Qualification] Extracted data:', updates);
     
-    // Update lead_qualification_data
+    // Update lead_qualification_data (legacy table)
     await supabase
       .from('lead_qualification_data')
       .update(updates)
       .eq('lead_id', leadId);
     
-    // Also update vehicle_interest in leads table for visibility in CRM
+    // ===== NEW: Also update leads.qualification_data JSONB for the new Q1/Q2/Q3 system =====
+    // Get existing qualification_data from leads table
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select('qualification_data, vehicle_interest')
+      .eq('id', leadId)
+      .single();
+    
+    const existingQualData = (existingLead?.qualification_data as Record<string, any>) || {};
+    
+    // Map the updates to the new qualification_data format
+    const newQualData: Record<string, any> = { ...existingQualData };
+    
+    if (updates.vehicle_interest) newQualData.veiculo_interesse = updates.vehicle_interest;
+    if (updates.budget) newQualData.orcamento = updates.budget;
+    if (updates.down_payment) newQualData.entrada = updates.down_payment;
+    if (updates.desired_installment) newQualData.parcela = updates.desired_installment;
+    if (updates.has_trade_in !== undefined) newQualData.tem_troca = updates.has_trade_in;
+    if (updates.trade_in_vehicle) newQualData.veiculo_troca = updates.trade_in_vehicle;
+    if (updates.clean_credit !== undefined) newQualData.nome_limpo = updates.clean_credit;
+    if (updates.lead_source_confirmed) newQualData.origem = updates.lead_source_confirmed;
+    if (updates.payment_method) newQualData.forma_pagamento = updates.payment_method;
+    if (updates.cpf) newQualData.cpf = updates.cpf;
+    
+    // Calculate score based on filled fields
+    const filledFields = Object.keys(newQualData).filter(k => 
+      newQualData[k] !== undefined && newQualData[k] !== null && newQualData[k] !== ''
+    );
+    const score = Math.min(100, filledFields.length * 15);
+    const status = score >= 80 ? 'complete' : score > 0 ? 'partial' : 'pending';
+    
+    // Update leads table with new qualification data
+    const leadsUpdate: Record<string, any> = {
+      qualification_data: newQualData,
+      qualification_score: score,
+    };
+    
+    // Also update vehicle_interest for visibility in CRM
     if (updates.vehicle_interest) {
-      console.log('[Qualification] Updating vehicle_interest in leads table:', updates.vehicle_interest);
-      await supabase
-        .from('leads')
-        .update({ vehicle_interest: updates.vehicle_interest })
-        .eq('id', leadId);
+      leadsUpdate.vehicle_interest = updates.vehicle_interest;
     }
+    
+    console.log('[Qualification] Updating leads.qualification_data:', newQualData, 'score:', score);
+    
+    await supabase
+      .from('leads')
+      .update(leadsUpdate)
+      .eq('id', leadId);
   }
 
   // Check current qualification data

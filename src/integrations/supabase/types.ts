@@ -2014,7 +2014,10 @@ export type Database = {
           name: string
           notes: string | null
           phone: string
+          qualification_data: Json | null
+          qualification_level: string | null
           qualification_reason: string | null
+          qualification_score: number | null
           qualification_status:
             | Database["public"]["Enums"]["qualification_status"]
             | null
@@ -2041,7 +2044,10 @@ export type Database = {
           name: string
           notes?: string | null
           phone: string
+          qualification_data?: Json | null
+          qualification_level?: string | null
           qualification_reason?: string | null
+          qualification_score?: number | null
           qualification_status?:
             | Database["public"]["Enums"]["qualification_status"]
             | null
@@ -2068,7 +2074,10 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string
+          qualification_data?: Json | null
+          qualification_level?: string | null
           qualification_reason?: string | null
+          qualification_score?: number | null
           qualification_status?:
             | Database["public"]["Enums"]["qualification_status"]
             | null
@@ -2827,6 +2836,45 @@ export type Database = {
           is_active?: boolean
           is_master?: boolean
           phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      qualification_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          level: string
+          name: string
+          optional_fields: Json
+          points_config: Json
+          required_fields: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          level: string
+          name: string
+          optional_fields?: Json
+          points_config?: Json
+          required_fields?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          level?: string
+          name?: string
+          optional_fields?: Json
+          points_config?: Json
+          required_fields?: Json
           updated_at?: string
         }
         Relationships: []

@@ -12,6 +12,7 @@ import { LeadDetailSheet } from '@/components/crm/LeadDetailSheet';
 import { NegotiationPipeline } from '@/components/crm/NegotiationPipeline';
 import { NegotiationForm } from '@/components/crm/NegotiationForm';
 import { CustomerDetailSheet } from '@/components/crm/CustomerDetailSheet';
+import { QualificationLevelSelector } from '@/components/crm/QualificationLevelSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Lead, LeadStatus, LeadSource } from '@/types/crm';
 import type { Negotiation } from '@/types/negotiations';
@@ -163,15 +164,18 @@ export default function CRMHome() {
 
   return (
     <div className="space-y-4">
-      {/* Search Bar */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por lead, veículo ou vendedor..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-        />
+      {/* Header with Search and Qualification Level */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por lead, veículo ou vendedor..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <QualificationLevelSelector />
       </div>
 
       {/* Pipeline */}

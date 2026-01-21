@@ -27,6 +27,9 @@ export interface Lead {
   // Qualification
   qualification_status: QualificationStatus | null;
   qualification_reason: string | null;
+  qualification_level: string | null;
+  qualification_data: Record<string, unknown> | null;
+  qualification_score: number | null;
   first_response_at: string | null;
   // Joined data
   assigned_profile?: {

@@ -145,17 +145,30 @@ export function ImportTransactionsDialog({ open, onOpenChange }: ImportTransacti
                     <div className="p-3 space-y-2">
                       {preview.preview.map((item: any, i: number) => (
                         <div key={i} className="p-2 bg-muted/50 rounded text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">#{item.vehicle_number || 'N/A'}</Badge>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {item.vehicle_number && (
+                              <Badge variant="outline">#{item.vehicle_number}</Badge>
+                            )}
                             <span className="font-medium">
-                              {item.brand} {item.model}
+                              {[item.brand, item.model].filter(Boolean).join(' ') || 'Veículo sem nome'}
                             </span>
-                            <span className="text-muted-foreground">{item.plate}</span>
+                            {item.plate && (
+                              <Badge variant="secondary" className="text-xs">{item.plate}</Badge>
+                            )}
                           </div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {item.seller_name && <span>Comprado de: {item.seller_name}</span>}
-                            {item.seller_name && item.buyer_name && ' | '}
-                            {item.buyer_name && <span>Vendido para: {item.buyer_name}</span>}
+                          <div className="mt-1 text-xs text-muted-foreground space-x-2">
+                            {item.seller_name && (
+                              <span>De: <strong>{item.seller_name}</strong></span>
+                            )}
+                            {item.purchase_date && (
+                              <span>({item.purchase_date})</span>
+                            )}
+                            {item.buyer_name && (
+                              <span>• Para: <strong>{item.buyer_name}</strong></span>
+                            )}
+                            {item.sale_date && (
+                              <span>({item.sale_date})</span>
+                            )}
                           </div>
                         </div>
                       ))}

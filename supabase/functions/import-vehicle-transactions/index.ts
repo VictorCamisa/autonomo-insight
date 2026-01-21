@@ -63,7 +63,11 @@ function parseDate(value: any): string | null {
 function cleanString(value: any): string | null {
   if (value === null || value === undefined) return null;
   const str = String(value).trim();
-  return str === '' ? null : str;
+  // Trata valores de erro do Excel
+  if (str === '' || str === '#N/A' || str === '#REF!' || str === '#VALUE!' || str === '#DIV/0!' || str === '#NAME?') {
+    return null;
+  }
+  return str;
 }
 
 function cleanNumber(value: any): number | null {

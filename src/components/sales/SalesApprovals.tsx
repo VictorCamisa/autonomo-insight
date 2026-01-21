@@ -10,10 +10,12 @@ import {
   User, 
   DollarSign,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  FileText
 } from 'lucide-react';
 import { usePendingApprovals } from '@/hooks/useSalesTeamMetrics';
 import { useUpdateSale } from '@/hooks/useSales';
+import { useContracts } from '@/hooks/useContracts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { paymentMethodLabels } from '@/types/sales';
@@ -30,9 +32,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ContractReadinessCard } from './ContractReadinessCard';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 export function SalesApprovals() {
   const { data: pendingApprovals, isLoading } = usePendingApprovals();
+  const { contracts } = useContracts();
   const updateSale = useUpdateSale();
   const { toast } = useToast();
   
@@ -42,6 +51,14 @@ export function SalesApprovals() {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  // Verifica se existe contrato para a venda (pelo vehicle_id ou customer_id)
+  const hasContractForSale = (vehicleId: string, customerId: string) => {
+    return contracts.some(c => 
+      c.contract_type === 'venda' && 
+      (c.vehicle_id === vehicleId || c.customer_id === customerId)
+    );
   };
 
   const handleApprove = async () => {
@@ -107,117 +124,143 @@ export function SalesApprovals() {
       {/* Pending Sales List */}
       {pendingApprovals && pendingApprovals.length > 0 ? (
         <div className="grid gap-4">
-          {pendingApprovals.map((sale: any) => (
-            <Card key={sale.id} className="hover:border-primary/50 transition-colors">
-              <CardContent className="p-6">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  {/* Sale Info */}
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold text-lg flex items-center gap-2">
-                          <Car className="h-5 w-5 text-primary" />
-                          {sale.vehicle?.brand} {sale.vehicle?.model} {sale.vehicle?.year_model}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          Placa: {sale.vehicle?.plate || 'N/A'}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
-                        <Clock className="h-3 w-3 mr-1" /> Pendente
-                      </Badge>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
+          {pendingApprovals.map((sale: any) => {
+            const hasContract = hasContractForSale(sale.vehicle_id, sale.customer_id);
+            
+            return (
+              <Card key={sale.id} className="hover:border-primary/50 transition-colors">
+                <CardContent className="p-6">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    {/* Sale Info */}
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-start justify-between">
                         <div>
-                          <p className="text-muted-foreground">Cliente</p>
-                          <p className="font-medium">{sale.customer?.name}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-muted-foreground">Vendedor</p>
-                          <p className="font-medium">{sale.salesperson?.full_name}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-muted-foreground">Data</p>
-                          <p className="font-medium">
-                            {format(new Date(sale.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                          <h3 className="font-semibold text-lg flex items-center gap-2">
+                            <Car className="h-5 w-5 text-primary" />
+                            {sale.vehicle?.brand} {sale.vehicle?.model} {sale.vehicle?.year_model}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Placa: {sale.vehicle?.plate || 'N/A'}
                           </p>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-muted-foreground">Pagamento</p>
-                          <p className="font-medium">{paymentMethodLabels[sale.payment_method]}</p>
+                        <div className="flex items-center gap-2">
+                          {hasContract && (
+                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                              <FileText className="h-3 w-3 mr-1" /> Contrato Gerado
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                            <Clock className="h-3 w-3 mr-1" /> Pendente
+                          </Badge>
                         </div>
                       </div>
-                    </div>
 
-                    {sale.notes && (
-                      <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
-                        {sale.notes}
-                      </p>
-                    )}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-muted-foreground">Cliente</p>
+                            <p className="font-medium">{sale.customer?.name}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-muted-foreground">Vendedor</p>
+                            <p className="font-medium">{sale.salesperson?.full_name}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-muted-foreground">Data</p>
+                            <p className="font-medium">
+                              {format(new Date(sale.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-muted-foreground">Pagamento</p>
+                            <p className="font-medium">{paymentMethodLabels[sale.payment_method]}</p>
+                          </div>
+                        </div>
+                      </div>
 
-                    {/* Contract Readiness Card */}
-                    <ContractReadinessCard 
-                      sale={{
-                        id: sale.id,
-                        customer_id: sale.customer_id,
-                        vehicle_id: sale.vehicle_id,
-                        sale_price: sale.sale_price,
-                        payment_method: sale.payment_method,
-                        payment_details: sale.payment_details,
-                        notes: sale.notes,
-                      }}
-                    />
-                  </div>
+                      {sale.notes && (
+                        <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
+                          {sale.notes}
+                        </p>
+                      )}
 
-                  {/* Price and Actions */}
-                  <div className="flex flex-col items-end gap-3">
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Valor da Venda</p>
-                      <p className="text-2xl font-bold text-primary">
-                        {formatCurrency(sale.sale_price)}
-                      </p>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        className="border-red-500/30 text-red-600 hover:bg-red-500/10"
-                        onClick={() => {
-                          setSelectedSale(sale);
-                          setActionType('reject');
+                      {/* Contract Readiness Card */}
+                      <ContractReadinessCard 
+                        sale={{
+                          id: sale.id,
+                          customer_id: sale.customer_id,
+                          vehicle_id: sale.vehicle_id,
+                          sale_price: sale.sale_price,
+                          payment_method: sale.payment_method,
+                          payment_details: sale.payment_details,
+                          notes: sale.notes,
                         }}
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Rejeitar
-                      </Button>
-                      <Button
-                        className="bg-green-600 hover:bg-green-700"
-                        onClick={() => {
-                          setSelectedSale(sale);
-                          setActionType('approve');
-                        }}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Aprovar
-                      </Button>
+                      />
+                    </div>
+
+                    {/* Price and Actions */}
+                    <div className="flex flex-col items-end gap-3">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Valor da Venda</p>
+                        <p className="text-2xl font-bold text-primary">
+                          {formatCurrency(sale.sale_price)}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="border-red-500/30 text-red-600 hover:bg-red-500/10"
+                          onClick={() => {
+                            setSelectedSale(sale);
+                            setActionType('reject');
+                          }}
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Rejeitar
+                        </Button>
+                        
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button
+                                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                                  disabled={!hasContract}
+                                  onClick={() => {
+                                    setSelectedSale(sale);
+                                    setActionType('approve');
+                                  }}
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Aprovar
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {!hasContract && (
+                              <TooltipContent>
+                                <p>Gere o contrato antes de aprovar a venda</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card>

@@ -20,128 +20,59 @@ import {
   UsersRound,
   Search,
   Phone,
-  Mail,
-  Eye,
   Car,
   ArrowDownLeft,
   ArrowUpRight,
   ShoppingCart,
+  Upload,
+  FileSpreadsheet,
+  MapPin,
+  Calendar,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-
-interface CustomerWithVehicle {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-  cpf_cnpj: string | null;
-  date: string;
-  price: number;
-  vehicle_brand: string;
-  vehicle_model: string;
-  vehicle_plate: string | null;
-}
-
-// Hook para buscar veículos vendidos (clientes que compraram da loja)
-function useSoldVehicles() {
-  return useQuery({
-    queryKey: ['customers-sold'],
-    queryFn: async (): Promise<CustomerWithVehicle[]> => {
-      const { data, error } = await supabase
-        .from('sales')
-        .select(`
-          id,
-          sale_date,
-          sale_price,
-          customer:customers!sales_customer_id_fkey(
-            id,
-            name,
-            phone,
-            email,
-            cpf_cnpj
-          ),
-          vehicle:vehicles!sales_vehicle_id_fkey(
-            brand,
-            model,
-            plate
-          )
-        `)
-        .eq('status', 'concluida')
-        .order('sale_date', { ascending: false });
-
-      if (error) throw error;
-
-      return (data || []).map((sale: any) => ({
-        id: sale.customer?.id || sale.id,
-        name: sale.customer?.name || 'Cliente não identificado',
-        phone: sale.customer?.phone || '',
-        email: sale.customer?.email,
-        cpf_cnpj: sale.customer?.cpf_cnpj,
-        date: sale.sale_date,
-        price: sale.sale_price,
-        vehicle_brand: sale.vehicle?.brand || '',
-        vehicle_model: sale.vehicle?.model || '',
-        vehicle_plate: sale.vehicle?.plate,
-      }));
-    },
-    staleTime: 30000,
-  });
-}
-
-// Hook para buscar veículos comprados (de quem a loja comprou)
-function usePurchasedVehicles() {
-  return useQuery({
-    queryKey: ['customers-purchased'],
-    queryFn: async (): Promise<CustomerWithVehicle[]> => {
-      // Por enquanto retorna vazio - será expandido quando tiver tabela de aquisições
-      return [];
-    },
-    staleTime: 30000,
-  });
-}
+import { usePurchasedTransactions, useSoldTransactions } from '@/hooks/useVehicleTransactions';
+import { ImportTransactionsDialog } from '@/components/customers/ImportTransactionsDialog';
 
 export default function Customers() {
   const navigate = useNavigate();
-  const { data: soldVehicles, isLoading: loadingSold } = useSoldVehicles();
-  const { data: purchasedVehicles, isLoading: loadingPurchased } = usePurchasedVehicles();
+  const { data: soldTransactions, isLoading: loadingSold } = useSoldTransactions();
+  const { data: purchasedTransactions, isLoading: loadingPurchased } = usePurchasedTransactions();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('sold');
+  const [importOpen, setImportOpen] = useState(false);
 
   const filteredSold = useMemo(() => {
-    if (!searchQuery.trim() || !soldVehicles) return soldVehicles;
+    if (!searchQuery.trim() || !soldTransactions) return soldTransactions;
     
     const query = searchQuery.toLowerCase();
-    return soldVehicles.filter((item) => {
-      const name = item.name?.toLowerCase() || '';
-      const phone = item.phone?.toLowerCase() || '';
-      const vehicle = `${item.vehicle_brand} ${item.vehicle_model}`.toLowerCase();
+    return soldTransactions.filter((item) => {
+      const name = item.buyer_name?.toLowerCase() || '';
+      const phone = item.buyer_phone?.toLowerCase() || '';
+      const vehicle = `${item.brand} ${item.model}`.toLowerCase();
+      const plate = item.plate?.toLowerCase() || '';
       
-      return name.includes(query) || phone.includes(query) || vehicle.includes(query);
+      return name.includes(query) || phone.includes(query) || vehicle.includes(query) || plate.includes(query);
     });
-  }, [soldVehicles, searchQuery]);
+  }, [soldTransactions, searchQuery]);
 
   const filteredPurchased = useMemo(() => {
-    if (!searchQuery.trim() || !purchasedVehicles) return purchasedVehicles;
+    if (!searchQuery.trim() || !purchasedTransactions) return purchasedTransactions;
     
     const query = searchQuery.toLowerCase();
-    return purchasedVehicles.filter((item) => {
-      const name = item.name?.toLowerCase() || '';
-      const phone = item.phone?.toLowerCase() || '';
-      const vehicle = `${item.vehicle_brand} ${item.vehicle_model}`.toLowerCase();
+    return purchasedTransactions.filter((item) => {
+      const name = item.seller_name?.toLowerCase() || '';
+      const phone = item.seller_phone?.toLowerCase() || '';
+      const vehicle = `${item.brand} ${item.model}`.toLowerCase();
+      const plate = item.plate?.toLowerCase() || '';
       
-      return name.includes(query) || phone.includes(query) || vehicle.includes(query);
+      return name.includes(query) || phone.includes(query) || vehicle.includes(query) || plate.includes(query);
     });
-  }, [purchasedVehicles, searchQuery]);
+  }, [purchasedTransactions, searchQuery]);
 
-  const handleOpenDetail = (customerId: string) => {
-    navigate(`/clientes/${customerId}`);
-  };
-
-  const formatPhone = (phone: string) => {
+  const formatPhone = (phone: string | null) => {
+    if (!phone) return '-';
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length === 11) {
       return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
@@ -149,15 +80,26 @@ export default function Customers() {
     return phone;
   };
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null) => {
+    if (!value) return '-';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
   };
 
-  const totalSoldValue = soldVehicles?.reduce((sum, v) => sum + (v.price || 0), 0) || 0;
-  const totalPurchasedValue = purchasedVehicles?.reduce((sum, v) => sum + (v.price || 0), 0) || 0;
+  const formatDate = (date: string | null) => {
+    if (!date) return '-';
+    try {
+      return format(new Date(date), "dd/MM/yyyy", { locale: ptBR });
+    } catch {
+      return date;
+    }
+  };
+
+  const totalSold = soldTransactions?.length || 0;
+  const totalPurchased = purchasedTransactions?.length || 0;
+  const totalTransactions = totalSold + totalPurchased;
 
   return (
     <div>
@@ -184,7 +126,7 @@ export default function Customers() {
                     <UsersRound className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{(soldVehicles?.length || 0) + (purchasedVehicles?.length || 0)}</p>
+                    <p className="text-2xl font-bold">{totalTransactions}</p>
                     <p className="text-sm text-muted-foreground">Total de Transações</p>
                   </div>
                 </div>
@@ -204,7 +146,7 @@ export default function Customers() {
                     <ArrowUpRight className="h-5 w-5 text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-emerald-600">{soldVehicles?.length || 0}</p>
+                    <p className="text-2xl font-bold text-emerald-600">{totalSold}</p>
                     <p className="text-sm text-muted-foreground">Vendidos</p>
                   </div>
                 </div>
@@ -224,7 +166,7 @@ export default function Customers() {
                     <ArrowDownLeft className="h-5 w-5 text-amber-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-amber-600">{purchasedVehicles?.length || 0}</p>
+                    <p className="text-2xl font-bold text-amber-600">{totalPurchased}</p>
                     <p className="text-sm text-muted-foreground">Comprados</p>
                   </div>
                 </div>
@@ -241,11 +183,19 @@ export default function Customers() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-sky-500/20 flex items-center justify-center">
-                    <ShoppingCart className="h-5 w-5 text-sky-600" />
+                    <FileSpreadsheet className="h-5 w-5 text-sky-600" />
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-sky-600">{formatCurrency(totalSoldValue)}</p>
-                    <p className="text-sm text-muted-foreground">Total Vendido</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-sky-600 hover:text-sky-700 p-0 h-auto"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      <Upload className="h-4 w-4 mr-1" />
+                      Importar Planilha
+                    </Button>
+                    <p className="text-sm text-muted-foreground">Excel/XLSX</p>
                   </div>
                 </div>
               </CardContent>
@@ -260,19 +210,19 @@ export default function Customers() {
               <TabsTrigger value="sold" className="flex items-center gap-2">
                 <ArrowUpRight className="h-4 w-4" />
                 Vendidos
-                <Badge variant="secondary" className="ml-1">{soldVehicles?.length || 0}</Badge>
+                <Badge variant="secondary" className="ml-1">{totalSold}</Badge>
               </TabsTrigger>
               <TabsTrigger value="purchased" className="flex items-center gap-2">
                 <ArrowDownLeft className="h-4 w-4" />
                 Comprados
-                <Badge variant="secondary" className="ml-1">{purchasedVehicles?.length || 0}</Badge>
+                <Badge variant="secondary" className="ml-1">{totalPurchased}</Badge>
               </TabsTrigger>
             </TabsList>
             
             <div className="relative w-full sm:w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome, telefone, veículo..."
+                placeholder="Buscar por nome, telefone, veículo, placa..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -286,7 +236,7 @@ export default function Customers() {
               <CardContent className="p-0">
                 {loadingSold ? (
                   <div className="p-6 space-y-4">
-                    {[...Array(3)].map((_, i) => (
+                    {[...Array(5)].map((_, i) => (
                       <Skeleton key={i} className="h-16 w-full" />
                     ))}
                   </div>
@@ -294,35 +244,40 @@ export default function Customers() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>#</TableHead>
                         <TableHead>Cliente (Comprador)</TableHead>
                         <TableHead>Contato</TableHead>
-                        <TableHead>Veículo Vendido</TableHead>
-                        <TableHead>Valor da Venda</TableHead>
-                        <TableHead>Data</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
+                        <TableHead>Veículo</TableHead>
+                        <TableHead>Placa</TableHead>
+                        <TableHead>Data da Venda</TableHead>
+                        <TableHead>KM Saída</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredSold.map((item, index) => (
                         <motion.tr
-                          key={`${item.id}-${index}`}
+                          key={item.id}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: index * 0.02 }}
-                          className="group hover:bg-muted/50 cursor-pointer"
-                          onClick={() => handleOpenDetail(item.id)}
+                          className="group hover:bg-muted/50"
                         >
+                          <TableCell>
+                            <Badge variant="outline" className="font-mono">
+                              {item.vehicle_number || '-'}
+                            </Badge>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                                 <span className="text-sm font-semibold text-emerald-600">
-                                  {item.name?.charAt(0).toUpperCase() || '?'}
+                                  {item.buyer_name?.charAt(0).toUpperCase() || '?'}
                                 </span>
                               </div>
                               <div>
-                                <p className="font-medium">{item.name}</p>
-                                {item.cpf_cnpj && (
-                                  <span className="text-xs text-muted-foreground">{item.cpf_cnpj}</span>
+                                <p className="font-medium">{item.buyer_name || '-'}</p>
+                                {item.buyer_cpf && (
+                                  <span className="text-xs text-muted-foreground">{item.buyer_cpf}</span>
                                 )}
                               </div>
                             </div>
@@ -331,12 +286,12 @@ export default function Customers() {
                             <div className="space-y-1">
                               <div className="flex items-center gap-1.5 text-sm">
                                 <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                                {formatPhone(item.phone)}
+                                {formatPhone(item.buyer_phone)}
                               </div>
-                              {item.email && (
-                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                  <Mail className="h-3.5 w-3.5" />
-                                  {item.email}
+                              {item.buyer_address && (
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <MapPin className="h-3 w-3" />
+                                  <span className="truncate max-w-[200px]">{item.buyer_address}</span>
                                 </div>
                               )}
                             </div>
@@ -344,36 +299,22 @@ export default function Customers() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Car className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="font-medium">{item.vehicle_brand} {item.vehicle_model}</p>
-                                {item.vehicle_plate && (
-                                  <span className="text-xs text-muted-foreground">{item.vehicle_plate}</span>
-                                )}
-                              </div>
+                              <span className="font-medium">{item.brand} {item.model}</span>
                             </div>
                           </TableCell>
                           <TableCell>
-                            <span className="font-semibold text-emerald-600">
-                              {formatCurrency(item.price)}
-                            </span>
+                            <span className="font-mono text-sm">{item.plate || '-'}</span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-sm">{formatDate(item.sale_date)}</span>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
-                              {format(new Date(item.date), "dd/MM/yyyy", { locale: ptBR })}
+                              {item.km_out ? `${item.km_out.toLocaleString('pt-BR')} km` : '-'}
                             </span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenDetail(item.id);
-                              }}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              Ver
-                            </Button>
                           </TableCell>
                         </motion.tr>
                       ))}
@@ -383,11 +324,15 @@ export default function Customers() {
                   <div className="p-12 text-center">
                     <ArrowUpRight className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
                     <h3 className="text-lg font-medium mb-2">Nenhuma venda registrada</h3>
-                    <p className="text-muted-foreground text-sm">
+                    <p className="text-muted-foreground text-sm mb-4">
                       {searchQuery
                         ? 'Nenhuma venda corresponde à sua busca.'
-                        : 'Vendas aparecerão aqui quando forem concluídas.'}
+                        : 'Importe sua planilha para visualizar o histórico de vendas.'}
                     </p>
+                    <Button variant="outline" onClick={() => setImportOpen(true)}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Importar Planilha
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -400,7 +345,7 @@ export default function Customers() {
               <CardContent className="p-0">
                 {loadingPurchased ? (
                   <div className="p-6 space-y-4">
-                    {[...Array(3)].map((_, i) => (
+                    {[...Array(5)].map((_, i) => (
                       <Skeleton key={i} className="h-16 w-full" />
                     ))}
                   </div>
@@ -408,35 +353,40 @@ export default function Customers() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>#</TableHead>
                         <TableHead>Cliente (Vendedor)</TableHead>
                         <TableHead>Contato</TableHead>
-                        <TableHead>Veículo Comprado</TableHead>
-                        <TableHead>Valor da Compra</TableHead>
-                        <TableHead>Data</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
+                        <TableHead>Veículo</TableHead>
+                        <TableHead>Placa</TableHead>
+                        <TableHead>Data da Compra</TableHead>
+                        <TableHead>Chassi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredPurchased.map((item, index) => (
                         <motion.tr
-                          key={`${item.id}-${index}`}
+                          key={item.id}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: index * 0.02 }}
-                          className="group hover:bg-muted/50 cursor-pointer"
-                          onClick={() => handleOpenDetail(item.id)}
+                          className="group hover:bg-muted/50"
                         >
+                          <TableCell>
+                            <Badge variant="outline" className="font-mono">
+                              {item.vehicle_number || '-'}
+                            </Badge>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
                                 <span className="text-sm font-semibold text-amber-600">
-                                  {item.name?.charAt(0).toUpperCase() || '?'}
+                                  {item.seller_name?.charAt(0).toUpperCase() || '?'}
                                 </span>
                               </div>
                               <div>
-                                <p className="font-medium">{item.name}</p>
-                                {item.cpf_cnpj && (
-                                  <span className="text-xs text-muted-foreground">{item.cpf_cnpj}</span>
+                                <p className="font-medium">{item.seller_name || '-'}</p>
+                                {item.seller_cpf && (
+                                  <span className="text-xs text-muted-foreground">{item.seller_cpf}</span>
                                 )}
                               </div>
                             </div>
@@ -445,12 +395,12 @@ export default function Customers() {
                             <div className="space-y-1">
                               <div className="flex items-center gap-1.5 text-sm">
                                 <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                                {formatPhone(item.phone)}
+                                {formatPhone(item.seller_phone)}
                               </div>
-                              {item.email && (
-                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                  <Mail className="h-3.5 w-3.5" />
-                                  {item.email}
+                              {item.seller_address && (
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <MapPin className="h-3 w-3" />
+                                  <span className="truncate max-w-[200px]">{item.seller_address}</span>
                                 </div>
                               )}
                             </div>
@@ -458,36 +408,22 @@ export default function Customers() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Car className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="font-medium">{item.vehicle_brand} {item.vehicle_model}</p>
-                                {item.vehicle_plate && (
-                                  <span className="text-xs text-muted-foreground">{item.vehicle_plate}</span>
-                                )}
-                              </div>
+                              <span className="font-medium">{item.brand} {item.model}</span>
                             </div>
                           </TableCell>
                           <TableCell>
-                            <span className="font-semibold text-amber-600">
-                              {formatCurrency(item.price)}
-                            </span>
+                            <span className="font-mono text-sm">{item.plate || '-'}</span>
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm text-muted-foreground">
-                              {format(new Date(item.date), "dd/MM/yyyy", { locale: ptBR })}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-sm">{formatDate(item.purchase_date)}</span>
+                            </div>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenDetail(item.id);
-                              }}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              Ver
-                            </Button>
+                          <TableCell>
+                            <span className="text-xs font-mono text-muted-foreground truncate max-w-[120px] block">
+                              {item.chassis || '-'}
+                            </span>
                           </TableCell>
                         </motion.tr>
                       ))}
@@ -497,11 +433,15 @@ export default function Customers() {
                   <div className="p-12 text-center">
                     <ArrowDownLeft className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
                     <h3 className="text-lg font-medium mb-2">Nenhuma compra registrada</h3>
-                    <p className="text-muted-foreground text-sm">
+                    <p className="text-muted-foreground text-sm mb-4">
                       {searchQuery
                         ? 'Nenhuma compra corresponde à sua busca.'
-                        : 'Compras de veículos aparecerão aqui quando forem cadastradas.'}
+                        : 'Importe sua planilha para visualizar o histórico de compras.'}
                     </p>
+                    <Button variant="outline" onClick={() => setImportOpen(true)}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Importar Planilha
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -510,6 +450,7 @@ export default function Customers() {
         </Tabs>
       </div>
 
+      <ImportTransactionsDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }

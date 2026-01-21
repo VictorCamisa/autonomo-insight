@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { ContractReadinessCard } from './ContractReadinessCard';
 
 export function SalesApprovals() {
   const { data: pendingApprovals, isLoading } = usePendingApprovals();
@@ -165,6 +166,19 @@ export function SalesApprovals() {
                         {sale.notes}
                       </p>
                     )}
+
+                    {/* Contract Readiness Card */}
+                    <ContractReadinessCard 
+                      sale={{
+                        id: sale.id,
+                        customer_id: sale.customer_id,
+                        vehicle_id: sale.vehicle_id,
+                        sale_price: sale.sale_price,
+                        payment_method: sale.payment_method,
+                        payment_details: sale.payment_details,
+                        notes: sale.notes,
+                      }}
+                    />
                   </div>
 
                   {/* Price and Actions */}

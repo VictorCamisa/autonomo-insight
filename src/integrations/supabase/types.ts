@@ -3794,6 +3794,84 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_transactions: {
+        Row: {
+          brand: string | null
+          buyer_address: string | null
+          buyer_cpf: string | null
+          buyer_name: string | null
+          buyer_phone: string | null
+          chassis: string | null
+          created_at: string
+          id: string
+          km_out: number | null
+          model: string | null
+          notes: string | null
+          plate: string | null
+          purchase_date: string | null
+          purchase_price: number | null
+          renavam: string | null
+          sale_date: string | null
+          sale_price: number | null
+          seller_address: string | null
+          seller_cpf: string | null
+          seller_name: string | null
+          seller_phone: string | null
+          updated_at: string
+          vehicle_number: number | null
+        }
+        Insert: {
+          brand?: string | null
+          buyer_address?: string | null
+          buyer_cpf?: string | null
+          buyer_name?: string | null
+          buyer_phone?: string | null
+          chassis?: string | null
+          created_at?: string
+          id?: string
+          km_out?: number | null
+          model?: string | null
+          notes?: string | null
+          plate?: string | null
+          purchase_date?: string | null
+          purchase_price?: number | null
+          renavam?: string | null
+          sale_date?: string | null
+          sale_price?: number | null
+          seller_address?: string | null
+          seller_cpf?: string | null
+          seller_name?: string | null
+          seller_phone?: string | null
+          updated_at?: string
+          vehicle_number?: number | null
+        }
+        Update: {
+          brand?: string | null
+          buyer_address?: string | null
+          buyer_cpf?: string | null
+          buyer_name?: string | null
+          buyer_phone?: string | null
+          chassis?: string | null
+          created_at?: string
+          id?: string
+          km_out?: number | null
+          model?: string | null
+          notes?: string | null
+          plate?: string | null
+          purchase_date?: string | null
+          purchase_price?: number | null
+          renavam?: string | null
+          sale_date?: string | null
+          sale_price?: number | null
+          seller_address?: string | null
+          seller_cpf?: string | null
+          seller_name?: string | null
+          seller_phone?: string | null
+          updated_at?: string
+          vehicle_number?: number | null
+        }
+        Relationships: []
+      }
       vehicles: {
         Row: {
           brand: string

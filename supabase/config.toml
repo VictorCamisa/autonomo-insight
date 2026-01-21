@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.search-vehicles-rag]
 verify_jwt = false
+
+[functions.import-vehicle-transactions]
+verify_jwt = false

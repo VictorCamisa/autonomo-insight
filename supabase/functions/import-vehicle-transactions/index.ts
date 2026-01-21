@@ -9,20 +9,27 @@ interface TransactionRow {
   vehicle_number: number | null;
   brand: string | null;
   model: string | null;
+  year: string | null;
   plate: string | null;
+  color: string | null;
   renavam: string | null;
   chassis: string | null;
+  km_out: number | null;
   seller_name: string | null;
   seller_phone: string | null;
   seller_cpf: string | null;
+  seller_rg: string | null;
   seller_address: string | null;
+  seller_birth: string | null;
   purchase_date: string | null;
   buyer_name: string | null;
   buyer_phone: string | null;
   buyer_cpf: string | null;
+  buyer_rg: string | null;
   buyer_address: string | null;
+  buyer_birth: string | null;
   sale_date: string | null;
-  km_out: number | null;
+  observations: string | null;
   seller_customer_id?: string | null;
   buyer_customer_id?: string | null;
 }
@@ -40,6 +47,13 @@ function parseDate(value: any): string | null {
     const trimmed = value.trim();
     if (!trimmed) return null;
     
+    // Formato ISO com hora (2020-05-21 00:00:00)
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+    
+    // Formato BR (dd/mm/yyyy)
     const brMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (brMatch) {
       const day = brMatch[1].padStart(2, '0');
@@ -63,7 +77,6 @@ function parseDate(value: any): string | null {
 function cleanString(value: any): string | null {
   if (value === null || value === undefined) return null;
   const str = String(value).trim();
-  // Trata valores de erro do Excel
   if (str === '' || str === '#N/A' || str === '#REF!' || str === '#VALUE!' || str === '#DIV/0!' || str === '#NAME?') {
     return null;
   }
@@ -72,16 +85,27 @@ function cleanString(value: any): string | null {
 
 function cleanNumber(value: any): number | null {
   if (value === null || value === undefined) return null;
-  if (typeof value === 'number') return value;
-  const num = parseInt(String(value).replace(/\D/g, ''));
-  return isNaN(num) ? null : num;
+  if (typeof value === 'number') return Math.round(value);
+  const str = String(value).replace(/[^\d.-]/g, '');
+  const num = parseFloat(str);
+  return isNaN(num) ? null : Math.round(num);
 }
 
 function cleanPhone(phone: string | null): string {
   if (!phone) return '';
-  // Limpa e formata telefone, garantindo pelo menos algo para o campo obrigatório
   const cleaned = phone.replace(/\D/g, '');
-  return cleaned || '00000000000';
+  // Adiciona DDD 12 se não tiver
+  if (cleaned.length === 8 || cleaned.length === 9) {
+    return '12' + cleaned;
+  }
+  return cleaned || '';
+}
+
+function cleanCPF(cpf: string | null): string | null {
+  if (!cpf) return null;
+  const cleaned = cpf.replace(/\D/g, '');
+  if (cleaned.length < 11) return null;
+  return cleaned.substring(0, 11);
 }
 
 async function findOrCreateCustomer(
@@ -89,44 +113,58 @@ async function findOrCreateCustomer(
   name: string | null,
   phone: string | null,
   cpf: string | null,
+  rg: string | null,
   address: string | null,
+  birth: string | null,
   source: string
 ): Promise<string | null> {
   if (!name || name === '-') return null;
 
   const cleanedPhone = cleanPhone(phone);
+  const cleanedCPF = cleanCPF(cpf);
   
-  // Tenta encontrar cliente existente por CPF ou telefone
-  if (cpf) {
+  // Tenta encontrar cliente existente por CPF
+  if (cleanedCPF) {
     const { data: existingByCpf } = await supabase
       .from('customers')
       .select('id')
-      .eq('cpf_cnpj', cpf)
+      .eq('cpf_cnpj', cleanedCPF)
       .single();
     
-    if (existingByCpf) return existingByCpf.id;
+    if (existingByCpf) {
+      console.log(`Cliente encontrado por CPF: ${name}`);
+      return existingByCpf.id;
+    }
   }
   
-  if (cleanedPhone && cleanedPhone !== '00000000000') {
+  // Tenta encontrar por telefone
+  if (cleanedPhone && cleanedPhone.length >= 10) {
     const { data: existingByPhone } = await supabase
       .from('customers')
       .select('id')
       .eq('phone', cleanedPhone)
       .single();
     
-    if (existingByPhone) return existingByPhone.id;
+    if (existingByPhone) {
+      console.log(`Cliente encontrado por telefone: ${name}`);
+      return existingByPhone.id;
+    }
   }
 
   // Cria novo cliente
+  const customerData: any = {
+    name: name,
+    phone: cleanedPhone || '0000000000',
+    source: source,
+  };
+  
+  if (cleanedCPF) customerData.cpf_cnpj = cleanedCPF;
+  if (rg) customerData.rg = rg;
+  if (address) customerData.address = address;
+
   const { data: newCustomer, error } = await supabase
     .from('customers')
-    .insert({
-      name: name,
-      phone: cleanedPhone || '00000000000',
-      cpf_cnpj: cpf,
-      address: address,
-      source: source,
-    })
+    .insert(customerData)
     .select('id')
     .single();
 
@@ -135,6 +173,7 @@ async function findOrCreateCustomer(
     return null;
   }
 
+  console.log(`Cliente criado: ${name}`);
   return newCustomer?.id || null;
 }
 
@@ -149,7 +188,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { rows, dryRun = false } = await req.json();
+    const { rows, dryRun = false, fileType } = await req.json();
 
     if (!rows || !Array.isArray(rows)) {
       return new Response(
@@ -158,12 +197,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Processando ${rows.length} linhas. DryRun: ${dryRun}`);
+    console.log(`Processando ${rows.length} linhas. DryRun: ${dryRun}, FileType: ${fileType || 'auto'}`);
     
     // Log das colunas disponíveis na primeira linha para debug
     if (rows.length > 0) {
       console.log('Colunas disponíveis:', Object.keys(rows[0]));
     }
+
+    // Detecta tipo de arquivo baseado nas colunas
+    const firstRow = rows[0] || {};
+    const isSellerFile = 'NOME DO VENDEDOR' in firstRow || 'ENTRADA' in firstRow;
+    const isBuyerFile = 'NOME DO COMPRADOR' in firstRow || 'SAIDA' in firstRow;
+    
+    console.log(`Tipo detectado - Vendedor: ${isSellerFile}, Comprador: ${isBuyerFile}`);
 
     const transactions: TransactionRow[] = [];
     const errors: string[] = [];
@@ -175,23 +221,32 @@ Deno.serve(async (req) => {
 
       try {
         const transaction: TransactionRow = {
-          vehicle_number: cleanNumber(row['NUM']),
+          vehicle_number: cleanNumber(row['N°']),
           brand: cleanString(row['MARCA']),
           model: cleanString(row['MODELO']),
+          year: cleanString(row['ANO']),
           plate: cleanString(row['PLACA']),
+          color: cleanString(row['COR']),
           renavam: cleanString(row['RENAVAM']),
           chassis: cleanString(row['CHASSI']),
-          seller_name: cleanString(row['NOME (Origem/ Compra/ DE QUEM A LOJA COMPROU)']),
-          seller_phone: cleanString(row['TELEFONE (Origem)']),
-          seller_cpf: cleanString(row['CPF CNPJ (Origem)']),
-          seller_address: cleanString(row['ENDEREÇO (Origem)']),
-          purchase_date: parseDate(row['DATA DA COMPRA']),
-          buyer_name: cleanString(row['NOME (Destino/ Venda/ PARA QUEM A LOJA VENDEU)']),
-          buyer_phone: cleanString(row['TELEFONE (Destino)']),
-          buyer_cpf: cleanString(row['CPF CNPJ (Destino)']),
-          buyer_address: cleanString(row['ENDEREÇO (Destino)']),
-          sale_date: parseDate(row['DATA DA VENDA']),
-          km_out: cleanNumber(row['KM SAIDA']),
+          km_out: cleanNumber(row['KM S']),
+          observations: cleanString(row['OBSERVAÇÕES']),
+          // Campos do vendedor
+          seller_name: cleanString(row['NOME DO VENDEDOR']),
+          seller_phone: cleanString(row['TEL']),
+          seller_cpf: cleanString(row['CPF']),
+          seller_rg: cleanString(row['RG']),
+          seller_address: cleanString(row['ENDEREÇO']),
+          seller_birth: parseDate(row['NASCI']),
+          purchase_date: parseDate(row['ENTRADA']),
+          // Campos do comprador
+          buyer_name: cleanString(row['NOME DO COMPRADOR']),
+          buyer_phone: isSellerFile ? null : cleanString(row['TEL']),
+          buyer_cpf: isSellerFile ? null : cleanString(row['CPF']),
+          buyer_rg: isSellerFile ? null : cleanString(row['RG']),
+          buyer_address: isSellerFile ? null : cleanString(row['ENDEREÇO']),
+          buyer_birth: parseDate(row['NASC']),
+          sale_date: parseDate(row['SAIDA']),
         };
 
         // Pula linhas completamente vazias
@@ -209,7 +264,9 @@ Deno.serve(async (req) => {
               transaction.seller_name,
               transaction.seller_phone,
               transaction.seller_cpf,
+              transaction.seller_rg,
               transaction.seller_address,
+              transaction.seller_birth,
               'importacao_vendedor'
             );
             transaction.seller_customer_id = sellerCustomerId;
@@ -223,7 +280,9 @@ Deno.serve(async (req) => {
               transaction.buyer_name,
               transaction.buyer_phone,
               transaction.buyer_cpf,
+              transaction.buyer_rg,
               transaction.buyer_address,
+              transaction.buyer_birth,
               'importacao_comprador'
             );
             transaction.buyer_customer_id = buyerCustomerId;
@@ -246,6 +305,7 @@ Deno.serve(async (req) => {
           dryRun: true,
           totalRows: rows.length,
           validTransactions: transactions.length,
+          fileType: isSellerFile ? 'vendedores' : isBuyerFile ? 'compradores' : 'desconhecido',
           errors,
           preview: transactions.slice(0, 5),
         }),

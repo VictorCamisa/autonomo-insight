@@ -98,6 +98,7 @@ export function useCreateNegotiation() {
 
 interface UpdateNegotiationInput {
   id: string;
+  salesperson_id?: string | null;
   vehicle_id?: string | null;
   status?: NegotiationStatus;
   estimated_value?: number | null;

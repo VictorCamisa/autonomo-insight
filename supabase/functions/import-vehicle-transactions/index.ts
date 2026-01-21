@@ -268,10 +268,8 @@ Deno.serve(async (req) => {
       
       if (error) {
         console.error('Erro ao inserir clientes:', error.message);
-        // Continua mesmo com erro
       } else if (inserted) {
         customersCreated += inserted.length;
-        // Mapeia IDs dos clientes criados
         for (let j = 0; j < inserted.length; j++) {
           const customer = batch[j];
           customerKeyToExistingId.set(customer._key, inserted[j].id);
@@ -293,11 +291,48 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6. Insere transações em lotes
+    // 6. Busca transações existentes por placa + número para evitar duplicatas
+    const plateNumberPairs = transactions
+      .filter(tx => tx.plate && tx.vehicle_number)
+      .map(tx => ({ plate: tx.plate, vehicle_number: tx.vehicle_number }));
+    
+    const existingTransactions = new Set<string>();
+    
+    if (plateNumberPairs.length > 0) {
+      // Busca todas as placas envolvidas
+      const plates = [...new Set(plateNumberPairs.map(p => p.plate))];
+      
+      const { data: existing } = await supabase
+        .from('vehicle_transactions')
+        .select('plate, vehicle_number')
+        .in('plate', plates);
+      
+      if (existing) {
+        for (const tx of existing) {
+          if (tx.plate && tx.vehicle_number) {
+            existingTransactions.add(`${tx.plate}|${tx.vehicle_number}`);
+          }
+        }
+      }
+    }
+
+    console.log(`Transações existentes encontradas: ${existingTransactions.size}`);
+
+    // Filtra transações que não são duplicatas
+    const newTransactions = transactions.filter(tx => {
+      if (!tx.plate || !tx.vehicle_number) return true; // Se não tem placa ou número, deixa passar
+      const key = `${tx.plate}|${tx.vehicle_number}`;
+      return !existingTransactions.has(key);
+    });
+
+    const skipped = transactions.length - newTransactions.length;
+    console.log(`Transações novas: ${newTransactions.length}, Duplicatas ignoradas: ${skipped}`);
+
+    // 7. Insere transações em lotes
     let inserted = 0;
     
-    for (let i = 0; i < transactions.length; i += batchSize) {
-      const batch = transactions.slice(i, i + batchSize);
+    for (let i = 0; i < newTransactions.length; i += batchSize) {
+      const batch = newTransactions.slice(i, i + batchSize);
       
       const { data, error } = await supabase
         .from('vehicle_transactions')
@@ -320,6 +355,7 @@ Deno.serve(async (req) => {
         totalRows: rows.length,
         validTransactions: transactions.length,
         inserted,
+        skipped,
         customersCreated,
         customersExisting: customerKeyToExistingId.size - customersCreated,
         fileType,

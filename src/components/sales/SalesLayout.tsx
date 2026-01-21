@@ -7,6 +7,7 @@ import {
   List,
   Users,
   TrendingUp,
+  FileText,
 } from 'lucide-react';
 
 const navItems = [
@@ -15,6 +16,7 @@ const navItems = [
   { path: '/vendas/vendas', label: 'Vendas', icon: <List className="h-4 w-4" /> },
   { path: '/vendas/equipe', label: 'Equipe', icon: <Users className="h-4 w-4" /> },
   { path: '/vendas/lucro', label: 'Lucro', icon: <TrendingUp className="h-4 w-4" /> },
+  { path: '/vendas/contratos', label: 'Contratos', icon: <FileText className="h-4 w-4" /> },
 ];
 
 export function SalesLayout() {

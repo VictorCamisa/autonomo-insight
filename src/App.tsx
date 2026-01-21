@@ -76,6 +76,7 @@ const SalesListPage = lazy(() => import("@/components/sales/SalesListPage").then
 const SalesTeamView = lazy(() => import("@/components/sales/SalesTeamView").then(m => ({ default: m.SalesTeamView })));
 const SalesProfitPage = lazy(() => import("@/components/sales/SalesProfitPage").then(m => ({ default: m.SalesProfitPage })));
 const SalesMetricsPage = lazy(() => import("@/components/sales/SalesMetricsPage").then(m => ({ default: m.SalesMetricsPage })));
+const ContractsPage = lazy(() => import("@/components/sales/ContractsPage").then(m => ({ default: m.ContractsPage })));
 const SalespersonDetail = lazy(() => import("@/pages/SalespersonDetail"));
 
 // Lazy load Financial pages
@@ -206,6 +207,7 @@ const App = () => (
                     <Route path="equipe" element={<SalesTeamView />} />
                     <Route path="equipe/:id" element={<SalespersonDetail />} />
                     <Route path="lucro" element={<SalesProfitPage />} />
+                    <Route path="contratos" element={<ContractsPage />} />
                     <Route path="metricas" element={<SalesMetricsPage />} />
                   </Route>
                   

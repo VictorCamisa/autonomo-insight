@@ -35,6 +35,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Documentation = lazy(() => import("./pages/Documentation"));
+const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
 
 // Lazy load layouts
 const CRMLayout = lazy(() => import("@/components/crm/CRMLayout").then(m => ({ default: m.CRMLayout })));
@@ -262,6 +263,15 @@ const App = () => (
                   <Route path="/configuracoes" element={
                     <ProtectedRoute requiredModule="configuracoes">
                       <Settings />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* Knowledge Base - Isolated Access */}
+                  <Route path="/conhecimento" element={
+                    <ProtectedRoute requiredModule="configuracoes">
+                      <Suspense fallback={<PageLoader />}>
+                        <KnowledgeBase />
+                      </Suspense>
                     </ProtectedRoute>
                   } />
 

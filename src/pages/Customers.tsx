@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ModuleHeader } from '@/components/layout/ModuleHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,7 +31,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { CustomerDetailSheet } from '@/components/crm/CustomerDetailSheet';
 
 interface CustomerWithVehicle {
   id: string;
@@ -104,12 +104,11 @@ function usePurchasedVehicles() {
 }
 
 export default function Customers() {
+  const navigate = useNavigate();
   const { data: soldVehicles, isLoading: loadingSold } = useSoldVehicles();
   const { data: purchasedVehicles, isLoading: loadingPurchased } = usePurchasedVehicles();
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('sold');
 
   const filteredSold = useMemo(() => {
@@ -139,8 +138,7 @@ export default function Customers() {
   }, [purchasedVehicles, searchQuery]);
 
   const handleOpenDetail = (customerId: string) => {
-    setSelectedCustomerId(customerId);
-    setDetailOpen(true);
+    navigate(`/clientes/${customerId}`);
   };
 
   const formatPhone = (phone: string) => {
@@ -512,12 +510,6 @@ export default function Customers() {
         </Tabs>
       </div>
 
-      {/* Customer Detail Sheet */}
-      <CustomerDetailSheet
-        customerId={selectedCustomerId}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-      />
     </div>
   );
 }

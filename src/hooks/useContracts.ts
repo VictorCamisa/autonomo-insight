@@ -84,6 +84,7 @@ export interface ContractFormData {
   installments_count?: number;
   installment_value?: number;
   installment_due_day?: number;
+  negotiation_details?: string; // Campo de negociação editável
   notes?: string;
 }
 
@@ -129,6 +130,13 @@ export function useContracts() {
 
   const updateContract = useMutation({
     mutationFn: async ({ id, ...data }: Partial<Contract> & { id: string }) => {
+      // Get current contract to check for status change
+      const { data: currentContract } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('id', id)
+        .single();
+
       const { data: result, error } = await supabase
         .from('contracts')
         .update(data)
@@ -137,6 +145,28 @@ export function useContracts() {
         .single();
       
       if (error) throw error;
+
+      // If contract was signed and has trade-in, notify managers
+      if (data.status === 'signed' && currentContract?.status !== 'signed' && currentContract?.trade_in_brand) {
+        // Get all managers
+        const { data: managers } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'gerente');
+
+        if (managers && managers.length > 0) {
+          const notifications = managers.map(m => ({
+            user_id: m.user_id,
+            type: 'trade_in_pending',
+            title: '🚗 Veículo de Troca para Cadastrar',
+            message: `Contrato ${result.contract_number} assinado com veículo de troca: ${currentContract.trade_in_brand} ${currentContract.trade_in_model || ''}`,
+            link: `/vendas/contratos?trade_in=${id}`,
+          }));
+
+          await supabase.from('notifications').insert(notifications);
+        }
+      }
+
       return result;
     },
     onSuccess: () => {

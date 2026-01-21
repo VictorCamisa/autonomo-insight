@@ -1055,6 +1055,152 @@ export type Database = {
           },
         ]
       }
+      contracts: {
+        Row: {
+          contract_number: string
+          contract_type: string
+          created_at: string
+          created_by: string | null
+          customer_address: string | null
+          customer_birth_date: string | null
+          customer_city: string | null
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_id: string | null
+          customer_marital_status: string | null
+          customer_name: string
+          customer_nationality: string | null
+          customer_phone: string | null
+          customer_profession: string | null
+          customer_rg: string | null
+          customer_state: string | null
+          customer_zip: string | null
+          down_payment: number | null
+          id: string
+          installment_due_day: number | null
+          installment_value: number | null
+          installments_count: number | null
+          notes: string | null
+          signed_at: string | null
+          status: string
+          trade_in_brand: string | null
+          trade_in_color: string | null
+          trade_in_model: string | null
+          trade_in_plate: string | null
+          trade_in_renavam: string | null
+          trade_in_value: number | null
+          trade_in_year: string | null
+          updated_at: string
+          vehicle_brand: string
+          vehicle_color: string | null
+          vehicle_id: string | null
+          vehicle_model: string
+          vehicle_odometer: number | null
+          vehicle_plate: string | null
+          vehicle_renavam: string | null
+          vehicle_value: number
+          vehicle_year: string
+        }
+        Insert: {
+          contract_number: string
+          contract_type: string
+          created_at?: string
+          created_by?: string | null
+          customer_address?: string | null
+          customer_birth_date?: string | null
+          customer_city?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_marital_status?: string | null
+          customer_name: string
+          customer_nationality?: string | null
+          customer_phone?: string | null
+          customer_profession?: string | null
+          customer_rg?: string | null
+          customer_state?: string | null
+          customer_zip?: string | null
+          down_payment?: number | null
+          id?: string
+          installment_due_day?: number | null
+          installment_value?: number | null
+          installments_count?: number | null
+          notes?: string | null
+          signed_at?: string | null
+          status?: string
+          trade_in_brand?: string | null
+          trade_in_color?: string | null
+          trade_in_model?: string | null
+          trade_in_plate?: string | null
+          trade_in_renavam?: string | null
+          trade_in_value?: number | null
+          trade_in_year?: string | null
+          updated_at?: string
+          vehicle_brand: string
+          vehicle_color?: string | null
+          vehicle_id?: string | null
+          vehicle_model: string
+          vehicle_odometer?: number | null
+          vehicle_plate?: string | null
+          vehicle_renavam?: string | null
+          vehicle_value: number
+          vehicle_year: string
+        }
+        Update: {
+          contract_number?: string
+          contract_type?: string
+          created_at?: string
+          created_by?: string | null
+          customer_address?: string | null
+          customer_birth_date?: string | null
+          customer_city?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_marital_status?: string | null
+          customer_name?: string
+          customer_nationality?: string | null
+          customer_phone?: string | null
+          customer_profession?: string | null
+          customer_rg?: string | null
+          customer_state?: string | null
+          customer_zip?: string | null
+          down_payment?: number | null
+          id?: string
+          installment_due_day?: number | null
+          installment_value?: number | null
+          installments_count?: number | null
+          notes?: string | null
+          signed_at?: string | null
+          status?: string
+          trade_in_brand?: string | null
+          trade_in_color?: string | null
+          trade_in_model?: string | null
+          trade_in_plate?: string | null
+          trade_in_renavam?: string | null
+          trade_in_value?: number | null
+          trade_in_year?: string | null
+          updated_at?: string
+          vehicle_brand?: string
+          vehicle_color?: string | null
+          vehicle_id?: string | null
+          vehicle_model?: string
+          vehicle_odometer?: number | null
+          vehicle_plate?: string | null
+          vehicle_renavam?: string | null
+          vehicle_value?: number
+          vehicle_year?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null

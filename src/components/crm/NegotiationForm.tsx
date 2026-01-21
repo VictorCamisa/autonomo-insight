@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,14 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useLeads } from '@/hooks/useLeads';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useUsersWithRoles } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
 import { negotiationStatusLabels, pipelineColumns, lossReasonLabels, objectionOptions } from '@/types/negotiations';
 import type { Negotiation, NegotiationStatus, LossReasonType } from '@/types/negotiations';
-import { Calendar, Clock, Lock, User, UserCheck, AlertCircle, Trash2 } from 'lucide-react';
+import { Calendar, Clock, Lock, User, UserCheck, AlertCircle, Trash2, Car, Check, ChevronsUpDown } from 'lucide-react';
 import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
+import { cn } from '@/lib/utils';
 
 const negotiationFormSchema = z.object({
   lead_id: z.string().min(1, 'Selecione um lead'),
@@ -48,6 +51,7 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
   const { data: leads = [] } = useLeads();
   const { data: vehicles = [] } = useVehicles();
   const { data: users = [] } = useUsersWithRoles();
+  const [vehicleOpen, setVehicleOpen] = useState(false);
 
   const isManager = role === 'gerente';
   const isEditing = !!negotiation?.id;
@@ -211,30 +215,74 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
         <FormField
           control={form.control}
           name="vehicle_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Veículo de Interesse</FormLabel>
-              <Select 
-                onValueChange={(value) => field.onChange(value === 'none' ? '' : value)} 
-                value={field.value || 'none'}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o veículo" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {availableVehicles.map((vehicle) => (
-                    <SelectItem key={vehicle.id} value={vehicle.id}>
-                      {vehicle.brand} {vehicle.model} {vehicle.year_model} - {vehicle.plate || 'Sem placa'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            const selectedVehicle = availableVehicles.find((v) => v.id === field.value);
+            return (
+              <FormItem className="flex flex-col">
+                <FormLabel>Veículo de Interesse</FormLabel>
+                <Popover open={vehicleOpen} onOpenChange={setVehicleOpen}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={vehicleOpen}
+                        className={cn(
+                          "w-full justify-between font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {selectedVehicle
+                          ? `${selectedVehicle.brand} ${selectedVehicle.model} - ${selectedVehicle.plate || 'Sem placa'}`
+                          : "Nenhum veículo selecionado"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar por marca, modelo ou placa..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhum veículo encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="nenhum-veiculo"
+                            onSelect={() => {
+                              field.onChange('');
+                              setVehicleOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", !field.value ? "opacity-100" : "opacity-0")} />
+                            Nenhum
+                          </CommandItem>
+                          {availableVehicles.map((vehicle) => (
+                            <CommandItem
+                              key={vehicle.id}
+                              value={`${vehicle.brand} ${vehicle.model} ${vehicle.year_model} ${vehicle.plate || ''}`}
+                              onSelect={() => {
+                                field.onChange(vehicle.id);
+                                setVehicleOpen(false);
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", field.value === vehicle.id ? "opacity-100" : "opacity-0")} />
+                              <Car className="mr-2 h-4 w-4 text-muted-foreground" />
+                              <div className="flex flex-col">
+                                <span>{vehicle.brand} {vehicle.model} {vehicle.year_model}</span>
+                                <span className="text-xs text-muted-foreground font-mono">
+                                  {vehicle.plate || 'Sem placa'}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <div className="grid grid-cols-2 gap-4">

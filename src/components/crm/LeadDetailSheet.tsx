@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { negotiationStatusLabels, negotiationStatusColors } from '@/types/negotiations';
 import { WhatsAppChatModal } from '@/components/whatsapp/WhatsAppChatModal';
 import { LeadQualificationPanel } from './LeadQualificationPanel';
+import { LeadQualificationProgress } from './LeadQualificationProgress';
 import { cn } from '@/lib/utils';
 
 interface LeadDetailSheetProps {
@@ -156,7 +157,13 @@ export function LeadDetailSheet({ lead, open, onOpenChange, onStartNegotiation }
           {/* Qualification Tab - Real-time AI Panel */}
           <TabsContent value="qualification" className="flex-1 overflow-hidden mt-4 m-0 data-[state=active]:flex data-[state=active]:flex-col min-h-0">
             <ScrollArea className="flex-1 min-h-0 px-6 pb-6">
-              <LeadQualificationPanel leadId={lead.id} />
+              <div className="space-y-4">
+                {/* Dynamic Qualification Progress based on current level */}
+                <LeadQualificationProgress lead={lead} />
+                
+                {/* AI Conversation Panel */}
+                <LeadQualificationPanel leadId={lead.id} />
+              </div>
             </ScrollArea>
           </TabsContent>
 

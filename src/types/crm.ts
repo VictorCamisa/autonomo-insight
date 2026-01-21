@@ -48,10 +48,13 @@ export interface Customer {
   email: string | null;
   phone: string;
   cpf_cnpj: string | null;
+  rg: string | null;
+  renavam: string | null;
   address: string | null;
   city: string | null;
   state: string | null;
   notes: string | null;
+  source: string | null;
   created_at: string;
   updated_at: string;
   // Joined data

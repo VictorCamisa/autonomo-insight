@@ -9,7 +9,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -24,7 +30,6 @@ import {
   Phone,
   Mail,
   MapPin,
-  Calendar,
   Car,
   DollarSign,
   User,
@@ -38,6 +43,8 @@ import {
   CheckCircle,
   XCircle,
   MessageSquare,
+  CreditCard,
+  Hash,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -60,10 +67,13 @@ export default function CustomerDetail() {
         phone: customerData.phone,
         email: customerData.email,
         cpf_cnpj: customerData.cpf_cnpj,
+        rg: customerData.rg,
+        renavam: customerData.renavam,
         address: customerData.address,
         city: customerData.city,
         state: customerData.state,
         notes: customerData.notes,
+        source: customerData.source,
       });
       setIsEditing(true);
     }
@@ -96,7 +106,35 @@ export default function CustomerDetail() {
     if (cleaned.length === 11) {
       return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
     }
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+    }
     return phone;
+  };
+
+  const formatCPF = (cpf: string | null) => {
+    if (!cpf) return '';
+    const cleaned = cpf.replace(/\D/g, '');
+    if (cleaned.length === 11) {
+      return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9)}`;
+    }
+    if (cleaned.length === 14) {
+      return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 5)}.${cleaned.slice(5, 8)}/${cleaned.slice(8, 12)}-${cleaned.slice(12)}`;
+    }
+    return cpf;
+  };
+
+  const sourceLabels: Record<string, string> = {
+    website: 'Website',
+    indicacao: 'Indicação',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    google_ads: 'Google Ads',
+    olx: 'OLX',
+    webmotors: 'WebMotors',
+    importacao_vendedor: 'Importação (Vendedor)',
+    importacao_comprador: 'Importação (Comprador)',
+    outros: 'Outros',
   };
 
   // Calculate stats
@@ -175,11 +213,11 @@ export default function CustomerDetail() {
                       <User className="h-10 w-10 text-primary" />
                     </div>
                     
-                    <div className="flex-1 space-y-4">
+                    <div className="flex-1 space-y-4 w-full">
                       {isEditing ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           <div>
-                            <Label>Nome</Label>
+                            <Label>Nome *</Label>
                             <Input
                               value={editForm.name || ''}
                               onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
@@ -187,24 +225,32 @@ export default function CustomerDetail() {
                             />
                           </div>
                           <div>
-                            <Label>CPF/CNPJ</Label>
-                            <Input
-                              value={editForm.cpf_cnpj || ''}
-                              onChange={(e) => setEditForm({ ...editForm, cpf_cnpj: e.target.value })}
-                              className="mt-1"
-                            />
+                            <Label>Origem</Label>
+                            <Select
+                              value={editForm.source || 'outros'}
+                              onValueChange={(value) => setEditForm({ ...editForm, source: value })}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(sourceLabels).map(([key, label]) => (
+                                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                       ) : (
                         <div>
                           <h1 className="text-2xl font-bold">{customerData.name}</h1>
                           <div className="flex flex-wrap gap-2 mt-2">
-                            {customerData.cpf_cnpj && (
-                              <Badge variant="secondary">
-                                {customerData.cpf_cnpj.length > 14 ? 'CNPJ' : 'CPF'}: {customerData.cpf_cnpj}
+                            {customerData.source && (
+                              <Badge variant="outline">
+                                {sourceLabels[customerData.source] || customerData.source}
                               </Badge>
                             )}
-                            <Badge variant="outline">
+                            <Badge variant="secondary">
                               <Clock className="h-3 w-3 mr-1" />
                               Cliente desde {format(new Date(customerData.created_at), "MMM/yyyy", { locale: ptBR })}
                             </Badge>
@@ -244,123 +290,185 @@ export default function CustomerDetail() {
               </Card>
             </motion.div>
 
-            {/* Info Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Contact Info */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-              >
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <Phone className="h-5 w-5 text-primary" />
-                      Informações de Contato
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-muted-foreground text-sm">Telefone</Label>
-                        {isEditing ? (
-                          <Input
-                            value={editForm.phone || ''}
-                            onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                            className="mt-1"
-                          />
-                        ) : (
-                          <p className="font-medium flex items-center gap-2 mt-1">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            {formatPhone(customerData.phone)}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <Label className="text-muted-foreground text-sm">Email</Label>
-                        {isEditing ? (
-                          <Input
-                            value={editForm.email || ''}
-                            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                            placeholder="email@exemplo.com"
-                            className="mt-1"
-                          />
-                        ) : (
-                          <p className="font-medium flex items-center gap-2 mt-1">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            {customerData.email || 'Não informado'}
-                          </p>
-                        )}
-                      </div>
+            {/* Documents Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    Documentos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground text-sm">CPF/CNPJ</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editForm.cpf_cnpj || ''}
+                          onChange={(e) => setEditForm({ ...editForm, cpf_cnpj: e.target.value })}
+                          placeholder="000.000.000-00"
+                          className="mt-1"
+                        />
+                      ) : (
+                        <p className="font-medium mt-1">
+                          {formatCPF(customerData.cpf_cnpj) || 'Não informado'}
+                        </p>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                    <div>
+                      <Label className="text-muted-foreground text-sm">RG</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editForm.rg || ''}
+                          onChange={(e) => setEditForm({ ...editForm, rg: e.target.value })}
+                          placeholder="00.000.000-0"
+                          className="mt-1"
+                        />
+                      ) : (
+                        <p className="font-medium mt-1">
+                          {customerData.rg || 'Não informado'}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground text-sm">RENAVAM</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editForm.renavam || ''}
+                          onChange={(e) => setEditForm({ ...editForm, renavam: e.target.value })}
+                          placeholder="00000000000"
+                          className="mt-1"
+                        />
+                      ) : (
+                        <p className="font-medium mt-1">
+                          {customerData.renavam || 'Não informado'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-              {/* Address */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.2 }}
-              >
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <MapPin className="h-5 w-5 text-primary" />
-                      Endereço
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {isEditing ? (
-                      <>
+            {/* Contact Info */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.15 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Phone className="h-5 w-5 text-primary" />
+                    Informações de Contato
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground text-sm">Telefone *</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editForm.phone || ''}
+                          onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                          className="mt-1"
+                        />
+                      ) : (
+                        <p className="font-medium flex items-center gap-2 mt-1">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          {formatPhone(customerData.phone)}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground text-sm">Email</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editForm.email || ''}
+                          onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                          placeholder="email@exemplo.com"
+                          className="mt-1"
+                        />
+                      ) : (
+                        <p className="font-medium flex items-center gap-2 mt-1">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          {customerData.email || 'Não informado'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Address */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <MapPin className="h-5 w-5 text-primary" />
+                    Endereço
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isEditing ? (
+                    <>
+                      <div>
+                        <Label className="text-muted-foreground text-sm">Endereço</Label>
+                        <Input
+                          value={editForm.address || ''}
+                          onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                          placeholder="Rua, número, bairro"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-muted-foreground text-sm">Endereço</Label>
+                          <Label className="text-muted-foreground text-sm">Cidade</Label>
                           <Input
-                            value={editForm.address || ''}
-                            onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                            placeholder="Rua, número, bairro"
+                            value={editForm.city || ''}
+                            onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
                             className="mt-1"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label className="text-muted-foreground text-sm">Cidade</Label>
-                            <Input
-                              value={editForm.city || ''}
-                              onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-muted-foreground text-sm">Estado</Label>
-                            <Input
-                              value={editForm.state || ''}
-                              onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
-                              className="mt-1"
-                            />
-                          </div>
+                        <div>
+                          <Label className="text-muted-foreground text-sm">Estado</Label>
+                          <Input
+                            value={editForm.state || ''}
+                            onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                            className="mt-1"
+                          />
                         </div>
-                      </>
-                    ) : (
-                      <div>
-                        <p className="font-medium">{customerData.address || 'Endereço não informado'}</p>
-                        {(customerData.city || customerData.state) && (
-                          <p className="text-muted-foreground">
-                            {[customerData.city, customerData.state].filter(Boolean).join(' - ')}
-                          </p>
-                        )}
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
+                    </>
+                  ) : (
+                    <div>
+                      <p className="font-medium">{customerData.address || 'Endereço não informado'}</p>
+                      {(customerData.city || customerData.state) && (
+                        <p className="text-muted-foreground">
+                          {[customerData.city, customerData.state].filter(Boolean).join(' - ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
 
             {/* Notes */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.3 }}
+              transition={{ duration: 0.3, delay: 0.25 }}
             >
               <Card>
                 <CardHeader>
@@ -391,7 +499,7 @@ export default function CustomerDetail() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.4 }}
+                transition={{ duration: 0.3, delay: 0.3 }}
               >
                 <Card>
                   <CardHeader>
@@ -470,7 +578,7 @@ export default function CustomerDetail() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.5 }}
+                transition={{ duration: 0.3, delay: 0.35 }}
               >
                 <Card>
                   <CardHeader>
@@ -520,7 +628,7 @@ export default function CustomerDetail() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.6 }}
+                transition={{ duration: 0.3, delay: 0.4 }}
               >
                 <Card>
                   <CardHeader>

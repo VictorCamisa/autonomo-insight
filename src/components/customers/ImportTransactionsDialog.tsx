@@ -94,7 +94,7 @@ export function ImportTransactionsDialog({ open, onOpenChange }: ImportTransacti
             <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
               <input
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx,.xls,.csv"
                 onChange={handleFileChange}
                 className="hidden"
                 id="file-upload"
@@ -103,7 +103,10 @@ export function ImportTransactionsDialog({ open, onOpenChange }: ImportTransacti
                 <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-lg font-medium mb-2">Clique para selecionar a planilha</p>
                 <p className="text-sm text-muted-foreground">
-                  Formatos aceitos: .xlsx, .xls
+                  Formatos aceitos: .xlsx, .xls, .csv
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Importe vendedores.csv ou compradores.csv separadamente
                 </p>
               </label>
             </div>
@@ -111,7 +114,7 @@ export function ImportTransactionsDialog({ open, onOpenChange }: ImportTransacti
 
           {step === 'preview' && preview && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="p-4 bg-muted rounded-lg">
                   <p className="text-sm text-muted-foreground">Linhas no arquivo</p>
                   <p className="text-2xl font-bold">{preview.totalRows}</p>
@@ -119,6 +122,10 @@ export function ImportTransactionsDialog({ open, onOpenChange }: ImportTransacti
                 <div className="p-4 bg-muted rounded-lg">
                   <p className="text-sm text-muted-foreground">Transações válidas</p>
                   <p className="text-2xl font-bold text-emerald-600">{preview.validTransactions}</p>
+                </div>
+                <div className="p-4 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground">Tipo de arquivo</p>
+                  <p className="text-lg font-bold capitalize">{preview.fileType || 'Detectando...'}</p>
                 </div>
               </div>
 

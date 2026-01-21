@@ -20,13 +20,11 @@ import {
   Search,
   Phone,
   Mail,
-  MapPin,
-  ShoppingCart,
   Eye,
-  Calendar,
   Car,
-  TrendingUp,
-  TrendingDown,
+  ArrowDownLeft,
+  ArrowUpRight,
+  ShoppingCart,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -34,27 +32,24 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CustomerDetailSheet } from '@/components/crm/CustomerDetailSheet';
 
-interface CustomerWithSale {
+interface CustomerWithVehicle {
   id: string;
   name: string;
   phone: string;
   email: string | null;
   cpf_cnpj: string | null;
-  city: string | null;
-  state: string | null;
-  created_at: string;
-  sale_date: string;
-  sale_price: number;
+  date: string;
+  price: number;
   vehicle_brand: string;
   vehicle_model: string;
   vehicle_plate: string | null;
 }
 
-// Hook para buscar clientes compradores (que compraram veículos)
-function useBuyerCustomers() {
+// Hook para buscar veículos vendidos (clientes que compraram da loja)
+function useSoldVehicles() {
   return useQuery({
-    queryKey: ['customers-buyers'],
-    queryFn: async (): Promise<CustomerWithSale[]> => {
+    queryKey: ['customers-sold'],
+    queryFn: async (): Promise<CustomerWithVehicle[]> => {
       const { data, error } = await supabase
         .from('sales')
         .select(`
@@ -66,10 +61,7 @@ function useBuyerCustomers() {
             name,
             phone,
             email,
-            cpf_cnpj,
-            city,
-            state,
-            created_at
+            cpf_cnpj
           ),
           vehicle:vehicles!sales_vehicle_id_fkey(
             brand,
@@ -88,11 +80,8 @@ function useBuyerCustomers() {
         phone: sale.customer?.phone || '',
         email: sale.customer?.email,
         cpf_cnpj: sale.customer?.cpf_cnpj,
-        city: sale.customer?.city,
-        state: sale.customer?.state,
-        created_at: sale.customer?.created_at || sale.sale_date,
-        sale_date: sale.sale_date,
-        sale_price: sale.sale_price,
+        date: sale.sale_date,
+        price: sale.sale_price,
         vehicle_brand: sale.vehicle?.brand || '',
         vehicle_model: sale.vehicle?.model || '',
         vehicle_plate: sale.vehicle?.plate,
@@ -102,12 +91,12 @@ function useBuyerCustomers() {
   });
 }
 
-// Hook para buscar clientes vendedores (que venderam veículos para a loja)
-function useSellerCustomers() {
+// Hook para buscar veículos comprados (de quem a loja comprou)
+function usePurchasedVehicles() {
   return useQuery({
-    queryKey: ['customers-sellers'],
-    queryFn: async (): Promise<CustomerWithSale[]> => {
-      // Por enquanto retorna vazio - pode ser expandido quando tiver tabela de compras/aquisições
+    queryKey: ['customers-purchased'],
+    queryFn: async (): Promise<CustomerWithVehicle[]> => {
+      // Por enquanto retorna vazio - será expandido quando tiver tabela de aquisições
       return [];
     },
     staleTime: 30000,
@@ -115,44 +104,39 @@ function useSellerCustomers() {
 }
 
 export default function Customers() {
-  const { data: buyers, isLoading: loadingBuyers } = useBuyerCustomers();
-  const { data: sellers, isLoading: loadingSellers } = useSellerCustomers();
+  const { data: soldVehicles, isLoading: loadingSold } = useSoldVehicles();
+  const { data: purchasedVehicles, isLoading: loadingPurchased } = usePurchasedVehicles();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('buyers');
+  const [activeTab, setActiveTab] = useState('sold');
 
-  const filteredBuyers = useMemo(() => {
-    if (!searchQuery.trim() || !buyers) return buyers;
+  const filteredSold = useMemo(() => {
+    if (!searchQuery.trim() || !soldVehicles) return soldVehicles;
     
     const query = searchQuery.toLowerCase();
-    return buyers.filter((customer) => {
-      const name = customer.name?.toLowerCase() || '';
-      const phone = customer.phone?.toLowerCase() || '';
-      const email = customer.email?.toLowerCase() || '';
-      const vehicle = `${customer.vehicle_brand} ${customer.vehicle_model}`.toLowerCase();
+    return soldVehicles.filter((item) => {
+      const name = item.name?.toLowerCase() || '';
+      const phone = item.phone?.toLowerCase() || '';
+      const vehicle = `${item.vehicle_brand} ${item.vehicle_model}`.toLowerCase();
       
-      return (
-        name.includes(query) ||
-        phone.includes(query) ||
-        email.includes(query) ||
-        vehicle.includes(query)
-      );
+      return name.includes(query) || phone.includes(query) || vehicle.includes(query);
     });
-  }, [buyers, searchQuery]);
+  }, [soldVehicles, searchQuery]);
 
-  const filteredSellers = useMemo(() => {
-    if (!searchQuery.trim() || !sellers) return sellers;
+  const filteredPurchased = useMemo(() => {
+    if (!searchQuery.trim() || !purchasedVehicles) return purchasedVehicles;
     
     const query = searchQuery.toLowerCase();
-    return sellers.filter((customer) => {
-      const name = customer.name?.toLowerCase() || '';
-      const phone = customer.phone?.toLowerCase() || '';
+    return purchasedVehicles.filter((item) => {
+      const name = item.name?.toLowerCase() || '';
+      const phone = item.phone?.toLowerCase() || '';
+      const vehicle = `${item.vehicle_brand} ${item.vehicle_model}`.toLowerCase();
       
-      return name.includes(query) || phone.includes(query);
+      return name.includes(query) || phone.includes(query) || vehicle.includes(query);
     });
-  }, [sellers, searchQuery]);
+  }, [purchasedVehicles, searchQuery]);
 
   const handleOpenDetail = (customerId: string) => {
     setSelectedCustomerId(customerId);
@@ -174,15 +158,15 @@ export default function Customers() {
     }).format(value);
   };
 
-  const totalBuyersValue = buyers?.reduce((sum, b) => sum + (b.sale_price || 0), 0) || 0;
-  const totalSellersValue = sellers?.reduce((sum, s) => sum + (s.sale_price || 0), 0) || 0;
+  const totalSoldValue = soldVehicles?.reduce((sum, v) => sum + (v.price || 0), 0) || 0;
+  const totalPurchasedValue = purchasedVehicles?.reduce((sum, v) => sum + (v.price || 0), 0) || 0;
 
   return (
     <div>
       <ModuleHeader
         icon={UsersRound}
         title="Clientes"
-        description="Gerencie compradores e vendedores"
+        description="Histórico de compras e vendas de veículos"
         basePath="/clientes"
         navItems={[]}
       />
@@ -202,8 +186,8 @@ export default function Customers() {
                     <UsersRound className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{(buyers?.length || 0) + (sellers?.length || 0)}</p>
-                    <p className="text-sm text-muted-foreground">Total de Clientes</p>
+                    <p className="text-2xl font-bold">{(soldVehicles?.length || 0) + (purchasedVehicles?.length || 0)}</p>
+                    <p className="text-sm text-muted-foreground">Total de Transações</p>
                   </div>
                 </div>
               </CardContent>
@@ -219,11 +203,11 @@ export default function Customers() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                    <TrendingUp className="h-5 w-5 text-emerald-600" />
+                    <ArrowUpRight className="h-5 w-5 text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-emerald-600">{buyers?.length || 0}</p>
-                    <p className="text-sm text-muted-foreground">Compradores</p>
+                    <p className="text-2xl font-bold text-emerald-600">{soldVehicles?.length || 0}</p>
+                    <p className="text-sm text-muted-foreground">Vendidos</p>
                   </div>
                 </div>
               </CardContent>
@@ -239,11 +223,11 @@ export default function Customers() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                    <TrendingDown className="h-5 w-5 text-amber-600" />
+                    <ArrowDownLeft className="h-5 w-5 text-amber-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-amber-600">{sellers?.length || 0}</p>
-                    <p className="text-sm text-muted-foreground">Vendedores</p>
+                    <p className="text-2xl font-bold text-amber-600">{purchasedVehicles?.length || 0}</p>
+                    <p className="text-sm text-muted-foreground">Comprados</p>
                   </div>
                 </div>
               </CardContent>
@@ -262,7 +246,7 @@ export default function Customers() {
                     <ShoppingCart className="h-5 w-5 text-sky-600" />
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-sky-600">{formatCurrency(totalBuyersValue)}</p>
+                    <p className="text-lg font-bold text-sky-600">{formatCurrency(totalSoldValue)}</p>
                     <p className="text-sm text-muted-foreground">Total Vendido</p>
                   </div>
                 </div>
@@ -275,15 +259,15 @@ export default function Customers() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <TabsList>
-              <TabsTrigger value="buyers" className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                Compradores
-                <Badge variant="secondary" className="ml-1">{buyers?.length || 0}</Badge>
+              <TabsTrigger value="sold" className="flex items-center gap-2">
+                <ArrowUpRight className="h-4 w-4" />
+                Vendidos
+                <Badge variant="secondary" className="ml-1">{soldVehicles?.length || 0}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="sellers" className="flex items-center gap-2">
-                <TrendingDown className="h-4 w-4" />
-                Vendedores
-                <Badge variant="secondary" className="ml-1">{sellers?.length || 0}</Badge>
+              <TabsTrigger value="purchased" className="flex items-center gap-2">
+                <ArrowDownLeft className="h-4 w-4" />
+                Comprados
+                <Badge variant="secondary" className="ml-1">{purchasedVehicles?.length || 0}</Badge>
               </TabsTrigger>
             </TabsList>
             
@@ -298,49 +282,49 @@ export default function Customers() {
             </div>
           </div>
 
-          {/* Buyers Tab */}
-          <TabsContent value="buyers" className="mt-6">
+          {/* Sold Tab (Veículos que a loja vendeu) */}
+          <TabsContent value="sold" className="mt-6">
             <Card>
               <CardContent className="p-0">
-                {loadingBuyers ? (
+                {loadingSold ? (
                   <div className="p-6 space-y-4">
                     {[...Array(3)].map((_, i) => (
                       <Skeleton key={i} className="h-16 w-full" />
                     ))}
                   </div>
-                ) : filteredBuyers && filteredBuyers.length > 0 ? (
+                ) : filteredSold && filteredSold.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Cliente</TableHead>
+                        <TableHead>Cliente (Comprador)</TableHead>
                         <TableHead>Contato</TableHead>
-                        <TableHead>Veículo Comprado</TableHead>
-                        <TableHead>Valor</TableHead>
-                        <TableHead>Data da Compra</TableHead>
+                        <TableHead>Veículo Vendido</TableHead>
+                        <TableHead>Valor da Venda</TableHead>
+                        <TableHead>Data</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredBuyers.map((customer, index) => (
+                      {filteredSold.map((item, index) => (
                         <motion.tr
-                          key={`${customer.id}-${index}`}
+                          key={`${item.id}-${index}`}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: index * 0.02 }}
                           className="group hover:bg-muted/50 cursor-pointer"
-                          onClick={() => handleOpenDetail(customer.id)}
+                          onClick={() => handleOpenDetail(item.id)}
                         >
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                                 <span className="text-sm font-semibold text-emerald-600">
-                                  {customer.name?.charAt(0).toUpperCase() || '?'}
+                                  {item.name?.charAt(0).toUpperCase() || '?'}
                                 </span>
                               </div>
                               <div>
-                                <p className="font-medium">{customer.name}</p>
-                                {customer.cpf_cnpj && (
-                                  <span className="text-xs text-muted-foreground">{customer.cpf_cnpj}</span>
+                                <p className="font-medium">{item.name}</p>
+                                {item.cpf_cnpj && (
+                                  <span className="text-xs text-muted-foreground">{item.cpf_cnpj}</span>
                                 )}
                               </div>
                             </div>
@@ -349,12 +333,12 @@ export default function Customers() {
                             <div className="space-y-1">
                               <div className="flex items-center gap-1.5 text-sm">
                                 <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                                {formatPhone(customer.phone)}
+                                {formatPhone(item.phone)}
                               </div>
-                              {customer.email && (
+                              {item.email && (
                                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                                   <Mail className="h-3.5 w-3.5" />
-                                  {customer.email}
+                                  {item.email}
                                 </div>
                               )}
                             </div>
@@ -363,21 +347,21 @@ export default function Customers() {
                             <div className="flex items-center gap-2">
                               <Car className="h-4 w-4 text-muted-foreground" />
                               <div>
-                                <p className="font-medium">{customer.vehicle_brand} {customer.vehicle_model}</p>
-                                {customer.vehicle_plate && (
-                                  <span className="text-xs text-muted-foreground">{customer.vehicle_plate}</span>
+                                <p className="font-medium">{item.vehicle_brand} {item.vehicle_model}</p>
+                                {item.vehicle_plate && (
+                                  <span className="text-xs text-muted-foreground">{item.vehicle_plate}</span>
                                 )}
                               </div>
                             </div>
                           </TableCell>
                           <TableCell>
                             <span className="font-semibold text-emerald-600">
-                              {formatCurrency(customer.sale_price)}
+                              {formatCurrency(item.price)}
                             </span>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
-                              {format(new Date(customer.sale_date), "dd/MM/yyyy", { locale: ptBR })}
+                              {format(new Date(item.date), "dd/MM/yyyy", { locale: ptBR })}
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
@@ -386,7 +370,7 @@ export default function Customers() {
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleOpenDetail(customer.id);
+                                handleOpenDetail(item.id);
                               }}
                             >
                               <Eye className="h-4 w-4 mr-1" />
@@ -399,12 +383,12 @@ export default function Customers() {
                   </Table>
                 ) : (
                   <div className="p-12 text-center">
-                    <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Nenhum comprador encontrado</h3>
+                    <ArrowUpRight className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Nenhuma venda registrada</h3>
                     <p className="text-muted-foreground text-sm">
                       {searchQuery
-                        ? 'Nenhum comprador corresponde à sua busca.'
-                        : 'Compradores aparecerão aqui quando vendas forem concluídas.'}
+                        ? 'Nenhuma venda corresponde à sua busca.'
+                        : 'Vendas aparecerão aqui quando forem concluídas.'}
                     </p>
                   </div>
                 )}
@@ -412,49 +396,49 @@ export default function Customers() {
             </Card>
           </TabsContent>
 
-          {/* Sellers Tab */}
-          <TabsContent value="sellers" className="mt-6">
+          {/* Purchased Tab (Veículos que a loja comprou) */}
+          <TabsContent value="purchased" className="mt-6">
             <Card>
               <CardContent className="p-0">
-                {loadingSellers ? (
+                {loadingPurchased ? (
                   <div className="p-6 space-y-4">
                     {[...Array(3)].map((_, i) => (
                       <Skeleton key={i} className="h-16 w-full" />
                     ))}
                   </div>
-                ) : filteredSellers && filteredSellers.length > 0 ? (
+                ) : filteredPurchased && filteredPurchased.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Cliente</TableHead>
+                        <TableHead>Cliente (Vendedor)</TableHead>
                         <TableHead>Contato</TableHead>
-                        <TableHead>Veículo Vendido</TableHead>
-                        <TableHead>Valor</TableHead>
-                        <TableHead>Data da Venda</TableHead>
+                        <TableHead>Veículo Comprado</TableHead>
+                        <TableHead>Valor da Compra</TableHead>
+                        <TableHead>Data</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredSellers.map((customer, index) => (
+                      {filteredPurchased.map((item, index) => (
                         <motion.tr
-                          key={`${customer.id}-${index}`}
+                          key={`${item.id}-${index}`}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: index * 0.02 }}
                           className="group hover:bg-muted/50 cursor-pointer"
-                          onClick={() => handleOpenDetail(customer.id)}
+                          onClick={() => handleOpenDetail(item.id)}
                         >
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
                                 <span className="text-sm font-semibold text-amber-600">
-                                  {customer.name?.charAt(0).toUpperCase() || '?'}
+                                  {item.name?.charAt(0).toUpperCase() || '?'}
                                 </span>
                               </div>
                               <div>
-                                <p className="font-medium">{customer.name}</p>
-                                {customer.cpf_cnpj && (
-                                  <span className="text-xs text-muted-foreground">{customer.cpf_cnpj}</span>
+                                <p className="font-medium">{item.name}</p>
+                                {item.cpf_cnpj && (
+                                  <span className="text-xs text-muted-foreground">{item.cpf_cnpj}</span>
                                 )}
                               </div>
                             </div>
@@ -463,12 +447,12 @@ export default function Customers() {
                             <div className="space-y-1">
                               <div className="flex items-center gap-1.5 text-sm">
                                 <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                                {formatPhone(customer.phone)}
+                                {formatPhone(item.phone)}
                               </div>
-                              {customer.email && (
+                              {item.email && (
                                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                                   <Mail className="h-3.5 w-3.5" />
-                                  {customer.email}
+                                  {item.email}
                                 </div>
                               )}
                             </div>
@@ -477,21 +461,21 @@ export default function Customers() {
                             <div className="flex items-center gap-2">
                               <Car className="h-4 w-4 text-muted-foreground" />
                               <div>
-                                <p className="font-medium">{customer.vehicle_brand} {customer.vehicle_model}</p>
-                                {customer.vehicle_plate && (
-                                  <span className="text-xs text-muted-foreground">{customer.vehicle_plate}</span>
+                                <p className="font-medium">{item.vehicle_brand} {item.vehicle_model}</p>
+                                {item.vehicle_plate && (
+                                  <span className="text-xs text-muted-foreground">{item.vehicle_plate}</span>
                                 )}
                               </div>
                             </div>
                           </TableCell>
                           <TableCell>
                             <span className="font-semibold text-amber-600">
-                              {formatCurrency(customer.sale_price)}
+                              {formatCurrency(item.price)}
                             </span>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
-                              {format(new Date(customer.sale_date), "dd/MM/yyyy", { locale: ptBR })}
+                              {format(new Date(item.date), "dd/MM/yyyy", { locale: ptBR })}
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
@@ -500,7 +484,7 @@ export default function Customers() {
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleOpenDetail(customer.id);
+                                handleOpenDetail(item.id);
                               }}
                             >
                               <Eye className="h-4 w-4 mr-1" />
@@ -513,12 +497,12 @@ export default function Customers() {
                   </Table>
                 ) : (
                   <div className="p-12 text-center">
-                    <TrendingDown className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Nenhum vendedor cadastrado</h3>
+                    <ArrowDownLeft className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Nenhuma compra registrada</h3>
                     <p className="text-muted-foreground text-sm">
                       {searchQuery
-                        ? 'Nenhum vendedor corresponde à sua busca.'
-                        : 'Vendedores aparecerão aqui quando veículos forem adquiridos de particulares.'}
+                        ? 'Nenhuma compra corresponde à sua busca.'
+                        : 'Compras de veículos aparecerão aqui quando forem cadastradas.'}
                     </p>
                   </div>
                 )}

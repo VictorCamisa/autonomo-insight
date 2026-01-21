@@ -23,24 +23,23 @@ interface TransactionRow {
   buyer_address: string | null;
   sale_date: string | null;
   km_out: number | null;
+  seller_customer_id?: string | null;
+  buyer_customer_id?: string | null;
 }
 
 function parseDate(value: any): string | null {
   if (!value) return null;
   
-  // Se for número (Excel serial date)
   if (typeof value === 'number') {
     const excelEpoch = new Date(1899, 11, 30);
     const date = new Date(excelEpoch.getTime() + value * 86400000);
     return date.toISOString().split('T')[0];
   }
   
-  // Se for string
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) return null;
     
-    // Tenta formato dd/mm/yyyy
     const brMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (brMatch) {
       const day = brMatch[1].padStart(2, '0');
@@ -52,7 +51,6 @@ function parseDate(value: any): string | null {
       return `${year}-${month}-${day}`;
     }
     
-    // Tenta ISO
     const isoDate = new Date(trimmed);
     if (!isNaN(isoDate.getTime())) {
       return isoDate.toISOString().split('T')[0];
@@ -73,6 +71,67 @@ function cleanNumber(value: any): number | null {
   if (typeof value === 'number') return value;
   const num = parseInt(String(value).replace(/\D/g, ''));
   return isNaN(num) ? null : num;
+}
+
+function cleanPhone(phone: string | null): string {
+  if (!phone) return '';
+  // Limpa e formata telefone, garantindo pelo menos algo para o campo obrigatório
+  const cleaned = phone.replace(/\D/g, '');
+  return cleaned || '00000000000';
+}
+
+async function findOrCreateCustomer(
+  supabase: any,
+  name: string | null,
+  phone: string | null,
+  cpf: string | null,
+  address: string | null,
+  source: string
+): Promise<string | null> {
+  if (!name || name === '-') return null;
+
+  const cleanedPhone = cleanPhone(phone);
+  
+  // Tenta encontrar cliente existente por CPF ou telefone
+  if (cpf) {
+    const { data: existingByCpf } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('cpf_cnpj', cpf)
+      .single();
+    
+    if (existingByCpf) return existingByCpf.id;
+  }
+  
+  if (cleanedPhone && cleanedPhone !== '00000000000') {
+    const { data: existingByPhone } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('phone', cleanedPhone)
+      .single();
+    
+    if (existingByPhone) return existingByPhone.id;
+  }
+
+  // Cria novo cliente
+  const { data: newCustomer, error } = await supabase
+    .from('customers')
+    .insert({
+      name: name,
+      phone: cleanedPhone || '00000000000',
+      cpf_cnpj: cpf,
+      address: address,
+      source: source,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('Erro ao criar cliente:', error.message, { name, phone: cleanedPhone });
+    return null;
+  }
+
+  return newCustomer?.id || null;
 }
 
 Deno.serve(async (req) => {
@@ -99,13 +158,13 @@ Deno.serve(async (req) => {
 
     const transactions: TransactionRow[] = [];
     const errors: string[] = [];
+    let customersCreated = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const rowNum = i + 2; // +2 porque começa da linha 2 (1 é header)
+      const rowNum = i + 2;
 
       try {
-        // Mapeia as colunas da planilha para o objeto
         const transaction: TransactionRow = {
           vehicle_number: cleanNumber(row['NUM']),
           brand: cleanString(row['MARCA']),
@@ -132,6 +191,37 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Se não é dry run, cria os clientes
+        if (!dryRun) {
+          // Cria cliente vendedor (de quem a loja comprou)
+          if (transaction.seller_name) {
+            const sellerCustomerId = await findOrCreateCustomer(
+              supabase,
+              transaction.seller_name,
+              transaction.seller_phone,
+              transaction.seller_cpf,
+              transaction.seller_address,
+              'importacao_vendedor'
+            );
+            transaction.seller_customer_id = sellerCustomerId;
+            if (sellerCustomerId) customersCreated++;
+          }
+
+          // Cria cliente comprador (para quem a loja vendeu)
+          if (transaction.buyer_name) {
+            const buyerCustomerId = await findOrCreateCustomer(
+              supabase,
+              transaction.buyer_name,
+              transaction.buyer_phone,
+              transaction.buyer_cpf,
+              transaction.buyer_address,
+              'importacao_comprador'
+            );
+            transaction.buyer_customer_id = buyerCustomerId;
+            if (buyerCustomerId) customersCreated++;
+          }
+        }
+
         transactions.push(transaction);
       } catch (err: any) {
         errors.push(`Linha ${rowNum}: ${err?.message || 'Erro desconhecido'}`);
@@ -154,9 +244,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Insere em lotes de 100
+    // Insere transações em lotes de 50
     let inserted = 0;
-    const batchSize = 100;
+    const batchSize = 50;
 
     for (let i = 0; i < transactions.length; i += batchSize) {
       const batch = transactions.slice(i, i + batchSize);
@@ -174,7 +264,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Inseridos: ${inserted} registros`);
+    console.log(`Inseridos: ${inserted} registros, ${customersCreated} clientes criados/encontrados`);
 
     return new Response(
       JSON.stringify({
@@ -182,6 +272,7 @@ Deno.serve(async (req) => {
         totalRows: rows.length,
         validTransactions: transactions.length,
         inserted,
+        customersCreated,
         errors,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

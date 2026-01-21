@@ -311,9 +311,9 @@ export function generateSampleContractPDF(type: 'venda' | 'compra') {
 
 export function previewSampleContract(type: 'venda' | 'compra') {
   const doc = generateSampleContractPDF(type);
-  const pdfBlob = doc.output('blob');
-  const pdfUrl = URL.createObjectURL(pdfBlob);
-  window.open(pdfUrl, '_blank');
+  // Download direto para evitar bloqueio do Chrome em blob URLs
+  const filename = type === 'venda' ? 'MODELO_VENDA_VEICULO.pdf' : 'MODELO_COMPRA_VEICULO.pdf';
+  doc.save(filename);
 }
 
 export function downloadSampleContract(type: 'venda' | 'compra') {

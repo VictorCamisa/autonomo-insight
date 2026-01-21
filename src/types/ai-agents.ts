@@ -368,9 +368,57 @@ Regras importantes:
 };
 
 // =============================================
+// KNOWLEDGE BASE
+// =============================================
+
+export const KNOWLEDGE_CATEGORIES = [
+  { value: 'faq', label: 'FAQs / Perguntas Frequentes' },
+  { value: 'policies', label: 'Políticas e Regras' },
+  { value: 'scripts', label: 'Scripts de Vendas' },
+  { value: 'about', label: 'Sobre a Empresa' },
+  { value: 'custom', label: 'Personalizado' },
+] as const;
+
+export interface AIAgentKnowledge {
+  id: string;
+  agent_id: string;
+  title: string;
+  content: string;
+  category: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AIAgentKnowledgeFormData = Omit<AIAgentKnowledge, 'id' | 'created_at' | 'updated_at'>;
+
+// Agent Identity (stored in ai_agents table)
+export interface AIAgentIdentity {
+  display_name: string | null;
+  gender: 'male' | 'female' | 'neutral';
+  tone: 'formal' | 'informal' | 'friendly' | 'professional';
+  welcome_message: string | null;
+  special_instructions: Record<string, unknown>;
+}
+
+export const GENDER_OPTIONS = [
+  { value: 'female', label: 'Feminino' },
+  { value: 'male', label: 'Masculino' },
+  { value: 'neutral', label: 'Neutro' },
+] as const;
+
+export const TONE_OPTIONS = [
+  { value: 'friendly', label: 'Amigável' },
+  { value: 'professional', label: 'Profissional' },
+  { value: 'informal', label: 'Informal' },
+  { value: 'formal', label: 'Formal' },
+] as const;
+
+// =============================================
 // HELPER TYPES
 // =============================================
 
 export type LLMProvider = typeof LLM_PROVIDERS[number]['value'];
 export type AgentObjective = typeof AGENT_OBJECTIVES[number]['value'];
 export type AgentStatus = typeof AGENT_STATUS[number]['value'];
+export type KnowledgeCategory = typeof KNOWLEDGE_CATEGORIES[number]['value'];

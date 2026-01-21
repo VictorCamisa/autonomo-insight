@@ -20,7 +20,9 @@ import { useAIAgent } from '@/hooks/useAIAgents';
 
 const agentNavItems = [
   { path: 'basico', label: 'Básico', icon: Settings },
+  { path: 'identidade', label: 'Identidade', icon: Bot },
   { path: 'llm', label: 'Modelo LLM', icon: Brain },
+  { path: 'conhecimento', label: 'Conhecimento', icon: Database },
   { path: 'memoria', label: 'Memória', icon: Database },
   { path: 'ferramentas', label: 'Ferramentas', icon: Wrench },
   { path: 'workflows', label: 'Workflows', icon: GitBranch },

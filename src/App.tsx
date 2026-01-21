@@ -96,7 +96,9 @@ const WhatsAppManagerDashboard = lazy(() => import("@/components/whatsapp/WhatsA
 const AIAgentsLayout = lazy(() => import("@/components/ai-agents/AIAgentsLayout"));
 const AIAgentsListPage = lazy(() => import("@/components/ai-agents/pages/AIAgentsListPage"));
 const AgentBasicsPage = lazy(() => import("@/components/ai-agents/pages/AgentBasicsPage"));
+const AgentIdentityPage = lazy(() => import("@/components/ai-agents/pages/AgentIdentityPage"));
 const AgentLLMConfigPage = lazy(() => import("@/components/ai-agents/pages/AgentLLMConfigPage"));
+const AgentKnowledgePage = lazy(() => import("@/components/ai-agents/pages/AgentKnowledgePage"));
 const AgentMemoryPage = lazy(() => import("@/components/ai-agents/pages/AgentMemoryPage"));
 const AgentToolsPage = lazy(() => import("@/components/ai-agents/pages/AgentToolsPage"));
 const AgentDeploymentPage = lazy(() => import("@/components/ai-agents/pages/AgentDeploymentPage"));
@@ -299,7 +301,9 @@ const App = () => (
                     <Route index element={<AIAgentsListPage />} />
                     <Route path="novo" element={<AgentBasicsPage />} />
                     <Route path=":agentId/basico" element={<AgentBasicsPage />} />
+                    <Route path=":agentId/identidade" element={<AgentIdentityPage />} />
                     <Route path=":agentId/llm" element={<AgentLLMConfigPage />} />
+                    <Route path=":agentId/conhecimento" element={<AgentKnowledgePage />} />
                     <Route path=":agentId/memoria" element={<AgentMemoryPage />} />
                     <Route path=":agentId/ferramentas" element={<AgentToolsPage />} />
                     <Route path=":agentId/workflows" element={<AgentWorkflowsPage />} />

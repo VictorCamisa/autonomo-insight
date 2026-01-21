@@ -180,13 +180,36 @@ export function generatePurchaseContractPDF(contract: Contract) {
   doc.setFont('helvetica', 'bold');
   doc.text('OBJETO:', margin, y);
   doc.setFont('helvetica', 'normal');
-  const vehicleText = `${contract.vehicle_brand} ${contract.vehicle_model}, ${contract.vehicle_year}, placas ${contract.vehicle_plate || '___________'}, cor ${contract.vehicle_color || '___________'}, RENAVAM n° ${contract.vehicle_renavam || '___________'}.`;
+  const vehicleText = `${contract.vehicle_brand} ${contract.vehicle_model}, ${contract.vehicle_year}, ${contract.vehicle_plate || '___________'}, ${contract.vehicle_color || '___________'}, RENAVAM n°${contract.vehicle_renavam || '___________'}.`;
   const vehicleLines = doc.splitTextToSize(vehicleText, contentWidth - 20);
   doc.text(vehicleLines, margin + 20, y);
   y += vehicleLines.length * 5 + 10;
 
+  // Negotiation section (payment details)
+  doc.setFont('helvetica', 'bold');
+  doc.text('NEGOCIAÇÃO:', margin, y);
+  doc.setFont('helvetica', 'normal');
+  y += 6;
+  
+  const negotiationIntro = `Comprado pelo valor de ${formatCurrency(contract.vehicle_value)} ${currencyToWords(contract.vehicle_value)}`;
+  const negotiationLines = doc.splitTextToSize(negotiationIntro, contentWidth);
+  doc.text(negotiationLines, margin, y);
+  y += negotiationLines.length * 5 + 4;
+
+  // Payment details from notes or default
+  if (contract.notes) {
+    const notesLines = doc.splitTextToSize(contract.notes, contentWidth);
+    doc.text(notesLines, margin, y);
+    y += notesLines.length * 5 + 8;
+  } else if (contract.down_payment && contract.down_payment > 0) {
+    doc.text(`• Entrada: ${formatCurrency(contract.down_payment)}`, margin, y);
+    y += 6;
+  }
+  
+  y += 4;
+
   // Commitment clause
-  const commitmentText = 'No ato da assinatura do presente instrumento o VENDEDOR compromete-se a entregar o veículo ao COMPRADOR livre e desimpedido de qualquer débito, como multas, bloqueio judiciais bem como outras taxas que possam recair.';
+  const commitmentText = 'No ato da assinatura do presente instrumento o VENDEDOR compromete-se a entregar o veículo ao COMPRADOR livre e desimpedido de qualquer débito, como multas, bloqueios judiciais bem como outras taxas que possam recair.';
   const commitmentLines = doc.splitTextToSize(commitmentText, contentWidth);
   doc.text(commitmentLines, margin, y);
   y += commitmentLines.length * 5 + 8;
@@ -277,25 +300,33 @@ const SAMPLE_PURCHASE_CONTRACT: Contract = {
   contract_number: 'MODELO-COMPRA',
   contract_type: 'compra',
   status: 'draft',
-  customer_name: 'Maria Aparecida Oliveira',
-  customer_cpf: '987.654.321-00',
-  customer_rg: '98.765.432-1',
-  customer_phone: '(12) 98888-7777',
-  customer_address: 'Avenida Brasil, 456, Jardim América',
+  customer_name: 'DEBORA CRISTINA PEREIRA',
+  customer_cpf: '367.554.878-30',
+  customer_rg: '418771340',
+  customer_phone: '(12) 98111-3858',
+  customer_address: 'Rua Marcelo Thorchio, 48, Vila Rezende',
   customer_city: 'Taubaté',
   customer_state: 'SP',
-  customer_zip: '12030-000',
-  customer_birth_date: '1978-10-20',
+  customer_zip: '12052-110',
+  customer_birth_date: '1987-06-03',
   customer_nationality: 'brasileira',
-  customer_profession: 'Advogada',
+  customer_profession: 'Auxiliar de Inclusão',
   customer_marital_status: 'solteira',
-  vehicle_brand: 'Toyota',
-  vehicle_model: 'Corolla XEi 2.0',
-  vehicle_year: '2021/2021',
-  vehicle_plate: 'DEF-9876',
-  vehicle_color: 'Branco',
-  vehicle_renavam: '11223344556',
-  vehicle_value: 98000,
+  vehicle_brand: 'FORD',
+  vehicle_model: 'FIESTA 1.6 FLEX',
+  vehicle_year: '2009/2010',
+  vehicle_plate: 'EIH2J66',
+  vehicle_color: 'PRETO',
+  vehicle_renavam: '00184453755',
+  vehicle_value: 20000,
+  down_payment: 12882,
+  notes: `com um valor de R$12.882,00 (doze mil oitocentos e oitenta e dois reais) para quitação na data de hoje pago pelo cliente da seguinte maneira:
+
+• R$8.000,00 no cartão em crédito em 3x de R$2.970,00
+• R$4.882,00 via pix na conta da loja (BRADESCO) na data de hoje
+• R$104,00 referente a multa por averbação (falta de transferência dentro da data vigente)
+
+Dando um total de R$4.986,00.`,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };

@@ -33,7 +33,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { usePurchasedTransactions, useSoldTransactions } from '@/hooks/useVehicleTransactions';
 import { ImportTransactionsDialog } from '@/components/customers/ImportTransactionsDialog';
 
 // Hook para buscar vendas do sistema (clientes que compraram da loja)
@@ -62,6 +61,42 @@ function useSystemSales() {
         `)
         .eq('status', 'concluida')
         .order('sale_date', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30000,
+  });
+}
+
+// Hook para buscar transações históricas de venda (com clientes vinculados)
+function useHistoryTransactionsSold() {
+  return useQuery({
+    queryKey: ['vehicle-transactions-sold-with-customers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vehicle_transactions')
+        .select('*')
+        .not('buyer_name', 'is', null)
+        .order('sale_date', { ascending: false, nullsFirst: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30000,
+  });
+}
+
+// Hook para buscar transações históricas de compra (com clientes vinculados)
+function useHistoryTransactionsPurchased() {
+  return useQuery({
+    queryKey: ['vehicle-transactions-purchased-with-customers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vehicle_transactions')
+        .select('*')
+        .not('seller_name', 'is', null)
+        .order('purchase_date', { ascending: false, nullsFirst: false });
 
       if (error) throw error;
       return data || [];
@@ -100,6 +135,7 @@ interface PurchasedItem {
   date: string | null;
   chassis: string | null;
   vehicle_number: number | null;
+  customer_id?: string;
 }
 
 export default function Customers() {
@@ -109,8 +145,8 @@ export default function Customers() {
   const { data: systemSales, isLoading: loadingSystemSales } = useSystemSales();
   
   // Dados históricos importados
-  const { data: soldTransactions, isLoading: loadingSoldTransactions } = useSoldTransactions();
-  const { data: purchasedTransactions, isLoading: loadingPurchasedTransactions } = usePurchasedTransactions();
+  const { data: soldTransactions, isLoading: loadingSoldTransactions } = useHistoryTransactionsSold();
+  const { data: purchasedTransactions, isLoading: loadingPurchasedTransactions } = useHistoryTransactionsPurchased();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('sold');
@@ -142,7 +178,7 @@ export default function Customers() {
     });
 
     // Adiciona histórico importado
-    soldTransactions?.forEach((tx) => {
+    soldTransactions?.forEach((tx: any) => {
       items.push({
         id: `history-${tx.id}`,
         type: 'history',
@@ -157,6 +193,7 @@ export default function Customers() {
         price: tx.sale_price,
         km_out: tx.km_out,
         vehicle_number: tx.vehicle_number,
+        customer_id: tx.buyer_customer_id,
       });
     });
 
@@ -170,7 +207,7 @@ export default function Customers() {
 
   // Processa compras (histórico importado)
   const allPurchasedItems = useMemo((): PurchasedItem[] => {
-    return (purchasedTransactions || []).map((tx) => ({
+    return (purchasedTransactions || []).map((tx: any) => ({
       id: tx.id,
       name: tx.seller_name || '-',
       phone: tx.seller_phone,
@@ -182,6 +219,7 @@ export default function Customers() {
       date: tx.purchase_date,
       chassis: tx.chassis,
       vehicle_number: tx.vehicle_number,
+      customer_id: tx.seller_customer_id,
     }));
   }, [purchasedTransactions]);
 
@@ -376,7 +414,7 @@ export default function Customers() {
             </div>
           </div>
 
-          {/* Sold Tab (Veículos que a loja vendeu) */}
+          {/* Sold Tab */}
           <TabsContent value="sold" className="mt-6">
             <Card>
               <CardContent className="p-0">
@@ -469,7 +507,7 @@ export default function Customers() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            {item.type === 'system' && item.customer_id && (
+                            {item.customer_id && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -502,7 +540,7 @@ export default function Customers() {
             </Card>
           </TabsContent>
 
-          {/* Purchased Tab (Veículos que a loja comprou) */}
+          {/* Purchased Tab */}
           <TabsContent value="purchased" className="mt-6">
             <Card>
               <CardContent className="p-0">
@@ -522,6 +560,7 @@ export default function Customers() {
                         <TableHead>Veículo</TableHead>
                         <TableHead>Data da Compra</TableHead>
                         <TableHead>Chassi</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -588,6 +627,17 @@ export default function Customers() {
                             <span className="text-xs font-mono text-muted-foreground truncate max-w-[120px] block">
                               {item.chassis || '-'}
                             </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {item.customer_id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenDetail(item.customer_id!)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
                           </TableCell>
                         </motion.tr>
                       ))}

@@ -1067,6 +1067,9 @@ export type Database = {
           name: string
           notes: string | null
           phone: string
+          renavam: string | null
+          rg: string | null
+          source: string | null
           state: string | null
           updated_at: string
         }
@@ -1081,6 +1084,9 @@ export type Database = {
           name: string
           notes?: string | null
           phone: string
+          renavam?: string | null
+          rg?: string | null
+          source?: string | null
           state?: string | null
           updated_at?: string
         }
@@ -1095,6 +1101,9 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string
+          renavam?: string | null
+          rg?: string | null
+          source?: string | null
           state?: string | null
           updated_at?: string
         }
@@ -3799,6 +3808,7 @@ export type Database = {
           brand: string | null
           buyer_address: string | null
           buyer_cpf: string | null
+          buyer_customer_id: string | null
           buyer_name: string | null
           buyer_phone: string | null
           chassis: string | null
@@ -3815,6 +3825,7 @@ export type Database = {
           sale_price: number | null
           seller_address: string | null
           seller_cpf: string | null
+          seller_customer_id: string | null
           seller_name: string | null
           seller_phone: string | null
           updated_at: string
@@ -3824,6 +3835,7 @@ export type Database = {
           brand?: string | null
           buyer_address?: string | null
           buyer_cpf?: string | null
+          buyer_customer_id?: string | null
           buyer_name?: string | null
           buyer_phone?: string | null
           chassis?: string | null
@@ -3840,6 +3852,7 @@ export type Database = {
           sale_price?: number | null
           seller_address?: string | null
           seller_cpf?: string | null
+          seller_customer_id?: string | null
           seller_name?: string | null
           seller_phone?: string | null
           updated_at?: string
@@ -3849,6 +3862,7 @@ export type Database = {
           brand?: string | null
           buyer_address?: string | null
           buyer_cpf?: string | null
+          buyer_customer_id?: string | null
           buyer_name?: string | null
           buyer_phone?: string | null
           chassis?: string | null
@@ -3865,12 +3879,28 @@ export type Database = {
           sale_price?: number | null
           seller_address?: string | null
           seller_cpf?: string | null
+          seller_customer_id?: string | null
           seller_name?: string | null
           seller_phone?: string | null
           updated_at?: string
           vehicle_number?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_transactions_buyer_customer_id_fkey"
+            columns: ["buyer_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_transactions_seller_customer_id_fkey"
+            columns: ["seller_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vehicles: {
         Row: {

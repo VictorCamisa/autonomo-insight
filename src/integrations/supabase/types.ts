@@ -220,6 +220,47 @@ export type Database = {
           },
         ]
       }
+      ai_agent_knowledge: {
+        Row: {
+          agent_id: string
+          category: string
+          content: string
+          created_at: string
+          id: string
+          is_active: boolean
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          category?: string
+          content: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          category?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_knowledge_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_agent_messages: {
         Row: {
           audio_url: string | null
@@ -565,9 +606,11 @@ export type Database = {
           created_by: string | null
           deployment_channels: string[] | null
           description: string | null
+          display_name: string | null
           elevenlabs_api_key: string | null
           embed_code: string | null
           enable_voice: boolean | null
+          gender: string | null
           id: string
           llm_model: string | null
           llm_provider: string | null
@@ -580,9 +623,11 @@ export type Database = {
           redis_password_encrypted: string | null
           redis_port: number | null
           short_term_memory_type: string | null
+          special_instructions: Json | null
           status: string | null
           system_prompt: string | null
           temperature: number | null
+          tone: string | null
           top_p: number | null
           transfer_keywords: string[] | null
           transfer_to_human_enabled: boolean | null
@@ -592,6 +637,7 @@ export type Database = {
           voice_id: string | null
           voice_model: string | null
           webhook_url: string | null
+          welcome_message: string | null
           whatsapp_auto_reply: boolean | null
           whatsapp_instance_id: string | null
           whatsapp_welcome_message: string | null
@@ -605,9 +651,11 @@ export type Database = {
           created_by?: string | null
           deployment_channels?: string[] | null
           description?: string | null
+          display_name?: string | null
           elevenlabs_api_key?: string | null
           embed_code?: string | null
           enable_voice?: boolean | null
+          gender?: string | null
           id?: string
           llm_model?: string | null
           llm_provider?: string | null
@@ -620,9 +668,11 @@ export type Database = {
           redis_password_encrypted?: string | null
           redis_port?: number | null
           short_term_memory_type?: string | null
+          special_instructions?: Json | null
           status?: string | null
           system_prompt?: string | null
           temperature?: number | null
+          tone?: string | null
           top_p?: number | null
           transfer_keywords?: string[] | null
           transfer_to_human_enabled?: boolean | null
@@ -632,6 +682,7 @@ export type Database = {
           voice_id?: string | null
           voice_model?: string | null
           webhook_url?: string | null
+          welcome_message?: string | null
           whatsapp_auto_reply?: boolean | null
           whatsapp_instance_id?: string | null
           whatsapp_welcome_message?: string | null
@@ -645,9 +696,11 @@ export type Database = {
           created_by?: string | null
           deployment_channels?: string[] | null
           description?: string | null
+          display_name?: string | null
           elevenlabs_api_key?: string | null
           embed_code?: string | null
           enable_voice?: boolean | null
+          gender?: string | null
           id?: string
           llm_model?: string | null
           llm_provider?: string | null
@@ -660,9 +713,11 @@ export type Database = {
           redis_password_encrypted?: string | null
           redis_port?: number | null
           short_term_memory_type?: string | null
+          special_instructions?: Json | null
           status?: string | null
           system_prompt?: string | null
           temperature?: number | null
+          tone?: string | null
           top_p?: number | null
           transfer_keywords?: string[] | null
           transfer_to_human_enabled?: boolean | null
@@ -672,6 +727,7 @@ export type Database = {
           voice_id?: string | null
           voice_model?: string | null
           webhook_url?: string | null
+          welcome_message?: string | null
           whatsapp_auto_reply?: boolean | null
           whatsapp_instance_id?: string | null
           whatsapp_welcome_message?: string | null

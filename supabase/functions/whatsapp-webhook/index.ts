@@ -619,66 +619,126 @@ async function processWithAIAgent(
 
   console.log('[AI Agent] Using', relevantVehicles.length, 'vehicles for context');
 
-  // Build system prompt with vehicles INCLUDING PHOTOS
+  // ===== BUILD DYNAMIC PROMPT FROM DATABASE =====
+  // Fetch knowledge base entries for this agent
+  const { data: knowledgeEntries } = await supabase
+    .from('ai_agent_knowledge')
+    .select('title, content, category')
+    .eq('agent_id', agent.id)
+    .eq('is_active', true)
+    .order('category', { ascending: true });
+
+  console.log('[AI Agent] Loaded', knowledgeEntries?.length || 0, 'knowledge base entries');
+
+  // Build system prompt dynamically from database configuration
   let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
   
-  // Add Matheus Veículos context, photo instructions, and QUALIFICATION data extraction
+  // Add identity from database (display_name, gender, tone, welcome_message)
+  const displayName = agent.display_name || agent.name || 'Assistente';
+  const gender = agent.gender || 'female';
+  const tone = agent.tone || 'friendly';
+  const welcomeMessage = agent.welcome_message || '';
+  const specialInstructions = agent.special_instructions || {};
+
+  // Build identity section dynamically
+  const genderLanguage = gender === 'female' 
+    ? 'Use linguagem FEMININA: "obrigada", "animada", "empolgada", "feliz em ajudar"'
+    : gender === 'male'
+    ? 'Use linguagem MASCULINA: "obrigado", "animado", "empolgado", "feliz em ajudar"'
+    : 'Use linguagem NEUTRA';
+
+  const toneDescriptions: Record<string, string> = {
+    friendly: 'Seja simpático(a), acolhedor(a) e descontraído(a)',
+    professional: 'Seja profissional, cortês e objetivo(a)',
+    informal: 'Seja informal, use gírias e seja bem descontraído(a)',
+    formal: 'Seja formal, use tratamento respeitoso e linguagem culta',
+  };
+  const toneDescription = toneDescriptions[tone] || 'Seja simpático(a) e acolhedor(a)';
+
   systemPrompt += `
 
-Você é a Gabi, assistente virtual da MATHEUS VEÍCULOS.
+===== IDENTIDADE =====
+- Você é ${displayName}. NUNCA se apresente com outro nome.
+- ${genderLanguage}
+- ${toneDescription}
+`;
 
-===== IDENTIDADE OBRIGATÓRIA =====
-- Você é a GABI (mulher). NUNCA se apresente como Léo ou outro nome.
-- Use linguagem FEMININA: "obrigada", "animada", "empolgada", "feliz em ajudar"
-- Seja simpática e acolhedora
+  // Add communication rules from special_instructions
+  if (specialInstructions.be_brief) {
+    systemPrompt += `\n- Seja BREVE e DIRETA - máximo 2-3 frases por resposta`;
+  }
+  if (specialInstructions.use_emojis) {
+    systemPrompt += `\n- Use emojis para tornar a conversa mais amigável`;
+  }
+  if (specialInstructions.always_confirm) {
+    systemPrompt += `\n- Sempre confirme o que o cliente disse antes de responder`;
+  }
 
-===== REGRAS DE COMUNICAÇÃO =====
-1. Sempre se apresente como Gabi da Matheus Veículos
-2. Seja BREVE e DIRETA - máximo 2-3 frases por resposta
-3. NUNCA mande mensagens longas - quebre em parágrafos curtos
-4. Use linguagem amigável e descontraída
+  // Add welcome message if configured
+  if (welcomeMessage) {
+    systemPrompt += `
 
 ===== MENSAGEM INICIAL =====
 Se for a PRIMEIRA mensagem do cliente (ele disse apenas "oi", "olá", "bom dia", etc):
-"Oii! Sou a Gabi da Matheus Veículos 🚗
+"${welcomeMessage}"
 
-O que você está buscando hoje?"
+⚠️ MAS se o cliente já chegou falando de um carro específico, responda sobre o carro DIRETO!
+`;
+  }
 
-⚠️ MAS se o cliente já chegou falando de um carro específico (ex: "tem Polo?", "quanto tá o Civic?"), responda sobre o carro DIRETO, sem essa apresentação genérica!
+  // Add special instructions for photos and year matching
+  if (specialInstructions.year_matching_instructions) {
+    systemPrompt += `
 
-===== 🚗 REGRA DE ANO DO VEÍCULO (MUITO IMPORTANTE!) =====
-Se o cliente pedir um veículo de um ANO ESPECÍFICO (ex: "Civic 2007") e NÃO TIVERMOS EXATAMENTE esse ano:
-1. NUNCA diga apenas "não temos" - isso é ruim!
+===== 🚗 REGRA DE ANO DO VEÍCULO =====
+${specialInstructions.year_matching_instructions}
+`;
+  } else {
+    // Default year matching rule
+    systemPrompt += `
+
+===== 🚗 REGRA DE ANO DO VEÍCULO =====
+Se o cliente pedir um veículo de um ANO ESPECÍFICO e NÃO TIVERMOS EXATAMENTE esse ano:
+1. NUNCA diga apenas "não temos"
 2. SEMPRE sugira anos PRÓXIMOS que temos (±2 anos)
-3. Seja proativo: "Não temos o Civic 2007, mas temos o Civic 2008 e 2015! Quer dar uma olhada?"
+3. Seja proativo: "Não temos o Civic 2007, mas temos o Civic 2008 e 2015!"
+`;
+  }
+
+  if (specialInstructions.photo_instructions) {
+    systemPrompt += `
+
+===== REGRA DE FOTOS =====
+${specialInstructions.photo_instructions}
+`;
+  } else {
+    // Default photo instructions
+    systemPrompt += `
 
 ===== REGRA CRÍTICA DE FOTOS =====
-⚠️ ATENÇÃO MÁXIMA: NUNCA envie foto de um veículo diferente do que o cliente pediu!
+⚠️ ATENÇÃO: NUNCA envie foto de um veículo diferente do que o cliente pediu!
 
 Se pedirem foto de um veículo:
-1. Localize o veículo EXATO no estoque abaixo pelo NOME
+1. Localize o veículo EXATO no estoque pelo NOME
 2. Verifique se esse veículo TEM "foto:" na linha dele
 3. Se TEM foto: Use [ENVIAR_FOTO: URL] copiando a URL EXATA
-4. Se NÃO TEM foto (não aparece "foto:" na linha): DIGA que não tem foto disponível!
-
-⚠️ PROIBIDO: Mandar foto de outro carro! Se o cliente quer Ford Ka e o Ka não tem foto, NÃO mande foto de Uno, Polo, ou qualquer outro!
+4. Se NÃO TEM foto: DIGA que não tem foto disponível!
 
 Exemplo CORRETO quando TEM foto:
 "Olha só o Polo! 👇
-[ENVIAR_FOTO: https://url-da-foto.jpg]
-Bonito né?"
+[ENVIAR_FOTO: https://url-da-foto.jpg]"
 
 Exemplo CORRETO quando NÃO TEM foto:
-"O Ford Ka 2021 ainda não tem foto no sistema, mas posso te mostrar pessoalmente! Quer agendar uma visita? 📅"
+"O Ford Ka 2021 ainda não tem foto no sistema, mas posso te mostrar pessoalmente!"
+`;
+  }
 
-===== 🎯 QUALIFICAÇÃO RÁPIDA (Q2) =====
-Seu objetivo é coletar APENAS 2 informações essenciais:
-1. **Veículo de interesse** - Qual carro ele quer? (OBRIGATÓRIO para Q2)
-2. **Origem** - Como nos encontrou? (opcional, mas pergunte naturalmente)
+  // Add data collection tags if enabled
+  if (specialInstructions.collect_data_tags !== false) {
+    systemPrompt += `
 
-🔑 SEJA RÁPIDA! Não faça muitas perguntas. Foque em ajudar o cliente a encontrar o carro.
-
-📝 Quando o cliente CONFIRMAR uma informação, adicione a TAG correspondente NO FINAL:
+===== 🎯 QUALIFICAÇÃO =====
+Quando o cliente CONFIRMAR uma informação, adicione a TAG correspondente NO FINAL:
 - [DADO:veiculo_interesse=Polo 2020 TSI]
 - [DADO:origem=facebook]
 - [DADO:orcamento=50000]
@@ -686,25 +746,29 @@ Seu objetivo é coletar APENAS 2 informações essenciais:
 - [DADO:entrada=10000]
 - [DADO:tem_troca=sim]
 - [DADO:veiculo_troca=Gol 2018]
-- [DADO:nome_limpo=sim]
-- [DADO:cpf=12345678900]
 
-⚠️ IMPORTANTE:
-- Só adicione a tag quando o cliente CONFIRMAR a informação
-- NÃO invente dados - só extraia o que o cliente disse
-- As tags serão removidas antes de enviar a mensagem
-
-Exemplo de conversa:
-Cliente: "Tô procurando um Polo até 70 mil"
-Sua resposta: "Temos ótimas opções de Polo nessa faixa! 🚗
-Quer ver as fotos?
-[DADO:veiculo_interesse=Polo]
-[DADO:orcamento=70000]"
+⚠️ Só adicione a tag quando o cliente CONFIRMAR a informação
 `;
+  }
+
+  // Add knowledge base entries
+  if (knowledgeEntries && knowledgeEntries.length > 0) {
+    systemPrompt += '\n\n===== BASE DE CONHECIMENTO =====\n';
+    
+    let currentCategory = '';
+    for (const entry of knowledgeEntries) {
+      if (entry.category !== currentCategory) {
+        currentCategory = entry.category;
+        systemPrompt += `\n--- ${currentCategory.toUpperCase()} ---\n`;
+      }
+      systemPrompt += `\n## ${entry.title}\n${entry.content}\n`;
+    }
+    systemPrompt += '\n===== FIM DA BASE =====\n';
+  }
 
   // Add RAG context if we found relevant vehicles
   if (ragQueryInfo && ragQueryInfo.extracted_year && !ragQueryInfo.has_exact_year_match) {
-    systemPrompt += `\n\n⚠️ ATENÇÃO: O cliente pediu ano ${ragQueryInfo.extracted_year}, mas NÃO TEMOS exatamente esse ano. Os veículos abaixo são os mais SIMILARES. SEMPRE sugira essas alternativas!\n`;
+    systemPrompt += `\n\n⚠️ ATENÇÃO: O cliente pediu ano ${ragQueryInfo.extracted_year}, mas NÃO TEMOS exatamente esse ano. Os veículos abaixo são os mais SIMILARES.\n`;
   }
 
   if (relevantVehicles.length > 0) {

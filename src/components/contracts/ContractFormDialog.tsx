@@ -21,13 +21,14 @@ import { FileText, User, Car, CreditCard, RefreshCw, HandCoins } from 'lucide-re
 interface ContractFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialData?: Partial<ContractFormData>;
 }
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
-export function ContractFormDialog({ open, onOpenChange }: ContractFormDialogProps) {
+export function ContractFormDialog({ open, onOpenChange, initialData }: ContractFormDialogProps) {
   const { createContract } = useContracts();
   const { data: customers = [] } = useCustomers();
   const { data: vehicles = [] } = useVehicles();
@@ -44,7 +45,24 @@ export function ContractFormDialog({ open, onOpenChange }: ContractFormDialogPro
   const [hasTradeIn, setHasTradeIn] = useState(false);
   const [hasInstallments, setHasInstallments] = useState(false);
 
-  const availableVehicles = vehicles.filter(v => v.status === 'disponivel');
+  // Carrega dados iniciais quando o dialog abre
+  useEffect(() => {
+    if (open && initialData) {
+      setFormData(prev => ({
+        ...prev,
+        ...initialData,
+      }));
+      // Verifica se tem dados de troca ou parcelamento
+      if (initialData.trade_in_brand || initialData.trade_in_value) {
+        setHasTradeIn(true);
+      }
+      if (initialData.installments_count && initialData.installments_count > 0) {
+        setHasInstallments(true);
+      }
+    }
+  }, [open, initialData]);
+
+  const availableVehicles = vehicles.filter(v => v.status === 'disponivel' || v.id === initialData?.vehicle_id);
 
   // Gera o texto de negociação automaticamente baseado nos dados de pagamento
   const generateNegotiationText = useCallback(() => {

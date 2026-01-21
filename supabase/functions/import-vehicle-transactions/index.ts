@@ -5,35 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface TransactionRow {
-  vehicle_number: number | null;
-  brand: string | null;
-  model: string | null;
-  year: string | null;
-  plate: string | null;
-  color: string | null;
-  renavam: string | null;
-  chassis: string | null;
-  km_out: number | null;
-  seller_name: string | null;
-  seller_phone: string | null;
-  seller_cpf: string | null;
-  seller_rg: string | null;
-  seller_address: string | null;
-  seller_birth: string | null;
-  purchase_date: string | null;
-  buyer_name: string | null;
-  buyer_phone: string | null;
-  buyer_cpf: string | null;
-  buyer_rg: string | null;
-  buyer_address: string | null;
-  buyer_birth: string | null;
-  sale_date: string | null;
-  observations: string | null;
-  seller_customer_id?: string | null;
-  buyer_customer_id?: string | null;
-}
-
 function parseDate(value: any): string | null {
   if (!value) return null;
   
@@ -47,13 +18,11 @@ function parseDate(value: any): string | null {
     const trimmed = value.trim();
     if (!trimmed) return null;
     
-    // Formato ISO com hora (2020-05-21 00:00:00)
     const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (isoMatch) {
       return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
     }
     
-    // Formato BR (dd/mm/yyyy)
     const brMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (brMatch) {
       const day = brMatch[1].padStart(2, '0');
@@ -94,7 +63,6 @@ function cleanNumber(value: any): number | null {
 function cleanPhone(phone: string | null): string {
   if (!phone) return '';
   const cleaned = phone.replace(/\D/g, '');
-  // Adiciona DDD 12 se não tiver
   if (cleaned.length === 8 || cleaned.length === 9) {
     return '12' + cleaned;
   }
@@ -108,75 +76,6 @@ function cleanCPF(cpf: string | null): string | null {
   return cleaned.substring(0, 11);
 }
 
-async function findOrCreateCustomer(
-  supabase: any,
-  name: string | null,
-  phone: string | null,
-  cpf: string | null,
-  rg: string | null,
-  address: string | null,
-  birth: string | null,
-  source: string
-): Promise<string | null> {
-  if (!name || name === '-') return null;
-
-  const cleanedPhone = cleanPhone(phone);
-  const cleanedCPF = cleanCPF(cpf);
-  
-  // Tenta encontrar cliente existente por CPF
-  if (cleanedCPF) {
-    const { data: existingByCpf } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('cpf_cnpj', cleanedCPF)
-      .single();
-    
-    if (existingByCpf) {
-      console.log(`Cliente encontrado por CPF: ${name}`);
-      return existingByCpf.id;
-    }
-  }
-  
-  // Tenta encontrar por telefone
-  if (cleanedPhone && cleanedPhone.length >= 10) {
-    const { data: existingByPhone } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('phone', cleanedPhone)
-      .single();
-    
-    if (existingByPhone) {
-      console.log(`Cliente encontrado por telefone: ${name}`);
-      return existingByPhone.id;
-    }
-  }
-
-  // Cria novo cliente
-  const customerData: any = {
-    name: name,
-    phone: cleanedPhone || '0000000000',
-    source: source,
-  };
-  
-  if (cleanedCPF) customerData.cpf_cnpj = cleanedCPF;
-  if (rg) customerData.rg = rg;
-  if (address) customerData.address = address;
-
-  const { data: newCustomer, error } = await supabase
-    .from('customers')
-    .insert(customerData)
-    .select('id')
-    .single();
-
-  if (error) {
-    console.error('Erro ao criar cliente:', error.message, { name, phone: cleanedPhone });
-    return null;
-  }
-
-  console.log(`Cliente criado: ${name}`);
-  return newCustomer?.id || null;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -188,39 +87,38 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { rows, dryRun = false, fileType } = await req.json();
+    const { rows, dryRun = false } = await req.json();
 
     if (!rows || !Array.isArray(rows)) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Dados inválidos. Esperado array de linhas.' }),
+        JSON.stringify({ success: false, error: 'Dados inválidos.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Processando ${rows.length} linhas. DryRun: ${dryRun}, FileType: ${fileType || 'auto'}`);
+    console.log(`Processando ${rows.length} linhas. DryRun: ${dryRun}`);
     
-    // Log das colunas disponíveis na primeira linha para debug
     if (rows.length > 0) {
-      console.log('Colunas disponíveis:', Object.keys(rows[0]));
+      console.log('Colunas:', Object.keys(rows[0]).slice(0, 10));
     }
 
-    // Detecta tipo de arquivo baseado nas colunas
     const firstRow = rows[0] || {};
     const isSellerFile = 'NOME DO VENDEDOR' in firstRow || 'ENTRADA' in firstRow;
     const isBuyerFile = 'NOME DO COMPRADOR' in firstRow || 'SAIDA' in firstRow;
+    const fileType = isSellerFile ? 'vendedores' : isBuyerFile ? 'compradores' : 'desconhecido';
     
-    console.log(`Tipo detectado - Vendedor: ${isSellerFile}, Comprador: ${isBuyerFile}`);
+    console.log(`Tipo: ${fileType}`);
 
-    const transactions: TransactionRow[] = [];
+    // Processa todas as linhas e extrai dados
+    const transactions: any[] = [];
+    const customersToCreate: Map<string, any> = new Map();
     const errors: string[] = [];
-    let customersCreated = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const rowNum = i + 2;
-
+      
       try {
-        const transaction: TransactionRow = {
+        const transaction: any = {
           vehicle_number: cleanNumber(row['N°']),
           brand: cleanString(row['MARCA']),
           model: cleanString(row['MODELO']),
@@ -231,72 +129,70 @@ Deno.serve(async (req) => {
           chassis: cleanString(row['CHASSI']),
           km_out: cleanNumber(row['KM S']),
           observations: cleanString(row['OBSERVAÇÕES']),
-          // Campos do vendedor
-          seller_name: cleanString(row['NOME DO VENDEDOR']),
-          seller_phone: cleanString(row['TEL']),
-          seller_cpf: cleanString(row['CPF']),
-          seller_rg: cleanString(row['RG']),
-          seller_address: cleanString(row['ENDEREÇO']),
-          seller_birth: parseDate(row['NASCI']),
-          purchase_date: parseDate(row['ENTRADA']),
-          // Campos do comprador
-          buyer_name: cleanString(row['NOME DO COMPRADOR']),
-          buyer_phone: isSellerFile ? null : cleanString(row['TEL']),
-          buyer_cpf: isSellerFile ? null : cleanString(row['CPF']),
-          buyer_rg: isSellerFile ? null : cleanString(row['RG']),
-          buyer_address: isSellerFile ? null : cleanString(row['ENDEREÇO']),
-          buyer_birth: parseDate(row['NASC']),
-          sale_date: parseDate(row['SAIDA']),
         };
 
-        // Pula linhas completamente vazias
-        if (!transaction.brand && !transaction.model && !transaction.plate && 
-            !transaction.seller_name && !transaction.buyer_name) {
-          continue;
+        // Campos do vendedor
+        if (isSellerFile) {
+          transaction.seller_name = cleanString(row['NOME DO VENDEDOR']);
+          transaction.seller_phone = cleanString(row['TEL']);
+          transaction.seller_cpf = cleanString(row['CPF']);
+          transaction.seller_rg = cleanString(row['RG']);
+          transaction.seller_address = cleanString(row['ENDEREÇO']);
+          transaction.purchase_date = parseDate(row['ENTRADA']);
+          
+          // Adiciona cliente à lista para criar
+          if (transaction.seller_name && transaction.seller_name !== '-') {
+            const key = cleanCPF(transaction.seller_cpf) || cleanPhone(transaction.seller_phone) || transaction.seller_name;
+            if (!customersToCreate.has(key)) {
+              customersToCreate.set(key, {
+                name: transaction.seller_name,
+                phone: cleanPhone(transaction.seller_phone) || '0000000000',
+                cpf_cnpj: cleanCPF(transaction.seller_cpf),
+                rg: transaction.seller_rg,
+                address: transaction.seller_address,
+                source: 'importacao_vendedor',
+              });
+            }
+          }
         }
 
-        // Se não é dry run, cria os clientes
-        if (!dryRun) {
-          // Cria cliente vendedor (de quem a loja comprou)
-          if (transaction.seller_name) {
-            const sellerCustomerId = await findOrCreateCustomer(
-              supabase,
-              transaction.seller_name,
-              transaction.seller_phone,
-              transaction.seller_cpf,
-              transaction.seller_rg,
-              transaction.seller_address,
-              transaction.seller_birth,
-              'importacao_vendedor'
-            );
-            transaction.seller_customer_id = sellerCustomerId;
-            if (sellerCustomerId) customersCreated++;
+        // Campos do comprador
+        if (isBuyerFile) {
+          transaction.buyer_name = cleanString(row['NOME DO COMPRADOR']);
+          transaction.buyer_phone = cleanString(row['TEL']);
+          transaction.buyer_cpf = cleanString(row['CPF']);
+          transaction.buyer_rg = cleanString(row['RG']);
+          transaction.buyer_address = cleanString(row['ENDEREÇO']);
+          transaction.sale_date = parseDate(row['SAIDA']);
+          
+          // Adiciona cliente à lista para criar
+          if (transaction.buyer_name && transaction.buyer_name !== '-') {
+            const key = cleanCPF(transaction.buyer_cpf) || cleanPhone(transaction.buyer_phone) || transaction.buyer_name;
+            if (!customersToCreate.has(key)) {
+              customersToCreate.set(key, {
+                name: transaction.buyer_name,
+                phone: cleanPhone(transaction.buyer_phone) || '0000000000',
+                cpf_cnpj: cleanCPF(transaction.buyer_cpf),
+                rg: transaction.buyer_rg,
+                address: transaction.buyer_address,
+                source: 'importacao_comprador',
+              });
+            }
           }
+        }
 
-          // Cria cliente comprador (para quem a loja vendeu)
-          if (transaction.buyer_name) {
-            const buyerCustomerId = await findOrCreateCustomer(
-              supabase,
-              transaction.buyer_name,
-              transaction.buyer_phone,
-              transaction.buyer_cpf,
-              transaction.buyer_rg,
-              transaction.buyer_address,
-              transaction.buyer_birth,
-              'importacao_comprador'
-            );
-            transaction.buyer_customer_id = buyerCustomerId;
-            if (buyerCustomerId) customersCreated++;
-          }
+        // Pula linhas vazias
+        if (!transaction.brand && !transaction.model && !transaction.plate) {
+          continue;
         }
 
         transactions.push(transaction);
       } catch (err: any) {
-        errors.push(`Linha ${rowNum}: ${err?.message || 'Erro desconhecido'}`);
+        errors.push(`Linha ${i + 2}: ${err?.message || 'Erro'}`);
       }
     }
 
-    console.log(`Transações válidas: ${transactions.length}`);
+    console.log(`Transações: ${transactions.length}, Clientes únicos: ${customersToCreate.size}`);
 
     if (dryRun) {
       return new Response(
@@ -305,18 +201,101 @@ Deno.serve(async (req) => {
           dryRun: true,
           totalRows: rows.length,
           validTransactions: transactions.length,
-          fileType: isSellerFile ? 'vendedores' : isBuyerFile ? 'compradores' : 'desconhecido',
-          errors,
+          uniqueCustomers: customersToCreate.size,
+          fileType,
+          errors: errors.slice(0, 10),
           preview: transactions.slice(0, 5),
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Insere transações em lotes de 50
-    let inserted = 0;
-    const batchSize = 50;
+    // ===== IMPORTAÇÃO REAL =====
+    
+    // 1. Busca clientes existentes por CPF
+    const cpfs = Array.from(customersToCreate.values())
+      .filter(c => c.cpf_cnpj)
+      .map(c => c.cpf_cnpj);
+    
+    const { data: existingByCpf } = await supabase
+      .from('customers')
+      .select('id, cpf_cnpj, phone')
+      .in('cpf_cnpj', cpfs.length > 0 ? cpfs : ['__none__']);
+    
+    const cpfToId = new Map((existingByCpf || []).map(c => [c.cpf_cnpj, c.id]));
+    console.log(`Clientes existentes por CPF: ${cpfToId.size}`);
 
+    // 2. Busca clientes existentes por telefone
+    const phones = Array.from(customersToCreate.values())
+      .filter(c => c.phone && c.phone !== '0000000000')
+      .map(c => c.phone);
+    
+    const { data: existingByPhone } = await supabase
+      .from('customers')
+      .select('id, phone')
+      .in('phone', phones.length > 0 ? phones : ['__none__']);
+    
+    const phoneToId = new Map((existingByPhone || []).map(c => [c.phone, c.id]));
+    console.log(`Clientes existentes por telefone: ${phoneToId.size}`);
+
+    // 3. Filtra clientes que precisam ser criados
+    const customersToInsert: any[] = [];
+    const customerKeyToExistingId = new Map<string, string>();
+    
+    for (const [key, customer] of customersToCreate) {
+      const existingId = cpfToId.get(customer.cpf_cnpj) || phoneToId.get(customer.phone);
+      if (existingId) {
+        customerKeyToExistingId.set(key, existingId);
+      } else {
+        customersToInsert.push({ ...customer, _key: key });
+      }
+    }
+
+    console.log(`Clientes a criar: ${customersToInsert.length}`);
+
+    // 4. Insere novos clientes em lotes
+    let customersCreated = 0;
+    const batchSize = 100;
+    
+    for (let i = 0; i < customersToInsert.length; i += batchSize) {
+      const batch = customersToInsert.slice(i, i + batchSize);
+      const toInsert = batch.map(({ _key, ...rest }) => rest);
+      
+      const { data: inserted, error } = await supabase
+        .from('customers')
+        .insert(toInsert)
+        .select('id, cpf_cnpj, phone');
+      
+      if (error) {
+        console.error('Erro ao inserir clientes:', error.message);
+        // Continua mesmo com erro
+      } else if (inserted) {
+        customersCreated += inserted.length;
+        // Mapeia IDs dos clientes criados
+        for (let j = 0; j < inserted.length; j++) {
+          const customer = batch[j];
+          customerKeyToExistingId.set(customer._key, inserted[j].id);
+        }
+      }
+    }
+
+    console.log(`Clientes criados: ${customersCreated}`);
+
+    // 5. Atualiza transações com IDs dos clientes
+    for (const tx of transactions) {
+      if (isSellerFile && tx.seller_name) {
+        const key = cleanCPF(tx.seller_cpf) || cleanPhone(tx.seller_phone) || tx.seller_name;
+        tx.seller_customer_id = customerKeyToExistingId.get(key) || null;
+      }
+      if (isBuyerFile && tx.buyer_name) {
+        const key = cleanCPF(tx.buyer_cpf) || cleanPhone(tx.buyer_phone) || tx.buyer_name;
+        tx.buyer_customer_id = customerKeyToExistingId.get(key) || null;
+      }
+    }
+
+    // 6. Insere transações em lotes
+    let inserted = 0;
+    
     for (let i = 0; i < transactions.length; i += batchSize) {
       const batch = transactions.slice(i, i + batchSize);
       
@@ -326,14 +305,14 @@ Deno.serve(async (req) => {
         .select('id');
 
       if (error) {
-        console.error(`Erro no lote ${Math.floor(i / batchSize) + 1}:`, error);
+        console.error(`Erro lote ${Math.floor(i / batchSize) + 1}:`, error.message);
         errors.push(`Lote ${Math.floor(i / batchSize) + 1}: ${error.message}`);
       } else {
         inserted += data?.length || 0;
       }
     }
 
-    console.log(`Inseridos: ${inserted} registros, ${customersCreated} clientes criados/encontrados`);
+    console.log(`Transações inseridas: ${inserted}`);
 
     return new Response(
       JSON.stringify({
@@ -342,7 +321,9 @@ Deno.serve(async (req) => {
         validTransactions: transactions.length,
         inserted,
         customersCreated,
-        errors,
+        customersExisting: customerKeyToExistingId.size - customersCreated,
+        fileType,
+        errors: errors.slice(0, 20),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

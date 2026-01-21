@@ -108,7 +108,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <Card className="border-dashed hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => agent && navigate(`/ai-agents/${agent.id}/conhecimento`)}>
+                <Card className="border-dashed hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => navigate('/conhecimento')}>
                   <CardContent className="pt-6">
                     <div className="flex items-start gap-4">
                       <div className="p-3 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">

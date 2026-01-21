@@ -7,14 +7,30 @@ export function useCustomers() {
   return useQuery({
     queryKey: ['customers'],
     queryFn: async (): Promise<Customer[]> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from('customers')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Busca todos os clientes sem limite (padrão é 1000)
+      const allCustomers: Customer[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      
+      while (true) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase as any)
+          .from('customers')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + batchSize - 1);
 
-      if (error) throw error;
-      return (data || []) as Customer[];
+        if (error) throw error;
+        
+        if (!data || data.length === 0) break;
+        
+        allCustomers.push(...(data as Customer[]));
+        
+        if (data.length < batchSize) break;
+        from += batchSize;
+      }
+      
+      return allCustomers;
     },
     staleTime: 30000,
   });

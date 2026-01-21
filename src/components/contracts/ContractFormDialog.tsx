@@ -156,6 +156,7 @@ export function ContractFormDialog({ open, onOpenChange, initialData }: Contract
     await createContract.mutateAsync({
       ...formData,
       notes: finalNotes,
+      updateRelated: true, // Atualiza cliente e veículo com os dados preenchidos
     });
     onOpenChange(false);
     resetForm();

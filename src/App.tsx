@@ -201,14 +201,14 @@ const App = () => (
                       </Suspense>
                     </ProtectedRoute>
                   }>
-                    <Route index element={<SalesDashboard />} />
-                    <Route path="aprovacoes" element={<SalesApprovals />} />
-                    <Route path="vendas" element={<SalesListPage />} />
-                    <Route path="equipe" element={<SalesTeamView />} />
-                    <Route path="equipe/:id" element={<SalespersonDetail />} />
-                    <Route path="lucro" element={<SalesProfitPage />} />
-                    <Route path="contratos" element={<ContractsPage />} />
-                    <Route path="metricas" element={<SalesMetricsPage />} />
+                    <Route index element={<Suspense fallback={<PageLoader />}><SalesDashboard /></Suspense>} />
+                    <Route path="aprovacoes" element={<Suspense fallback={<PageLoader />}><SalesApprovals /></Suspense>} />
+                    <Route path="vendas" element={<Suspense fallback={<PageLoader />}><SalesListPage /></Suspense>} />
+                    <Route path="equipe" element={<Suspense fallback={<PageLoader />}><SalesTeamView /></Suspense>} />
+                    <Route path="equipe/:id" element={<Suspense fallback={<PageLoader />}><SalespersonDetail /></Suspense>} />
+                    <Route path="lucro" element={<Suspense fallback={<PageLoader />}><SalesProfitPage /></Suspense>} />
+                    <Route path="contratos" element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
+                    <Route path="metricas" element={<Suspense fallback={<PageLoader />}><SalesMetricsPage /></Suspense>} />
                   </Route>
                   
                   {/* Financial Routes */}

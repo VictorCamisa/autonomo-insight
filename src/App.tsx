@@ -34,6 +34,7 @@ const FollowUp = lazy(() => import("./pages/FollowUp"));
 const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Reports = lazy(() => import("./pages/Reports"));
+const Customers = lazy(() => import("./pages/Customers"));
 const Documentation = lazy(() => import("./pages/Documentation"));
 const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
 
@@ -238,6 +239,15 @@ const App = () => (
                     <ProtectedRoute requiredModule="marketing">
                       <Suspense fallback={<PageLoader />}>
                         <Reports />
+                      </Suspense>
+                    </ProtectedRoute>
+                  } />
+
+                  {/* Customers Module */}
+                  <Route path="/clientes" element={
+                    <ProtectedRoute requiredModule="vendas">
+                      <Suspense fallback={<PageLoader />}>
+                        <Customers />
                       </Suspense>
                     </ProtectedRoute>
                   } />

@@ -3807,16 +3807,20 @@ export type Database = {
         Row: {
           brand: string | null
           buyer_address: string | null
+          buyer_birth: string | null
           buyer_cpf: string | null
           buyer_customer_id: string | null
           buyer_name: string | null
           buyer_phone: string | null
+          buyer_rg: string | null
           chassis: string | null
+          color: string | null
           created_at: string
           id: string
           km_out: number | null
           model: string | null
           notes: string | null
+          observations: string | null
           plate: string | null
           purchase_date: string | null
           purchase_price: number | null
@@ -3824,26 +3828,33 @@ export type Database = {
           sale_date: string | null
           sale_price: number | null
           seller_address: string | null
+          seller_birth: string | null
           seller_cpf: string | null
           seller_customer_id: string | null
           seller_name: string | null
           seller_phone: string | null
+          seller_rg: string | null
           updated_at: string
           vehicle_number: number | null
+          year: string | null
         }
         Insert: {
           brand?: string | null
           buyer_address?: string | null
+          buyer_birth?: string | null
           buyer_cpf?: string | null
           buyer_customer_id?: string | null
           buyer_name?: string | null
           buyer_phone?: string | null
+          buyer_rg?: string | null
           chassis?: string | null
+          color?: string | null
           created_at?: string
           id?: string
           km_out?: number | null
           model?: string | null
           notes?: string | null
+          observations?: string | null
           plate?: string | null
           purchase_date?: string | null
           purchase_price?: number | null
@@ -3851,26 +3862,33 @@ export type Database = {
           sale_date?: string | null
           sale_price?: number | null
           seller_address?: string | null
+          seller_birth?: string | null
           seller_cpf?: string | null
           seller_customer_id?: string | null
           seller_name?: string | null
           seller_phone?: string | null
+          seller_rg?: string | null
           updated_at?: string
           vehicle_number?: number | null
+          year?: string | null
         }
         Update: {
           brand?: string | null
           buyer_address?: string | null
+          buyer_birth?: string | null
           buyer_cpf?: string | null
           buyer_customer_id?: string | null
           buyer_name?: string | null
           buyer_phone?: string | null
+          buyer_rg?: string | null
           chassis?: string | null
+          color?: string | null
           created_at?: string
           id?: string
           km_out?: number | null
           model?: string | null
           notes?: string | null
+          observations?: string | null
           plate?: string | null
           purchase_date?: string | null
           purchase_price?: number | null
@@ -3878,12 +3896,15 @@ export type Database = {
           sale_date?: string | null
           sale_price?: number | null
           seller_address?: string | null
+          seller_birth?: string | null
           seller_cpf?: string | null
           seller_customer_id?: string | null
           seller_name?: string | null
           seller_phone?: string | null
+          seller_rg?: string | null
           updated_at?: string
           vehicle_number?: number | null
+          year?: string | null
         }
         Relationships: [
           {

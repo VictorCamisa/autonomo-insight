@@ -16,23 +16,33 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { useContracts } from '@/hooks/useContracts';
+import { ContractFormDialog } from './ContractFormDialog';
+import { downloadContractPDF } from '@/lib/contractPdf';
 
 const statusConfig = {
   signed: { label: 'Assinado', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', icon: CheckCircle2 },
   pending: { label: 'Pendente', color: 'bg-amber-500/10 text-amber-600 border-amber-500/20', icon: Clock },
   draft: { label: 'Rascunho', color: 'bg-muted text-muted-foreground border-muted', icon: AlertCircle },
+  cancelled: { label: 'Cancelado', color: 'bg-destructive/10 text-destructive border-destructive/20', icon: AlertCircle },
+};
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
 export function ContractsListPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [contracts] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const { contracts, stats, isLoading } = useContracts();
 
-  const stats = {
-    total: contracts.length,
-    signed: contracts.filter(c => c.status === 'signed').length,
-    pending: contracts.filter(c => c.status === 'pending').length,
-    draft: contracts.filter(c => c.status === 'draft').length,
-  };
+  const filteredContracts = contracts.filter(contract =>
+    contract.contract_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    contract.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    `${contract.vehicle_brand} ${contract.vehicle_model}`.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -95,20 +105,81 @@ export function ContractsListPage() {
             className="pl-10"
           />
         </div>
-        <Button>
+        <Button onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Novo Contrato
         </Button>
       </div>
 
-      {/* Empty State */}
-      <Card>
-        <CardContent className="p-8 text-center">
-          <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <p className="text-muted-foreground">Nenhum contrato encontrado</p>
-          <p className="text-sm text-muted-foreground mt-1">Crie seu primeiro contrato clicando no botão acima</p>
-        </CardContent>
-      </Card>
+      {/* Contracts List */}
+      {filteredContracts.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">Nenhum contrato encontrado</p>
+            <p className="text-sm text-muted-foreground mt-1">Crie seu primeiro contrato clicando no botão acima</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {filteredContracts.map((contract) => {
+            const config = statusConfig[contract.status as keyof typeof statusConfig] || statusConfig.draft;
+            const StatusIcon = config.icon;
+            return (
+              <Card key={contract.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 rounded-lg bg-primary/10">
+                        <FileText className="h-6 w-6 text-primary" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold">{contract.contract_number}</h3>
+                          <Badge variant="outline" className={config.color}>
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {config.label}
+                          </Badge>
+                          <Badge variant="secondary">
+                            {contract.contract_type === 'venda' ? 'Venda' : 'Compra'}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <User className="h-4 w-4" />
+                            {contract.customer_name}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Car className="h-4 w-4" />
+                            {contract.vehicle_brand} {contract.vehicle_model}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            {format(new Date(contract.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Valor</p>
+                        <p className="font-semibold text-lg">{formatCurrency(contract.vehicle_value)}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="icon" onClick={() => downloadContractPDF(contract)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      <ContractFormDialog open={showForm} onOpenChange={setShowForm} />
     </div>
   );
 }

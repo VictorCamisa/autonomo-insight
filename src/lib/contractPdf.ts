@@ -34,7 +34,7 @@ export function generateSaleContractPDF(contract: Contract) {
   doc.setFont('helvetica', 'bold');
   doc.text('VENDEDOR:', margin, y);
   doc.setFont('helvetica', 'normal');
-  const sellerText = 'M DE A PEREIRA VEICULOS ME, inscrita no CNPJ sob n° 06.334.716.0001-01, com sede na Avenida Major Joaquim Monteiro Patto, 25, Chácara do Visconde, Taubaté-SP, CEP 12050-620, Telefones: 12 36227375 e 12 974052576';
+  const sellerText = 'M DE A PEREIRA VEICULOS ME, inscrita no CNPJ sob n° 06.334.716.0001-01, com sede na Avenida Major Joaquim Monteiro Patto, 25, Chácara do Visconde, Taubaté-SP, CEP 12050-620, Telefones: 12 3622-7375, 12 97405-2576 E 12 99668-1249';
   const sellerLines = doc.splitTextToSize(sellerText, contentWidth - 25);
   doc.text(sellerLines, margin + 25, y);
   y += sellerLines.length * 5 + 8;
@@ -43,7 +43,7 @@ export function generateSaleContractPDF(contract: Contract) {
   doc.setFont('helvetica', 'bold');
   doc.text('COMPRADOR:', margin, y);
   doc.setFont('helvetica', 'normal');
-  const buyerText = `${contract.customer_name}, ${contract.customer_nationality || 'brasileiro(a)'}, ${contract.customer_profession || 'profissão não informada'}, ${contract.customer_marital_status || 'estado civil não informado'}, com cédula de identidade RG n° ${contract.customer_rg || '___________'}, inscrito no CPF/MF sob o n° ${contract.customer_cpf || '___________'}, data de nascimento: ${contract.customer_birth_date ? format(new Date(contract.customer_birth_date), 'dd/MM/yyyy') : '___/___/______'}, residente e domiciliado na ${contract.customer_address || '___________'}, ${contract.customer_city || '___________'}, ${contract.customer_state || '___'}, CEP ${contract.customer_zip || '___________'}, com telefone para contato n° ${contract.customer_phone || '___________'}. E-mail: ${contract.customer_email || '___________'}`;
+  const buyerText = `${contract.customer_name.toUpperCase()}, ${(contract.customer_nationality || 'BRASILEIRO(A)').toUpperCase()}, ${(contract.customer_profession || 'PROFISSÃO NÃO INFORMADA').toUpperCase()}, ${(contract.customer_marital_status || 'ESTADO CIVIL NÃO INFORMADO').toUpperCase()}, com cédula de identidade RG n° ${contract.customer_rg || '___________'}, inscrito no CPF/MF sob o n° ${contract.customer_cpf || '___________'}, data de nascimento: ${contract.customer_birth_date ? format(new Date(contract.customer_birth_date), 'dd/MM/yyyy') : '___/___/______'}, residente e domiciliado na ${contract.customer_address?.toUpperCase() || '___________'}, ${contract.customer_city?.toUpperCase() || '___________'}, ${contract.customer_state?.toUpperCase() || '___'}, ${contract.customer_zip || '___________'}, com telefone para contato n° ${contract.customer_phone || '___________'}. E-mail: ${contract.customer_email?.toUpperCase() || '___________'}`;
   const buyerLines = doc.splitTextToSize(buyerText, contentWidth - 28);
   doc.text(buyerLines, margin + 28, y);
   y += buyerLines.length * 5 + 10;
@@ -54,63 +54,103 @@ export function generateSaleContractPDF(contract: Contract) {
   doc.text(purposeLines, margin, y);
   y += purposeLines.length * 5 + 8;
 
-  // Vehicle info
+  // Vehicle info (matching original format: MARCA MODELO, ANO, PLACA, COR, RENAVAM)
   doc.setFont('helvetica', 'bold');
   doc.text('OBJETO:', margin, y);
   doc.setFont('helvetica', 'normal');
-  const vehicleText = `${contract.vehicle_brand} ${contract.vehicle_model}, ${contract.vehicle_year}, placa ${contract.vehicle_plate || '___________'}, cor ${contract.vehicle_color || '___________'}, RENAVAM n° ${contract.vehicle_renavam || '___________'}, Hodômetro: ${contract.vehicle_odometer || '___________'} km`;
+  const vehicleText = `${contract.vehicle_brand.toUpperCase()} ${contract.vehicle_model.toUpperCase()}, ${contract.vehicle_year}, ${contract.vehicle_plate?.toUpperCase() || '___________'}, ${contract.vehicle_color?.toUpperCase() || '___________'}, RENAVAM n°${contract.vehicle_renavam || '___________'},`;
   const vehicleLines = doc.splitTextToSize(vehicleText, contentWidth - 20);
   doc.text(vehicleLines, margin + 20, y);
   y += vehicleLines.length * 5 + 10;
 
-  // Payment
+  // Payment section
   doc.setFont('helvetica', 'bold');
   doc.text('FORMA DE PAGAMENTO:', margin, y);
   doc.setFont('helvetica', 'normal');
-  y += 6;
-  
-  const paymentIntro = 'O OBJETO deste contrato foi vendido da seguinte forma:';
-  doc.text(paymentIntro, margin, y);
+  const paymentIntro = 'o OBJETO deste contrato foi vendido da seguinte forma:';
+  doc.text(paymentIntro, margin + 50, y);
   y += 8;
 
-  // Down payment
-  if (contract.down_payment && contract.down_payment > 0) {
-    doc.text(`• Entrada no valor de ${formatCurrency(contract.down_payment)};`, margin, y);
+  // Use negotiation_details from notes if available, otherwise build from individual fields
+  const negotiationFromNotes = contract.notes?.includes('NEGOCIAÇÃO:') 
+    ? contract.notes.split('NEGOCIAÇÃO:')[1]?.split('\n\n')[0]?.trim()
+    : null;
+
+  if (negotiationFromNotes) {
+    // Parse negotiation details line by line
+    const lines = negotiationFromNotes.split('\n').filter(l => l.trim());
+    lines.forEach(line => {
+      const trimmedLine = line.trim();
+      if (trimmedLine && !trimmedLine.startsWith('Vendido pelo valor')) {
+        const lineText = trimmedLine.startsWith('•') ? trimmedLine : `- ${trimmedLine}`;
+        const wrappedLines = doc.splitTextToSize(lineText, contentWidth - 5);
+        doc.text(wrappedLines, margin, y);
+        y += wrappedLines.length * 5 + 2;
+      }
+    });
+    y += 4;
+  } else {
+    // Build from individual fields
+    // Down payment
+    if (contract.down_payment && contract.down_payment > 0) {
+      doc.text(`- Entrada no valor de ${formatCurrency(contract.down_payment)};`, margin, y);
+      y += 6;
+    }
+
+    // Trade-in
+    if (contract.trade_in_brand) {
+      const tradeInText = `- Entrega do veículo ${contract.trade_in_brand} ${contract.trade_in_model || ''}, ${contract.trade_in_year || ''}, placa ${contract.trade_in_plate || '___________'}, cor ${contract.trade_in_color || '___________'}, avaliado em ${formatCurrency(contract.trade_in_value || 0)};`;
+      const tradeInLines = doc.splitTextToSize(tradeInText, contentWidth - 5);
+      doc.text(tradeInLines, margin, y);
+      y += tradeInLines.length * 5 + 2;
+    }
+
+    // Financing/Installments
+    if (contract.installments_count && contract.installments_count > 0) {
+      const financingText = `- Valor financiado de ${formatCurrency((contract.installment_value || 0) * contract.installments_count)} financiado em ${contract.installments_count}x de ${formatCurrency(contract.installment_value || 0)}`;
+      const financingLines = doc.splitTextToSize(financingText, contentWidth - 5);
+      doc.text(financingLines, margin, y);
+      y += financingLines.length * 5 + 2;
+    }
     y += 6;
   }
 
-  // Trade-in
-  if (contract.trade_in_brand) {
-    const tradeInText = `• Entrega do veículo ${contract.trade_in_brand} ${contract.trade_in_model || ''}, ${contract.trade_in_year || ''}, placas ${contract.trade_in_plate || '___________'}, cor ${contract.trade_in_color || '___________'}, RENAVAM n° ${contract.trade_in_renavam || '___________'}. No ato da assinatura do presente instrumento o comprador compromete-se a entregar o veículo como parte do pagamento a LOJA, livre e desimpedido de qualquer débito.`;
-    const tradeInLines = doc.splitTextToSize(tradeInText, contentWidth - 5);
-    doc.text(tradeInLines, margin, y);
-    y += tradeInLines.length * 5 + 4;
-  }
-
-  // Installments
-  if (contract.installments_count && contract.installments_count > 0) {
-    const installmentText = `• O valor remanescente será pago por ${contract.installments_count} notas promissórias, no valor de ${formatCurrency(contract.installment_value || 0)}, a serem pagos todo dia ${contract.installment_due_day || '___'} de cada mês.`;
-    const installmentLines = doc.splitTextToSize(installmentText, contentWidth - 5);
-    doc.text(installmentLines, margin, y);
-    y += installmentLines.length * 5 + 8;
-  }
-
-  // Non-payment clause
-  const nonPaymentText = 'O não pagamento dos valores acima mencionados, desde já, autoriza a execução do presente contrato, bem como requerer medidas judiciais cabíveis.';
-  const nonPaymentLines = doc.splitTextToSize(nonPaymentText, contentWidth);
-  doc.text(nonPaymentLines, margin, y);
-  y += nonPaymentLines.length * 5 + 10;
-
-  // Warranty section
+  // Warranty section (complete version matching original)
   doc.setFont('helvetica', 'bold');
   doc.text('GARANTIA:', margin, y);
   doc.setFont('helvetica', 'normal');
   y += 6;
   
-  const warrantyText = 'O COMPRADOR adquire o veículo do VENDEDOR no estado em que ele se encontra. Atestando, pela assinatura do presente termo, ter vistoriado e garantido que o veículo atendeu suas exigências. O veículo não possui garantia de componentes elétricos, eletrônicos e eletromecânicos. Nos termos do Artigo 26, II, do CDC, o COMPRADOR tem o prazo de 90 (noventa) dias, a partir da tradição do bem, para apresentar ao VENDEDOR qualquer reclamação por vícios no veículo.';
-  const warrantyLines = doc.splitTextToSize(warrantyText, contentWidth);
-  doc.text(warrantyLines, margin, y);
-  y += warrantyLines.length * 5 + 10;
+  const warranty1 = 'o COMPRADOR adquire o veículo do VENDEDOR no estado em que ele se encontra. Atestando, pela assinatura do presente termo, ter vistoriado e garantido que o veículo atendeu suas exigências.';
+  const warranty1Lines = doc.splitTextToSize(warranty1, contentWidth);
+  doc.text(warranty1Lines, margin, y);
+  y += warranty1Lines.length * 5 + 4;
+
+  const warranty2 = 'O veículo não possui garantia de componentes elétricos, eletrônicos e eletromecânicos (módulos, sensores/sondas, alternador, motor de partida, lâmpadas, faróis, lanternas, chicotes elétricos e alarmes), pois encontram-se em perfeito estado e condições de uso no ato da compra. Ademais, o acabamento do veículo (estofamentos, forrações, pintura) bem como pneus, não estão cobertos pela garantia, por seu estado de conservação ser de fácil constatação.';
+  const warranty2Lines = doc.splitTextToSize(warranty2, contentWidth);
+  doc.text(warranty2Lines, margin, y);
+  y += warranty2Lines.length * 5 + 4;
+
+  const warranty3 = 'Nos termos do Artigo 26, II, do CDC, o COMPRADOR tem o prazo de 90 (noventa) dias, a partir da tradição do bem, para apresentar ao VENDEDOR qualquer reclamação por vícios no veículo. E, para que o reparo seja feito, o veículo deve ser apresentado ao estabelecimento comercial pelo comprador.';
+  const warranty3Lines = doc.splitTextToSize(warranty3, contentWidth);
+  doc.text(warranty3Lines, margin, y);
+  y += warranty3Lines.length * 5 + 4;
+
+  const warranty4 = 'Fica desde já consignado que, durante o período em que o veículo estiver sendo reparado (dentro do prazo máximo de 30 dias), o VENDEDOR não se obriga, conforme legislação vigente, a disponibilizar carro reserva ao COMPRADOR.';
+  const warranty4Lines = doc.splitTextToSize(warranty4, contentWidth);
+  doc.text(warranty4Lines, margin, y);
+  y += warranty4Lines.length * 5 + 4;
+
+  const warranty5 = 'O COMPRADOR perderá totalmente a garantia do veículo, caso seja constatada que o veículo tenha sido submetido ao uso de forma inadequada, imprudente, negligente ou danificado por acidente ou tenha sido reparado em oficina diversa, sem prévia comunicação ao VENDEDOR.';
+  const warranty5Lines = doc.splitTextToSize(warranty5, contentWidth);
+  doc.text(warranty5Lines, margin, y);
+  y += warranty5Lines.length * 5 + 8;
+
+  // Check if we need a new page
+  if (y > 250) {
+    doc.addPage();
+    y = 20;
+  }
 
   // Final clause
   const finalText = 'Por fim, nos termos do Artigo 784, III, do CPC, as partes firmam o presente contrato por livre e espontânea vontade. Elegendo, para dirimirem qualquer dúvida, o foro de Taubaté-SP.';

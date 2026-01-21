@@ -19,43 +19,6 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// Mock data for contracts
-const mockContracts = [
-  {
-    id: '1',
-    number: 'CONT-2024-001',
-    type: 'Venda',
-    customer: 'João Silva',
-    vehicle: 'Toyota Corolla 2023',
-    value: 125000,
-    date: new Date('2024-01-15'),
-    status: 'signed',
-    salesperson: 'Carlos Vendedor'
-  },
-  {
-    id: '2',
-    number: 'CONT-2024-002',
-    type: 'Venda',
-    customer: 'Maria Santos',
-    vehicle: 'Honda Civic 2022',
-    value: 98000,
-    date: new Date('2024-01-18'),
-    status: 'pending',
-    salesperson: 'Ana Silva'
-  },
-  {
-    id: '3',
-    number: 'CONT-2024-003',
-    type: 'Consignação',
-    customer: 'Pedro Costa',
-    vehicle: 'Volkswagen Golf 2021',
-    value: 85000,
-    date: new Date('2024-01-20'),
-    status: 'draft',
-    salesperson: 'Carlos Vendedor'
-  },
-];
-
 const statusConfig = {
   signed: { label: 'Assinado', color: 'bg-green-500/10 text-green-600 border-green-500/20', icon: CheckCircle2 },
   pending: { label: 'Pendente', color: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20', icon: Clock },
@@ -64,7 +27,7 @@ const statusConfig = {
 
 export function ContractsPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [contracts] = useState(mockContracts);
+  const [contracts] = useState<any[]>([]);
 
   const filteredContracts = contracts.filter(contract =>
     contract.number.toLowerCase().includes(searchQuery.toLowerCase()) ||

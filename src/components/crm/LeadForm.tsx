@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,12 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { leadSourceLabels, leadStatusLabels, qualificationStatusLabels } from '@/types/crm';
 import type { Lead, LeadSource, LeadStatus, QualificationStatus } from '@/types/crm';
 import { useMetaCampaigns } from '@/hooks/useMetaAds';
 import { useUsersWithRoles } from '@/hooks/useUsers';
-import { Megaphone, User, AlertCircle, Trash2 } from 'lucide-react';
+import { useVehicles } from '@/hooks/useVehicles';
+import { Megaphone, User, AlertCircle, Trash2, Car, Check, ChevronsUpDown } from 'lucide-react';
 import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
+import { cn } from '@/lib/utils';
 
 const leadFormSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100),
@@ -52,8 +57,14 @@ interface LeadFormProps {
 export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
   const { data: campaigns = [] } = useMetaCampaigns();
   const { data: users = [] } = useUsersWithRoles();
+  const { data: vehicles = [] } = useVehicles();
+  const [vehicleOpen, setVehicleOpen] = useState(false);
+  
   const isEditing = !!lead;
   const storageKey = isEditing ? `lead_edit_${lead.id}` : 'lead_create';
+  
+  // Filter available vehicles
+  const availableVehicles = vehicles.filter(v => v.status === 'disponivel');
   
   // Filter to only show active users with vendedor or gerente role
   const salespeople = users.filter(u => 
@@ -324,15 +335,88 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
         <FormField
           control={form.control}
           name="vehicle_interest"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Interesse em veículo</FormLabel>
-              <FormControl>
-                <Input placeholder="Ex: Honda Civic 2020, SUV até 80k" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            const selectedVehicle = availableVehicles.find((v) => v.id === field.value);
+            return (
+              <FormItem className="flex flex-col">
+                <FormLabel>Interesse em veículo</FormLabel>
+                <Popover open={vehicleOpen} onOpenChange={setVehicleOpen}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={vehicleOpen}
+                        className={cn(
+                          "w-full justify-between font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {selectedVehicle
+                          ? `${selectedVehicle.brand} ${selectedVehicle.model} - ${selectedVehicle.plate || 'Sem placa'}`
+                          : field.value || "Selecione ou digite o interesse"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Buscar por marca, modelo ou placa..." 
+                        onValueChange={(search) => {
+                          // Allow typing custom text if no vehicle matches
+                          if (search && !availableVehicles.some(v => 
+                            `${v.brand} ${v.model} ${v.year_model} ${v.plate || ''}`.toLowerCase().includes(search.toLowerCase())
+                          )) {
+                            field.onChange(search);
+                          }
+                        }}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          <div className="p-2 text-sm text-muted-foreground">
+                            Nenhum veículo encontrado. O texto digitado será salvo.
+                          </div>
+                        </CommandEmpty>
+                        <CommandGroup heading="Veículos disponíveis">
+                          <CommandItem
+                            value="nenhum-interesse"
+                            onSelect={() => {
+                              field.onChange('');
+                              setVehicleOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", !field.value ? "opacity-100" : "opacity-0")} />
+                            Nenhum
+                          </CommandItem>
+                          {availableVehicles.map((vehicle) => (
+                            <CommandItem
+                              key={vehicle.id}
+                              value={`${vehicle.brand} ${vehicle.model} ${vehicle.year_model} ${vehicle.plate || ''}`}
+                              onSelect={() => {
+                                field.onChange(vehicle.id);
+                                setVehicleOpen(false);
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", field.value === vehicle.id ? "opacity-100" : "opacity-0")} />
+                              <Car className="mr-2 h-4 w-4 text-muted-foreground" />
+                              <div className="flex flex-col">
+                                <span>{vehicle.brand} {vehicle.model} {vehicle.year_model}</span>
+                                <span className="text-xs text-muted-foreground font-mono">
+                                  {vehicle.plate || 'Sem placa'}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <FormField

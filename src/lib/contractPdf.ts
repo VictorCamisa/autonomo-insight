@@ -3,6 +3,12 @@ import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+// Brand colors
+const BRAND_RED = { r: 229, g: 57, b: 53 }; // #E53935
+const BRAND_BLACK = { r: 26, g: 26, b: 26 };
+const BRAND_GRAY = { r: 100, g: 100, b: 100 };
+const BRAND_LIGHT_GRAY = { r: 200, g: 200, b: 200 };
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -11,169 +17,270 @@ const formatCurrency = (value: number) => {
 };
 
 const currencyToWords = (value: number): string => {
-  // Simple implementation - can be expanded
   const formatted = formatCurrency(value);
   return `(${formatted})`;
 };
 
+// Add header with branding
+function addHeader(doc: jsPDF, title: string) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+
+  // Top red line
+  doc.setDrawColor(BRAND_RED.r, BRAND_RED.g, BRAND_RED.b);
+  doc.setLineWidth(3);
+  doc.line(0, 0, pageWidth, 0);
+  
+  // Secondary thin red line
+  doc.setLineWidth(0.5);
+  doc.line(margin, 8, pageWidth - margin, 8);
+
+  // Company name as logo text
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(BRAND_RED.r, BRAND_RED.g, BRAND_RED.b);
+  doc.text('MATHEUS', margin, 22);
+  
+  doc.setFontSize(12);
+  doc.setTextColor(BRAND_GRAY.r, BRAND_GRAY.g, BRAND_GRAY.b);
+  doc.text('VEÍCULOS', margin + 48, 22);
+
+  // Contact info on right
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(BRAND_GRAY.r, BRAND_GRAY.g, BRAND_GRAY.b);
+  doc.text('(12) 3622-7375', pageWidth - margin, 14, { align: 'right' });
+  doc.text('(12) 97405-2576', pageWidth - margin, 19, { align: 'right' });
+  doc.text('(12) 99668-1249', pageWidth - margin, 24, { align: 'right' });
+
+  // Red decorative line under header
+  doc.setDrawColor(BRAND_RED.r, BRAND_RED.g, BRAND_RED.b);
+  doc.setLineWidth(1.5);
+  doc.line(margin, 30, pageWidth - margin, 30);
+
+  // Title
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
+  doc.text(title, pageWidth / 2, 42, { align: 'center' });
+
+  return 50; // Return starting Y position after header
+}
+
+// Add watermark
+function addWatermark(doc: jsPDF) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(60);
+  doc.setTextColor(240, 240, 240); // Very light gray
+  
+  // Diagonal watermark
+  doc.text('MATHEUS VEÍCULOS', pageWidth / 2, pageHeight / 2, { 
+    align: 'center',
+    angle: 45
+  });
+}
+
+// Add footer
+function addFooter(doc: jsPDF, pageNum: number = 1) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+
+  // Footer line
+  doc.setDrawColor(BRAND_RED.r, BRAND_RED.g, BRAND_RED.b);
+  doc.setLineWidth(1);
+  doc.line(margin, pageHeight - 20, pageWidth - margin, pageHeight - 20);
+
+  // Address
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(BRAND_GRAY.r, BRAND_GRAY.g, BRAND_GRAY.b);
+  doc.text('Av. Major Joaquim Monteiro Patto, 25 - Chácara do Visconde, Taubaté-SP | CEP 12050-620', pageWidth / 2, pageHeight - 14, { align: 'center' });
+  doc.text('CNPJ: 06.334.716/0001-01 | M DE A PEREIRA VEÍCULOS ME', pageWidth / 2, pageHeight - 9, { align: 'center' });
+
+  // Page number
+  doc.setFontSize(8);
+  doc.text(`Página ${pageNum}`, pageWidth - margin, pageHeight - 9, { align: 'right' });
+}
+
+// Section header with red accent
+function addSectionHeader(doc: jsPDF, text: string, y: number, margin: number) {
+  doc.setDrawColor(BRAND_RED.r, BRAND_RED.g, BRAND_RED.b);
+  doc.setLineWidth(2);
+  doc.line(margin, y - 2, margin + 3, y - 2);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(BRAND_RED.r, BRAND_RED.g, BRAND_RED.b);
+  doc.text(text, margin + 6, y);
+  
+  doc.setTextColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
+  return y + 6;
+}
+
 export function generateSaleContractPDF(contract: Contract) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
+  const margin = 15;
   const contentWidth = pageWidth - 2 * margin;
-  let y = 20;
 
-  // Title
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('CONTRATO DE VENDA DE VEÍCULO', pageWidth / 2, y, { align: 'center' });
-  y += 15;
+  // Add watermark first (so it's behind content)
+  addWatermark(doc);
 
-  // Seller info (Company)
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('VENDEDOR:', margin, y);
+  // Add header
+  let y = addHeader(doc, 'CONTRATO DE VENDA DE VEÍCULO');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
+
+  // Seller info
+  y = addSectionHeader(doc, 'VENDEDOR', y, margin);
   doc.setFont('helvetica', 'normal');
   const sellerText = 'M DE A PEREIRA VEICULOS ME, inscrita no CNPJ sob n° 06.334.716.0001-01, com sede na Avenida Major Joaquim Monteiro Patto, 25, Chácara do Visconde, Taubaté-SP, CEP 12050-620, Telefones: 12 3622-7375, 12 97405-2576 E 12 99668-1249';
-  const sellerLines = doc.splitTextToSize(sellerText, contentWidth - 25);
-  doc.text(sellerLines, margin + 25, y);
-  y += sellerLines.length * 5 + 8;
+  const sellerLines = doc.splitTextToSize(sellerText, contentWidth);
+  doc.text(sellerLines, margin, y);
+  y += sellerLines.length * 4 + 6;
 
   // Buyer info
-  doc.setFont('helvetica', 'bold');
-  doc.text('COMPRADOR:', margin, y);
+  y = addSectionHeader(doc, 'COMPRADOR', y, margin);
   doc.setFont('helvetica', 'normal');
-  const buyerText = `${contract.customer_name.toUpperCase()}, ${(contract.customer_nationality || 'BRASILEIRO(A)').toUpperCase()}, ${(contract.customer_profession || 'PROFISSÃO NÃO INFORMADA').toUpperCase()}, ${(contract.customer_marital_status || 'ESTADO CIVIL NÃO INFORMADO').toUpperCase()}, com cédula de identidade RG n° ${contract.customer_rg || '___________'}, inscrito no CPF/MF sob o n° ${contract.customer_cpf || '___________'}, data de nascimento: ${contract.customer_birth_date ? format(new Date(contract.customer_birth_date), 'dd/MM/yyyy') : '___/___/______'}, residente e domiciliado na ${contract.customer_address?.toUpperCase() || '___________'}, ${contract.customer_city?.toUpperCase() || '___________'}, ${contract.customer_state?.toUpperCase() || '___'}, ${contract.customer_zip || '___________'}, com telefone para contato n° ${contract.customer_phone || '___________'}. E-mail: ${contract.customer_email?.toUpperCase() || '___________'}`;
-  const buyerLines = doc.splitTextToSize(buyerText, contentWidth - 28);
-  doc.text(buyerLines, margin + 28, y);
-  y += buyerLines.length * 5 + 10;
+  const buyerText = `${contract.customer_name.toUpperCase()}, ${(contract.customer_nationality || 'BRASILEIRO(A)').toUpperCase()}, ${(contract.customer_profession || '').toUpperCase()}, ${(contract.customer_marital_status || '').toUpperCase()}, RG n° ${contract.customer_rg || '___________'}, CPF n° ${contract.customer_cpf || '___________'}, nascido em ${contract.customer_birth_date ? format(new Date(contract.customer_birth_date), 'dd/MM/yyyy') : '___/___/______'}, residente na ${contract.customer_address?.toUpperCase() || '___________'}, ${contract.customer_city?.toUpperCase() || '___________'}-${contract.customer_state?.toUpperCase() || '___'}, CEP ${contract.customer_zip || '___________'}, telefone ${contract.customer_phone || '___________'}. E-mail: ${contract.customer_email?.toUpperCase() || '___________'}`;
+  const buyerLines = doc.splitTextToSize(buyerText, contentWidth);
+  doc.text(buyerLines, margin, y);
+  y += buyerLines.length * 4 + 6;
 
   // Purpose
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8);
   const purposeText = 'O presente instrumento particular entabulado entre as partes supramencionadas, tem como finalidade a venda do veículo:';
-  const purposeLines = doc.splitTextToSize(purposeText, contentWidth);
-  doc.text(purposeLines, margin, y);
-  y += purposeLines.length * 5 + 8;
-
-  // Vehicle info (matching original format: MARCA MODELO, ANO, PLACA, COR, RENAVAM)
-  doc.setFont('helvetica', 'bold');
-  doc.text('OBJETO:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  const vehicleText = `${contract.vehicle_brand.toUpperCase()} ${contract.vehicle_model.toUpperCase()}, ${contract.vehicle_year}, ${contract.vehicle_plate?.toUpperCase() || '___________'}, ${contract.vehicle_color?.toUpperCase() || '___________'}, RENAVAM n°${contract.vehicle_renavam || '___________'},`;
-  const vehicleLines = doc.splitTextToSize(vehicleText, contentWidth - 20);
-  doc.text(vehicleLines, margin + 20, y);
-  y += vehicleLines.length * 5 + 10;
-
-  // Payment section
-  doc.setFont('helvetica', 'bold');
-  doc.text('FORMA DE PAGAMENTO:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  const paymentIntro = 'o OBJETO deste contrato foi vendido da seguinte forma:';
-  doc.text(paymentIntro, margin + 50, y);
+  doc.text(purposeText, margin, y);
   y += 8;
 
-  // Use negotiation_details from notes if available, otherwise build from individual fields
+  // Vehicle info with box
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  y = addSectionHeader(doc, 'OBJETO', y, margin);
+  
+  // Vehicle box
+  doc.setFillColor(250, 250, 250);
+  doc.setDrawColor(BRAND_LIGHT_GRAY.r, BRAND_LIGHT_GRAY.g, BRAND_LIGHT_GRAY.b);
+  doc.roundedRect(margin, y - 3, contentWidth, 14, 2, 2, 'FD');
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  const vehicleText = `${contract.vehicle_brand.toUpperCase()} ${contract.vehicle_model.toUpperCase()}, ${contract.vehicle_year}, Placa: ${contract.vehicle_plate?.toUpperCase() || '___'}, Cor: ${contract.vehicle_color?.toUpperCase() || '___'}, RENAVAM: ${contract.vehicle_renavam || '___'}`;
+  doc.text(vehicleText, margin + 4, y + 5);
+  y += 18;
+
+  // Payment section
+  doc.setFontSize(9);
+  y = addSectionHeader(doc, 'FORMA DE PAGAMENTO', y, margin);
+  doc.setFont('helvetica', 'normal');
+
   const negotiationFromNotes = contract.notes?.includes('NEGOCIAÇÃO:') 
     ? contract.notes.split('NEGOCIAÇÃO:')[1]?.split('\n\n')[0]?.trim()
     : null;
 
   if (negotiationFromNotes) {
-    // Parse negotiation details line by line
     const lines = negotiationFromNotes.split('\n').filter(l => l.trim());
     lines.forEach(line => {
       const trimmedLine = line.trim();
       if (trimmedLine && !trimmedLine.startsWith('Vendido pelo valor')) {
-        const lineText = trimmedLine.startsWith('•') ? trimmedLine : `- ${trimmedLine}`;
+        const lineText = trimmedLine.startsWith('•') || trimmedLine.startsWith('-') ? trimmedLine : `• ${trimmedLine}`;
         const wrappedLines = doc.splitTextToSize(lineText, contentWidth - 5);
-        doc.text(wrappedLines, margin, y);
-        y += wrappedLines.length * 5 + 2;
+        doc.text(wrappedLines, margin + 3, y);
+        y += wrappedLines.length * 4 + 1;
       }
     });
-    y += 4;
+    y += 3;
   } else {
-    // Build from individual fields
-    // Down payment
     if (contract.down_payment && contract.down_payment > 0) {
-      doc.text(`- Entrada no valor de ${formatCurrency(contract.down_payment)};`, margin, y);
-      y += 6;
+      doc.text(`• Entrada: ${formatCurrency(contract.down_payment)}`, margin + 3, y);
+      y += 5;
     }
-
-    // Trade-in
     if (contract.trade_in_brand) {
-      const tradeInText = `- Entrega do veículo ${contract.trade_in_brand} ${contract.trade_in_model || ''}, ${contract.trade_in_year || ''}, placa ${contract.trade_in_plate || '___________'}, cor ${contract.trade_in_color || '___________'}, avaliado em ${formatCurrency(contract.trade_in_value || 0)};`;
+      const tradeInText = `• Veículo como entrada: ${contract.trade_in_brand} ${contract.trade_in_model || ''} ${contract.trade_in_year || ''}, Placa: ${contract.trade_in_plate || '___'}, avaliado em ${formatCurrency(contract.trade_in_value || 0)}`;
       const tradeInLines = doc.splitTextToSize(tradeInText, contentWidth - 5);
-      doc.text(tradeInLines, margin, y);
-      y += tradeInLines.length * 5 + 2;
+      doc.text(tradeInLines, margin + 3, y);
+      y += tradeInLines.length * 4 + 1;
     }
-
-    // Financing/Installments
     if (contract.installments_count && contract.installments_count > 0) {
-      const financingText = `- Valor financiado de ${formatCurrency((contract.installment_value || 0) * contract.installments_count)} financiado em ${contract.installments_count}x de ${formatCurrency(contract.installment_value || 0)}`;
-      const financingLines = doc.splitTextToSize(financingText, contentWidth - 5);
-      doc.text(financingLines, margin, y);
-      y += financingLines.length * 5 + 2;
+      doc.text(`• Financiamento: ${formatCurrency((contract.installment_value || 0) * contract.installments_count)} em ${contract.installments_count}x de ${formatCurrency(contract.installment_value || 0)}`, margin + 3, y);
+      y += 5;
     }
-    y += 6;
+    y += 3;
   }
 
-  // Warranty section (complete version matching original)
-  doc.setFont('helvetica', 'bold');
-  doc.text('GARANTIA:', margin, y);
+  // Warranty section
+  y = addSectionHeader(doc, 'GARANTIA', y, margin);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  y += 6;
   
-  const warranty1 = 'o COMPRADOR adquire o veículo do VENDEDOR no estado em que ele se encontra. Atestando, pela assinatura do presente termo, ter vistoriado e garantido que o veículo atendeu suas exigências.';
-  const warranty1Lines = doc.splitTextToSize(warranty1, contentWidth);
-  doc.text(warranty1Lines, margin, y);
-  y += warranty1Lines.length * 5 + 4;
+  const warranties = [
+    'O COMPRADOR adquire o veículo do VENDEDOR no estado em que ele se encontra, atestando ter vistoriado e garantido que o veículo atendeu suas exigências.',
+    'O veículo não possui garantia de componentes elétricos, eletrônicos e eletromecânicos (módulos, sensores, alternador, motor de partida, lâmpadas, faróis, lanternas, chicotes e alarmes), pois encontram-se em perfeito estado no ato da compra. Acabamento (estofamentos, forrações, pintura) e pneus não estão cobertos pela garantia.',
+    'Nos termos do Art. 26, II, do CDC, o COMPRADOR tem 90 dias, a partir da tradição do bem, para apresentar reclamação por vícios no veículo. O veículo deve ser apresentado ao estabelecimento comercial para reparo.',
+    'Durante o período de reparo (máximo 30 dias), o VENDEDOR não se obriga a disponibilizar carro reserva.',
+    'O COMPRADOR perderá a garantia caso o veículo tenha sido usado de forma inadequada, imprudente, negligente, danificado por acidente ou reparado em oficina diversa sem prévia comunicação.'
+  ];
 
-  const warranty2 = 'O veículo não possui garantia de componentes elétricos, eletrônicos e eletromecânicos (módulos, sensores/sondas, alternador, motor de partida, lâmpadas, faróis, lanternas, chicotes elétricos e alarmes), pois encontram-se em perfeito estado e condições de uso no ato da compra. Ademais, o acabamento do veículo (estofamentos, forrações, pintura) bem como pneus, não estão cobertos pela garantia, por seu estado de conservação ser de fácil constatação.';
-  const warranty2Lines = doc.splitTextToSize(warranty2, contentWidth);
-  doc.text(warranty2Lines, margin, y);
-  y += warranty2Lines.length * 5 + 4;
+  warranties.forEach(warranty => {
+    const lines = doc.splitTextToSize(`• ${warranty}`, contentWidth - 5);
+    doc.text(lines, margin + 3, y);
+    y += lines.length * 3.5 + 2;
+  });
 
-  const warranty3 = 'Nos termos do Artigo 26, II, do CDC, o COMPRADOR tem o prazo de 90 (noventa) dias, a partir da tradição do bem, para apresentar ao VENDEDOR qualquer reclamação por vícios no veículo. E, para que o reparo seja feito, o veículo deve ser apresentado ao estabelecimento comercial pelo comprador.';
-  const warranty3Lines = doc.splitTextToSize(warranty3, contentWidth);
-  doc.text(warranty3Lines, margin, y);
-  y += warranty3Lines.length * 5 + 4;
-
-  const warranty4 = 'Fica desde já consignado que, durante o período em que o veículo estiver sendo reparado (dentro do prazo máximo de 30 dias), o VENDEDOR não se obriga, conforme legislação vigente, a disponibilizar carro reserva ao COMPRADOR.';
-  const warranty4Lines = doc.splitTextToSize(warranty4, contentWidth);
-  doc.text(warranty4Lines, margin, y);
-  y += warranty4Lines.length * 5 + 4;
-
-  const warranty5 = 'O COMPRADOR perderá totalmente a garantia do veículo, caso seja constatada que o veículo tenha sido submetido ao uso de forma inadequada, imprudente, negligente ou danificado por acidente ou tenha sido reparado em oficina diversa, sem prévia comunicação ao VENDEDOR.';
-  const warranty5Lines = doc.splitTextToSize(warranty5, contentWidth);
-  doc.text(warranty5Lines, margin, y);
-  y += warranty5Lines.length * 5 + 8;
-
-  // Check if we need a new page
+  // Check for new page
   if (y > 250) {
+    addFooter(doc, 1);
     doc.addPage();
+    addWatermark(doc);
     y = 20;
   }
 
   // Final clause
+  y += 3;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
   const finalText = 'Por fim, nos termos do Artigo 784, III, do CPC, as partes firmam o presente contrato por livre e espontânea vontade. Elegendo, para dirimirem qualquer dúvida, o foro de Taubaté-SP.';
   const finalLines = doc.splitTextToSize(finalText, contentWidth);
   doc.text(finalLines, margin, y);
-  y += finalLines.length * 5 + 10;
+  y += finalLines.length * 4 + 8;
 
-  // Date
-  const today = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+  // Date with decorative element
+  const today = format(new Date(), "dd 'de' MMMM 'de' yyyy, HH:mm", { locale: ptBR });
+  doc.setFont('helvetica', 'italic');
   doc.text(`Taubaté, ${today}`, margin, y);
-  y += 20;
+  y += 15;
 
-  // Signatures
-  const signatureY = y + 15;
-  doc.line(margin, signatureY, margin + 70, signatureY);
-  doc.line(pageWidth - margin - 70, signatureY, pageWidth - margin, signatureY);
+  // Signatures with styled lines
+  const signatureY = y + 10;
+  doc.setDrawColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
+  doc.setLineWidth(0.5);
   
-  doc.setFontSize(9);
+  // Left signature
+  doc.line(margin, signatureY, margin + 75, signatureY);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
   doc.text('M DE A PEREIRA VEICULOS ME', margin, signatureY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(BRAND_GRAY.r, BRAND_GRAY.g, BRAND_GRAY.b);
   doc.text('VENDEDOR', margin, signatureY + 10);
   
-  doc.text(contract.customer_name.toUpperCase(), pageWidth - margin - 70, signatureY + 5);
-  doc.text('COMPRADOR', pageWidth - margin - 70, signatureY + 10);
+  // Right signature
+  doc.line(pageWidth - margin - 75, signatureY, pageWidth - margin, signatureY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
+  doc.text(contract.customer_name.toUpperCase().substring(0, 35), pageWidth - margin - 75, signatureY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(BRAND_GRAY.r, BRAND_GRAY.g, BRAND_GRAY.b);
+  doc.text('COMPRADOR', pageWidth - margin - 75, signatureY + 10);
+
+  addFooter(doc, 1);
 
   return doc;
 }
@@ -181,106 +288,121 @@ export function generateSaleContractPDF(contract: Contract) {
 export function generatePurchaseContractPDF(contract: Contract) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
+  const margin = 15;
   const contentWidth = pageWidth - 2 * margin;
-  let y = 20;
 
-  // Title
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('CONTRATO DE COMPRA DE VEÍCULO', pageWidth / 2, y, { align: 'center' });
-  y += 15;
+  addWatermark(doc);
+  let y = addHeader(doc, 'CONTRATO DE COMPRA DE VEÍCULO');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
 
   // Buyer info (Company)
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('COMPRADOR:', margin, y);
-  doc.setFont('helvetica', 'normal');
+  y = addSectionHeader(doc, 'COMPRADOR (LOJA)', y, margin);
   const buyerText = 'M DE A PEREIRA VEICULOS ME, inscrita no CNPJ sob n° 06.334.716.0001-01, com sede na Avenida Major Joaquim Monteiro Patto, 25, Chácara do Visconde, Taubaté-SP, CEP 12050-620.';
-  const buyerLines = doc.splitTextToSize(buyerText, contentWidth - 28);
-  doc.text(buyerLines, margin + 28, y);
-  y += buyerLines.length * 5 + 8;
+  const buyerLines = doc.splitTextToSize(buyerText, contentWidth);
+  doc.text(buyerLines, margin, y);
+  y += buyerLines.length * 4 + 6;
 
   // Seller info (Client)
-  doc.setFont('helvetica', 'bold');
-  doc.text('VENDEDOR:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  const sellerText = `${contract.customer_name}, ${contract.customer_nationality || 'brasileiro(a)'}, ${contract.customer_profession || 'profissão não informada'}, ${contract.customer_marital_status || 'estado civil não informado'}, data de nascimento: ${contract.customer_birth_date ? format(new Date(contract.customer_birth_date), 'dd/MM/yyyy') : '___/___/______'}, com cédula de identidade RG n° ${contract.customer_rg || '___________'}, inscrito no CPF/MF sob o n° ${contract.customer_cpf || '___________'}, residente e domiciliado na ${contract.customer_address || '___________'}, ${contract.customer_city || '___________'}, ${contract.customer_state || '___'}, CEP ${contract.customer_zip || '___________'}, telefone para contato: ${contract.customer_phone || '___________'}`;
-  const sellerLines = doc.splitTextToSize(sellerText, contentWidth - 25);
-  doc.text(sellerLines, margin + 25, y);
-  y += sellerLines.length * 5 + 10;
+  y = addSectionHeader(doc, 'VENDEDOR', y, margin);
+  const sellerText = `${contract.customer_name.toUpperCase()}, ${(contract.customer_nationality || 'brasileiro(a)').toUpperCase()}, ${(contract.customer_profession || '').toUpperCase()}, ${(contract.customer_marital_status || '').toUpperCase()}, RG n° ${contract.customer_rg || '___________'}, CPF n° ${contract.customer_cpf || '___________'}, nascido em ${contract.customer_birth_date ? format(new Date(contract.customer_birth_date), 'dd/MM/yyyy') : '___/___/______'}, residente na ${contract.customer_address?.toUpperCase() || '___________'}, ${contract.customer_city?.toUpperCase() || '___________'}-${contract.customer_state?.toUpperCase() || '___'}, telefone ${contract.customer_phone || '___________'}`;
+  const sellerLines = doc.splitTextToSize(sellerText, contentWidth);
+  doc.text(sellerLines, margin, y);
+  y += sellerLines.length * 4 + 6;
 
   // Purpose
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8);
   const purposeText = 'O presente instrumento particular entabulado entre as partes supramencionadas, tem como finalidade a compra do veículo:';
-  const purposeLines = doc.splitTextToSize(purposeText, contentWidth);
-  doc.text(purposeLines, margin, y);
-  y += purposeLines.length * 5 + 8;
+  doc.text(purposeText, margin, y);
+  y += 8;
 
-  // Vehicle info
+  // Vehicle box
+  doc.setFontSize(9);
+  y = addSectionHeader(doc, 'OBJETO', y, margin);
+  
+  doc.setFillColor(250, 250, 250);
+  doc.setDrawColor(BRAND_LIGHT_GRAY.r, BRAND_LIGHT_GRAY.g, BRAND_LIGHT_GRAY.b);
+  doc.roundedRect(margin, y - 3, contentWidth, 14, 2, 2, 'FD');
+  
   doc.setFont('helvetica', 'bold');
-  doc.text('OBJETO:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  const vehicleText = `${contract.vehicle_brand} ${contract.vehicle_model}, ${contract.vehicle_year}, ${contract.vehicle_plate || '___________'}, ${contract.vehicle_color || '___________'}, RENAVAM n°${contract.vehicle_renavam || '___________'}.`;
-  const vehicleLines = doc.splitTextToSize(vehicleText, contentWidth - 20);
-  doc.text(vehicleLines, margin + 20, y);
-  y += vehicleLines.length * 5 + 10;
+  doc.setFontSize(10);
+  doc.setTextColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
+  const vehicleText = `${contract.vehicle_brand.toUpperCase()} ${contract.vehicle_model.toUpperCase()}, ${contract.vehicle_year}, Placa: ${contract.vehicle_plate?.toUpperCase() || '___'}, Cor: ${contract.vehicle_color?.toUpperCase() || '___'}, RENAVAM: ${contract.vehicle_renavam || '___'}`;
+  doc.text(vehicleText, margin + 4, y + 5);
+  y += 18;
 
-  // Negotiation section (payment details)
-  doc.setFont('helvetica', 'bold');
-  doc.text('NEGOCIAÇÃO:', margin, y);
+  // Negotiation section
+  doc.setFontSize(9);
+  y = addSectionHeader(doc, 'NEGOCIAÇÃO', y, margin);
   doc.setFont('helvetica', 'normal');
-  y += 6;
   
   const negotiationIntro = `Comprado pelo valor de ${formatCurrency(contract.vehicle_value)} ${currencyToWords(contract.vehicle_value)}`;
-  const negotiationLines = doc.splitTextToSize(negotiationIntro, contentWidth);
-  doc.text(negotiationLines, margin, y);
-  y += negotiationLines.length * 5 + 4;
+  doc.text(negotiationIntro, margin, y);
+  y += 6;
 
-  // Payment details from notes or default
   if (contract.notes) {
     const notesLines = doc.splitTextToSize(contract.notes, contentWidth);
     doc.text(notesLines, margin, y);
-    y += notesLines.length * 5 + 8;
+    y += notesLines.length * 4 + 4;
   } else if (contract.down_payment && contract.down_payment > 0) {
-    doc.text(`• Entrada: ${formatCurrency(contract.down_payment)}`, margin, y);
+    doc.text(`• Pagamento: ${formatCurrency(contract.down_payment)}`, margin, y);
     y += 6;
   }
-  
   y += 4;
 
-  // Commitment clause
-  const commitmentText = 'No ato da assinatura do presente instrumento o VENDEDOR compromete-se a entregar o veículo ao COMPRADOR livre e desimpedido de qualquer débito, como multas, bloqueios judiciais bem como outras taxas que possam recair.';
-  const commitmentLines = doc.splitTextToSize(commitmentText, contentWidth);
-  doc.text(commitmentLines, margin, y);
-  y += commitmentLines.length * 5 + 8;
+  // Commitment clauses
+  doc.setFontSize(8);
+  const commitments = [
+    'No ato da assinatura do presente instrumento o VENDEDOR compromete-se a entregar o veículo ao COMPRADOR livre e desimpedido de qualquer débito, como multas, bloqueios judiciais bem como outras taxas que possam recair.',
+    'Realizada a tradição do bem, assim como definido entre as partes, quaisquer débitos que surgirem após essa data, serão única e exclusivamente de responsabilidade do VENDEDOR.'
+  ];
 
-  const debtText = 'Realizada a tradição do bem, assim como definido entre as partes, quaisquer débitos que surgirem após essa data, serão única e exclusivamente de responsabilidade do VENDEDOR.';
-  const debtLines = doc.splitTextToSize(debtText, contentWidth);
-  doc.text(debtLines, margin, y);
-  y += debtLines.length * 5 + 10;
+  commitments.forEach(text => {
+    const lines = doc.splitTextToSize(`• ${text}`, contentWidth - 5);
+    doc.text(lines, margin + 3, y);
+    y += lines.length * 3.5 + 3;
+  });
 
   // Final clause
+  y += 5;
+  doc.setFontSize(9);
   const finalText = 'Por fim, nos termos do Artigo 784, III, do CPC, as partes firmam o presente contrato por livre e espontânea vontade, exarando suas assinaturas em conjunto com duas testemunhas. Elegendo, para dirimirem qualquer dúvida, o foro de Taubaté-SP.';
   const finalLines = doc.splitTextToSize(finalText, contentWidth);
   doc.text(finalLines, margin, y);
-  y += finalLines.length * 5 + 10;
+  y += finalLines.length * 4 + 8;
 
   // Date
-  const today = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+  const today = format(new Date(), "dd 'de' MMMM 'de' yyyy, HH:mm", { locale: ptBR });
+  doc.setFont('helvetica', 'italic');
   doc.text(`Taubaté, ${today}`, margin, y);
-  y += 20;
+  y += 15;
 
   // Signatures
-  const signatureY = y + 15;
-  doc.line(margin, signatureY, margin + 70, signatureY);
-  doc.line(pageWidth - margin - 70, signatureY, pageWidth - margin, signatureY);
+  const signatureY = y + 10;
+  doc.setDrawColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
+  doc.setLineWidth(0.5);
   
-  doc.setFontSize(9);
+  doc.line(margin, signatureY, margin + 75, signatureY);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
   doc.text('M DE A PEREIRA VEICULOS ME', margin, signatureY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(BRAND_GRAY.r, BRAND_GRAY.g, BRAND_GRAY.b);
   doc.text('COMPRADOR', margin, signatureY + 10);
   
-  doc.text(`Nome: ${contract.customer_name.toUpperCase()}`, pageWidth - margin - 70, signatureY + 5);
-  doc.text('VENDEDOR', pageWidth - margin - 70, signatureY + 10);
+  doc.line(pageWidth - margin - 75, signatureY, pageWidth - margin, signatureY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(BRAND_BLACK.r, BRAND_BLACK.g, BRAND_BLACK.b);
+  doc.text(contract.customer_name.toUpperCase().substring(0, 35), pageWidth - margin - 75, signatureY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(BRAND_GRAY.r, BRAND_GRAY.g, BRAND_GRAY.b);
+  doc.text('VENDEDOR', pageWidth - margin - 75, signatureY + 10);
+
+  addFooter(doc, 1);
 
   return doc;
 }
@@ -293,7 +415,7 @@ export function downloadContractPDF(contract: Contract) {
   doc.save(`${contract.contract_number}.pdf`);
 }
 
-// Dados de exemplo para preview dos modelos
+// Sample contracts for preview
 const SAMPLE_SALE_CONTRACT: Contract = {
   id: 'sample-sale',
   contract_number: 'MODELO-VENDA',
@@ -340,7 +462,7 @@ const SAMPLE_PURCHASE_CONTRACT: Contract = {
   contract_number: 'MODELO-COMPRA',
   contract_type: 'compra',
   status: 'draft',
-  customer_name: 'DEBORA CRISTINA PEREIRA',
+  customer_name: 'Debora Cristina Pereira',
   customer_cpf: '367.554.878-30',
   customer_rg: '418771340',
   customer_phone: '(12) 98111-3858',
@@ -360,13 +482,10 @@ const SAMPLE_PURCHASE_CONTRACT: Contract = {
   vehicle_renavam: '00184453755',
   vehicle_value: 20000,
   down_payment: 12882,
-  notes: `com um valor de R$12.882,00 (doze mil oitocentos e oitenta e dois reais) para quitação na data de hoje pago pelo cliente da seguinte maneira:
-
-• R$8.000,00 no cartão em crédito em 3x de R$2.970,00
-• R$4.882,00 via pix na conta da loja (BRADESCO) na data de hoje
-• R$104,00 referente a multa por averbação (falta de transferência dentro da data vigente)
-
-Dando um total de R$4.986,00.`,
+  notes: `• R$8.000,00 no cartão de crédito em 3x de R$2.970,00
+• R$4.882,00 via PIX na conta da loja (BRADESCO)
+• R$104,00 referente a multa por averbação
+Total: R$12.986,00`,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -382,7 +501,6 @@ export function generateSampleContractPDF(type: 'venda' | 'compra') {
 
 export function previewSampleContract(type: 'venda' | 'compra') {
   const doc = generateSampleContractPDF(type);
-  // Download direto para evitar bloqueio do Chrome em blob URLs
   const filename = type === 'venda' ? 'MODELO_VENDA_VEICULO.pdf' : 'MODELO_COMPRA_VEICULO.pdf';
   doc.save(filename);
 }

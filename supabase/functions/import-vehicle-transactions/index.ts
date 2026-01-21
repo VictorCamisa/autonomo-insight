@@ -159,6 +159,11 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Processando ${rows.length} linhas. DryRun: ${dryRun}`);
+    
+    // Log das colunas disponíveis na primeira linha para debug
+    if (rows.length > 0) {
+      console.log('Colunas disponíveis:', Object.keys(rows[0]));
+    }
 
     const transactions: TransactionRow[] = [];
     const errors: string[] = [];

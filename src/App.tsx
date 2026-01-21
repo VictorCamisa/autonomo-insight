@@ -76,8 +76,15 @@ const SalesListPage = lazy(() => import("@/components/sales/SalesListPage").then
 const SalesTeamView = lazy(() => import("@/components/sales/SalesTeamView").then(m => ({ default: m.SalesTeamView })));
 const SalesProfitPage = lazy(() => import("@/components/sales/SalesProfitPage").then(m => ({ default: m.SalesProfitPage })));
 const SalesMetricsPage = lazy(() => import("@/components/sales/SalesMetricsPage").then(m => ({ default: m.SalesMetricsPage })));
-const ContractsPage = lazy(() => import("@/components/sales/ContractsPage").then(m => ({ default: m.ContractsPage })));
 const SalespersonDetail = lazy(() => import("@/pages/SalespersonDetail"));
+
+// Lazy load Contracts pages
+const ContractsLayout = lazy(() => import("@/components/contracts/ContractsLayout").then(m => ({ default: m.ContractsLayout })));
+const ContractsListPage = lazy(() => import("@/components/contracts/ContractsListPage").then(m => ({ default: m.ContractsListPage })));
+const ContractSignaturesPage = lazy(() => import("@/components/contracts/ContractSignaturesPage").then(m => ({ default: m.ContractSignaturesPage })));
+const ContractHistoryPage = lazy(() => import("@/components/contracts/ContractHistoryPage").then(m => ({ default: m.ContractHistoryPage })));
+const ContractTemplatesPage = lazy(() => import("@/components/contracts/ContractTemplatesPage").then(m => ({ default: m.ContractTemplatesPage })));
+const ContractSettingsPage = lazy(() => import("@/components/contracts/ContractSettingsPage").then(m => ({ default: m.ContractSettingsPage })));
 
 // Lazy load Financial pages
 const FinancialDashboard = lazy(() => import("@/components/financial/FinancialDashboard").then(m => ({ default: m.FinancialDashboard })));
@@ -207,8 +214,16 @@ const App = () => (
                     <Route path="equipe" element={<Suspense fallback={<PageLoader />}><SalesTeamView /></Suspense>} />
                     <Route path="equipe/:id" element={<Suspense fallback={<PageLoader />}><SalespersonDetail /></Suspense>} />
                     <Route path="lucro" element={<Suspense fallback={<PageLoader />}><SalesProfitPage /></Suspense>} />
-                    <Route path="contratos" element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
                     <Route path="metricas" element={<Suspense fallback={<PageLoader />}><SalesMetricsPage /></Suspense>} />
+                    
+                    {/* Contracts Sub-Routes */}
+                    <Route path="contratos" element={<Suspense fallback={<PageLoader />}><ContractsLayout /></Suspense>}>
+                      <Route index element={<Suspense fallback={<PageLoader />}><ContractsListPage /></Suspense>} />
+                      <Route path="assinaturas" element={<Suspense fallback={<PageLoader />}><ContractSignaturesPage /></Suspense>} />
+                      <Route path="historico" element={<Suspense fallback={<PageLoader />}><ContractHistoryPage /></Suspense>} />
+                      <Route path="modelos" element={<Suspense fallback={<PageLoader />}><ContractTemplatesPage /></Suspense>} />
+                      <Route path="configuracoes" element={<Suspense fallback={<PageLoader />}><ContractSettingsPage /></Suspense>} />
+                    </Route>
                   </Route>
                   
                   {/* Financial Routes */}

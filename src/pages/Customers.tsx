@@ -74,14 +74,28 @@ function useHistoryTransactionsSold() {
   return useQuery({
     queryKey: ['vehicle-transactions-sold-with-customers'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('vehicle_transactions')
-        .select('*')
-        .not('buyer_name', 'is', null)
-        .order('sale_date', { ascending: false, nullsFirst: false });
+      // Busca todos sem limite de 1000
+      const allData: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      
+      while (true) {
+        const { data, error } = await supabase
+          .from('vehicle_transactions')
+          .select('*')
+          .not('buyer_name', 'is', null)
+          .order('sale_date', { ascending: false, nullsFirst: false })
+          .range(from, from + batchSize - 1);
 
-      if (error) throw error;
-      return data || [];
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        
+        allData.push(...data);
+        if (data.length < batchSize) break;
+        from += batchSize;
+      }
+      
+      return allData;
     },
     staleTime: 30000,
   });
@@ -92,14 +106,28 @@ function useHistoryTransactionsPurchased() {
   return useQuery({
     queryKey: ['vehicle-transactions-purchased-with-customers'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('vehicle_transactions')
-        .select('*')
-        .not('seller_name', 'is', null)
-        .order('purchase_date', { ascending: false, nullsFirst: false });
+      // Busca todos sem limite de 1000
+      const allData: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      
+      while (true) {
+        const { data, error } = await supabase
+          .from('vehicle_transactions')
+          .select('*')
+          .not('seller_name', 'is', null)
+          .order('purchase_date', { ascending: false, nullsFirst: false })
+          .range(from, from + batchSize - 1);
 
-      if (error) throw error;
-      return data || [];
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        
+        allData.push(...data);
+        if (data.length < batchSize) break;
+        from += batchSize;
+      }
+      
+      return allData;
     },
     staleTime: 30000,
   });

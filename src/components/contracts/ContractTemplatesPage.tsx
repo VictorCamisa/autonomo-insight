@@ -6,11 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { 
   FileStack, 
   Search, 
-  Plus,
   FileText,
   Download,
   Eye
 } from 'lucide-react';
+import { previewSampleContract } from '@/lib/contractPdf';
 
 // Modelos padrão do sistema
 const DEFAULT_TEMPLATES = [
@@ -134,7 +134,12 @@ export function ContractTemplatesPage() {
                 </ul>
               </div>
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => previewSampleContract(template.id as 'venda' | 'compra')}
+                >
                   <Eye className="h-3.5 w-3.5 mr-1.5" />
                   Visualizar
                 </Button>

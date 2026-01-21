@@ -229,3 +229,94 @@ export function downloadContractPDF(contract: Contract) {
   
   doc.save(`${contract.contract_number}.pdf`);
 }
+
+// Dados de exemplo para preview dos modelos
+const SAMPLE_SALE_CONTRACT: Contract = {
+  id: 'sample-sale',
+  contract_number: 'MODELO-VENDA',
+  contract_type: 'venda',
+  status: 'draft',
+  customer_name: 'João da Silva Santos',
+  customer_cpf: '123.456.789-00',
+  customer_rg: '12.345.678-9',
+  customer_phone: '(12) 99999-8888',
+  customer_email: 'joao.silva@email.com',
+  customer_address: 'Rua das Flores, 123, Centro',
+  customer_city: 'Taubaté',
+  customer_state: 'SP',
+  customer_zip: '12020-000',
+  customer_birth_date: '1985-05-15',
+  customer_nationality: 'brasileiro',
+  customer_profession: 'Empresário',
+  customer_marital_status: 'casado',
+  vehicle_brand: 'Honda',
+  vehicle_model: 'Civic EXL 2.0',
+  vehicle_year: '2022/2023',
+  vehicle_plate: 'ABC-1234',
+  vehicle_color: 'Preto',
+  vehicle_renavam: '12345678901',
+  vehicle_odometer: 35000,
+  vehicle_value: 125000,
+  down_payment: 25000,
+  trade_in_brand: 'Volkswagen',
+  trade_in_model: 'Polo 1.6',
+  trade_in_year: '2018/2019',
+  trade_in_plate: 'XYZ-5678',
+  trade_in_color: 'Prata',
+  trade_in_renavam: '98765432109',
+  trade_in_value: 45000,
+  installments_count: 12,
+  installment_value: 4583.33,
+  installment_due_day: 15,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
+const SAMPLE_PURCHASE_CONTRACT: Contract = {
+  id: 'sample-purchase',
+  contract_number: 'MODELO-COMPRA',
+  contract_type: 'compra',
+  status: 'draft',
+  customer_name: 'Maria Aparecida Oliveira',
+  customer_cpf: '987.654.321-00',
+  customer_rg: '98.765.432-1',
+  customer_phone: '(12) 98888-7777',
+  customer_address: 'Avenida Brasil, 456, Jardim América',
+  customer_city: 'Taubaté',
+  customer_state: 'SP',
+  customer_zip: '12030-000',
+  customer_birth_date: '1978-10-20',
+  customer_nationality: 'brasileira',
+  customer_profession: 'Advogada',
+  customer_marital_status: 'solteira',
+  vehicle_brand: 'Toyota',
+  vehicle_model: 'Corolla XEi 2.0',
+  vehicle_year: '2021/2021',
+  vehicle_plate: 'DEF-9876',
+  vehicle_color: 'Branco',
+  vehicle_renavam: '11223344556',
+  vehicle_value: 98000,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
+export function generateSampleContractPDF(type: 'venda' | 'compra') {
+  const contract = type === 'venda' ? SAMPLE_SALE_CONTRACT : SAMPLE_PURCHASE_CONTRACT;
+  const doc = type === 'venda' 
+    ? generateSaleContractPDF(contract)
+    : generatePurchaseContractPDF(contract);
+  
+  return doc;
+}
+
+export function previewSampleContract(type: 'venda' | 'compra') {
+  const doc = generateSampleContractPDF(type);
+  const pdfBlob = doc.output('blob');
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  window.open(pdfUrl, '_blank');
+}
+
+export function downloadSampleContract(type: 'venda' | 'compra') {
+  const doc = generateSampleContractPDF(type);
+  doc.save(`MODELO_${type.toUpperCase()}_VEICULO.pdf`);
+}

@@ -144,9 +144,13 @@ export function SalesApprovals() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          {hasContract && (
+                          {hasContract ? (
                             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
                               <FileText className="h-3 w-3 mr-1" /> Contrato Gerado
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/30 animate-pulse">
+                              <AlertTriangle className="h-3 w-3 mr-1" /> Sem Contrato
                             </Badge>
                           )}
                           <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
@@ -230,30 +234,16 @@ export function SalesApprovals() {
                           Rejeitar
                         </Button>
                         
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Button
-                                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
-                                  disabled={!hasContract}
-                                  onClick={() => {
-                                    setSelectedSale(sale);
-                                    setActionType('approve');
-                                  }}
-                                >
-                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                  Aprovar
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            {!hasContract && (
-                              <TooltipContent>
-                                <p>Gere o contrato antes de aprovar a venda</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Button
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => {
+                            setSelectedSale(sale);
+                            setActionType('approve');
+                          }}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Aprovar
+                        </Button>
                       </div>
                     </div>
                   </div>

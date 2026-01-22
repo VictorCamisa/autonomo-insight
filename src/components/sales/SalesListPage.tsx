@@ -69,18 +69,28 @@ export function SalesListPage() {
   };
 
   const handleGenerateContract = (sale: Sale) => {
-    // Prepara os dados iniciais do contrato com base na venda
-    // Apenas com os campos disponíveis no tipo Sale
+    // Prepara os dados iniciais do contrato com todos os campos disponíveis
     const initialData: Partial<ContractFormData> = {
       contract_type: 'venda',
       customer_id: sale.customer_id,
       customer_name: sale.customer?.name || '',
+      customer_cpf: sale.customer?.cpf_cnpj || '',
+      customer_rg: sale.customer?.rg || '',
       customer_phone: sale.customer?.phone || '',
+      customer_email: sale.customer?.email || '',
+      customer_address: sale.customer?.address || '',
+      customer_city: sale.customer?.city || '',
+      customer_state: sale.customer?.state || '',
       vehicle_id: sale.vehicle_id,
       vehicle_brand: sale.vehicle?.brand || '',
       vehicle_model: sale.vehicle?.model || '',
-      vehicle_year: sale.vehicle?.year_model?.toString() || '',
+      vehicle_year: sale.vehicle?.year_fabrication && sale.vehicle?.year_model 
+        ? `${sale.vehicle.year_fabrication}/${sale.vehicle.year_model}` 
+        : sale.vehicle?.year_model?.toString() || '',
       vehicle_plate: sale.vehicle?.plate || '',
+      vehicle_color: sale.vehicle?.color || '',
+      vehicle_renavam: sale.vehicle?.renavam || '',
+      vehicle_odometer: sale.vehicle?.km || 0,
       vehicle_value: sale.sale_price || 0,
     };
 

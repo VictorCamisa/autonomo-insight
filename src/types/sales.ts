@@ -26,13 +26,23 @@ export interface Sale {
     id: string;
     name: string;
     phone: string;
+    cpf_cnpj?: string | null;
+    rg?: string | null;
+    email?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
   };
   vehicle?: {
     id: string;
     brand: string;
     model: string;
     year_model: number;
+    year_fabrication?: number;
     plate: string | null;
+    color?: string | null;
+    renavam?: string | null;
+    km?: number | null;
   };
   salesperson?: {
     id: string;

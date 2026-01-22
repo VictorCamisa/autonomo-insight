@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ImportTransactionsDialog } from '@/components/customers/ImportTransactionsDialog';
@@ -297,11 +298,12 @@ export default function Customers() {
   };
 
   const formatDate = (date: string | null) => {
-    if (!date) return '-';
+    const parsed = parseDate(date);
+    if (!parsed) return '-';
     try {
-      return format(new Date(date), "dd/MM/yyyy", { locale: ptBR });
+      return format(parsed, "dd/MM/yyyy", { locale: ptBR });
     } catch {
-      return date;
+      return date || '-';
     }
   };
 

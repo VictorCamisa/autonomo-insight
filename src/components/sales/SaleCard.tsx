@@ -6,6 +6,7 @@ import { Edit, Trash2, Car, User, Calendar, DollarSign } from 'lucide-react';
 import { Sale, saleStatusLabels, saleStatusColors, paymentMethodLabels } from '@/types/sales';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 import { SaleDetailModal } from './SaleDetailModal';
 
 interface SaleCardProps {
@@ -51,7 +52,7 @@ export function SaleCard({ sale, onEdit, onDelete }: SaleCardProps) {
           
           <div className="flex items-center gap-2 text-sm">
             <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span>{format(new Date(sale.sale_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+            <span>{parseDate(sale.sale_date) ? format(parseDate(sale.sale_date)!, 'dd/MM/yyyy', { locale: ptBR }) : '-'}</span>
           </div>
 
           <div className="flex items-center gap-2 text-sm">

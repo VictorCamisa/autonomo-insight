@@ -21,6 +21,7 @@ import {
 import { Sale, saleStatusLabels, saleStatusColors, paymentMethodLabels } from '@/types/sales';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 interface SaleDetailModalProps {
   sale: Sale | null;
@@ -37,8 +38,9 @@ export function SaleDetailModal({ sale, open, onOpenChange }: SaleDetailModalPro
   };
 
   const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return '-';
-    return format(new Date(dateString), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    const date = parseDate(dateString);
+    if (!date) return '-';
+    return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   };
 
   const formatDateTime = (dateString: string | null | undefined) => {

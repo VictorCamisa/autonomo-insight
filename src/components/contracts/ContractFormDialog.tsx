@@ -48,6 +48,8 @@ export function ContractFormDialog({ open, onOpenChange, initialData }: Contract
   // Carrega dados iniciais quando o dialog abre - usa os dados já passados via initialData
   useEffect(() => {
     if (open && initialData) {
+      console.log('[ContractFormDialog] initialData recebido:', initialData);
+      
       // Aplica TODOS os dados já passados diretamente no initialData
       // Os dados já vêm completos do SalesListPage/SalesApprovals
       const newFormData: ContractFormData = {
@@ -89,6 +91,7 @@ export function ContractFormDialog({ open, onOpenChange, initialData }: Contract
         notes: initialData.notes,
       };
 
+      console.log('[ContractFormDialog] newFormData montado:', newFormData);
       setFormData(newFormData);
 
       // Verifica se tem dados de troca ou parcelamento

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { useContracts, ContractFormData } from '@/hooks/useContracts';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useVehicles } from '@/hooks/useVehicles';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FileText, User, Car, CreditCard, RefreshCw, HandCoins } from 'lucide-react';
+import { FileText, User, Car, CreditCard, RefreshCw, HandCoins, Check, ChevronsUpDown, Search } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ContractFormDialogProps {
   open: boolean;
@@ -44,6 +58,25 @@ export function ContractFormDialog({ open, onOpenChange, initialData }: Contract
 
   const [hasTradeIn, setHasTradeIn] = useState(false);
   const [hasInstallments, setHasInstallments] = useState(false);
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+
+  // Filtra clientes baseado na busca
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearch.trim()) return customers.slice(0, 50); // Limita a 50 para performance
+    const search = customerSearch.toLowerCase();
+    return customers.filter(c => 
+      c.name?.toLowerCase().includes(search) ||
+      c.phone?.toLowerCase().includes(search) ||
+      c.cpf_cnpj?.toLowerCase().includes(search) ||
+      c.email?.toLowerCase().includes(search)
+    ).slice(0, 50);
+  }, [customers, customerSearch]);
+
+  // Encontra o cliente selecionado
+  const selectedCustomer = useMemo(() => {
+    return customers.find(c => c.id === formData.customer_id);
+  }, [customers, formData.customer_id]);
 
   // Carrega dados iniciais quando o dialog abre - usa os dados já passados via initialData
   useEffect(() => {
@@ -113,6 +146,8 @@ export function ContractFormDialog({ open, onOpenChange, initialData }: Contract
       });
       setHasTradeIn(false);
       setHasInstallments(false);
+      setCustomerSearch('');
+      setCustomerSearchOpen(false);
     }
   }, [open, initialData]);
 
@@ -271,18 +306,71 @@ export function ContractFormDialog({ open, onOpenChange, initialData }: Contract
 
               <div className="space-y-2">
                 <Label>Selecionar Cliente Existente</Label>
-                <Select onValueChange={handleCustomerSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um cliente ou preencha manualmente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map(customer => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name} {customer.cpf_cnpj ? `- ${customer.cpf_cnpj}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={customerSearchOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {selectedCustomer ? (
+                        <span className="flex items-center gap-2 truncate">
+                          <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="truncate">{selectedCustomer.name}</span>
+                          {selectedCustomer.cpf_cnpj && (
+                            <span className="text-muted-foreground text-xs">- {selectedCustomer.cpf_cnpj}</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Buscar cliente por nome, telefone ou CPF...</span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput 
+                        placeholder="Buscar por nome, telefone, CPF..." 
+                        value={customerSearch}
+                        onValueChange={setCustomerSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {customerSearch ? 'Nenhum cliente encontrado' : 'Digite para buscar...'}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {filteredCustomers.map((customer) => (
+                            <CommandItem
+                              key={customer.id}
+                              value={customer.id}
+                              onSelect={() => {
+                                handleCustomerSelect(customer.id);
+                                setCustomerSearchOpen(false);
+                                setCustomerSearch('');
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <Check
+                                className={cn(
+                                  "h-4 w-4",
+                                  formData.customer_id === customer.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col flex-1 min-w-0">
+                                <span className="font-medium truncate">{customer.name}</span>
+                                <span className="text-xs text-muted-foreground truncate">
+                                  {customer.phone}
+                                  {customer.cpf_cnpj && ` • ${customer.cpf_cnpj}`}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -3,20 +3,35 @@ import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSales, useDeleteSale } from '@/hooks/useSales';
+import { useContracts } from '@/hooks/useContracts';
 import { SaleCard } from '@/components/sales/SaleCard';
 import { SaleForm } from '@/components/sales/SaleForm';
+import { ContractFormDialog } from '@/components/contracts/ContractFormDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Sale } from '@/types/sales';
+import type { ContractFormData } from '@/hooks/useContracts';
 
 export function SalesListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [contractDialogOpen, setContractDialogOpen] = useState(false);
+  const [contractInitialData, setContractInitialData] = useState<Partial<ContractFormData> | undefined>();
+  
   const { data: sales, isLoading } = useSales();
+  const { contracts } = useContracts();
   const deleteSale = useDeleteSale();
   const { role } = useAuth();
 
   const isManager = role === 'gerente';
+
+  // Check if a sale has a contract based on vehicle_id and customer_id
+  const saleHasContract = (sale: Sale): boolean => {
+    if (!sale.vehicle_id || !sale.customer_id) return false;
+    return contracts.some(
+      (c) => c.vehicle_id === sale.vehicle_id && c.customer_id === sale.customer_id
+    );
+  };
 
   // Filter sales by search query
   const filteredSales = useMemo(() => {
@@ -51,6 +66,26 @@ export function SalesListPage() {
     if (confirm('Tem certeza que deseja excluir esta venda?')) {
       await deleteSale.mutateAsync(id);
     }
+  };
+
+  const handleGenerateContract = (sale: Sale) => {
+    // Prepara os dados iniciais do contrato com base na venda
+    // Apenas com os campos disponíveis no tipo Sale
+    const initialData: Partial<ContractFormData> = {
+      contract_type: 'venda',
+      customer_id: sale.customer_id,
+      customer_name: sale.customer?.name || '',
+      customer_phone: sale.customer?.phone || '',
+      vehicle_id: sale.vehicle_id,
+      vehicle_brand: sale.vehicle?.brand || '',
+      vehicle_model: sale.vehicle?.model || '',
+      vehicle_year: sale.vehicle?.year_model?.toString() || '',
+      vehicle_plate: sale.vehicle?.plate || '',
+      vehicle_value: sale.sale_price || 0,
+    };
+
+    setContractInitialData(initialData);
+    setContractDialogOpen(true);
   };
 
   return (
@@ -88,8 +123,10 @@ export function SalesListPage() {
             <SaleCard
               key={sale.id}
               sale={sale}
+              hasContract={saleHasContract(sale)}
               onEdit={isManager ? handleEdit : undefined}
               onDelete={isManager ? handleDelete : undefined}
+              onGenerateContract={handleGenerateContract}
             />
           ))}
           {filteredSales?.length === 0 && (
@@ -104,6 +141,12 @@ export function SalesListPage() {
         open={formOpen} 
         onOpenChange={setFormOpen} 
         sale={editingSale} 
+      />
+
+      <ContractFormDialog
+        open={contractDialogOpen}
+        onOpenChange={setContractDialogOpen}
+        initialData={contractInitialData}
       />
     </div>
   );

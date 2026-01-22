@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, Car, User, Calendar, DollarSign } from 'lucide-react';
+import { Edit, Trash2, Car, User, Calendar, DollarSign, FileText, AlertTriangle } from 'lucide-react';
 import { Sale, saleStatusLabels, saleStatusColors, paymentMethodLabels } from '@/types/sales';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -11,11 +11,13 @@ import { SaleDetailModal } from './SaleDetailModal';
 
 interface SaleCardProps {
   sale: Sale;
+  hasContract?: boolean;
   onEdit?: (sale: Sale) => void;
   onDelete?: (id: string) => void;
+  onGenerateContract?: (sale: Sale) => void;
 }
 
-export function SaleCard({ sale, onEdit, onDelete }: SaleCardProps) {
+export function SaleCard({ sale, hasContract = false, onEdit, onDelete, onGenerateContract }: SaleCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
 
   const formatCurrency = (value: number) => {
@@ -62,6 +64,34 @@ export function SaleCard({ sale, onEdit, onDelete }: SaleCardProps) {
 
           <div className="text-xs text-muted-foreground">
             {paymentMethodLabels[sale.payment_method]}
+          </div>
+
+          {/* Contract Status Indicator */}
+          <div className="pt-2 border-t border-border/50">
+            {hasContract ? (
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+                <FileText className="h-3 w-3 mr-1" />
+                Contrato Gerado
+              </Badge>
+            ) : (
+              <div className="flex items-center justify-between">
+                <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  Sem Contrato
+                </Badge>
+                {onGenerateContract && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7"
+                    onClick={(e) => { e.stopPropagation(); onGenerateContract(sale); }}
+                  >
+                    <FileText className="h-3 w-3 mr-1" />
+                    Gerar Contrato
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {(onEdit || onDelete) && (

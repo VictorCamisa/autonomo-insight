@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDate } from '@/lib/utils';
 import { SaleDetailModal } from './SaleDetailModal';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface SaleCardProps {
   sale: Sale;
@@ -17,8 +18,35 @@ interface SaleCardProps {
   onGenerateContract?: (sale: Sale) => void;
 }
 
+// Campos necessários para gerar um contrato completo
+interface MissingField {
+  key: string;
+  label: string;
+  category: 'cliente' | 'veiculo';
+}
+
+function getMissingContractFields(sale: Sale): MissingField[] {
+  const missing: MissingField[] = [];
+
+  // Campos do cliente
+  if (!sale.customer?.cpf_cnpj) missing.push({ key: 'cpf', label: 'CPF', category: 'cliente' });
+  if (!sale.customer?.rg) missing.push({ key: 'rg', label: 'RG', category: 'cliente' });
+  if (!sale.customer?.address) missing.push({ key: 'address', label: 'Endereço', category: 'cliente' });
+  if (!sale.customer?.city) missing.push({ key: 'city', label: 'Cidade', category: 'cliente' });
+  if (!sale.customer?.state) missing.push({ key: 'state', label: 'Estado', category: 'cliente' });
+
+  // Campos do veículo
+  if (!sale.vehicle?.plate) missing.push({ key: 'plate', label: 'Placa', category: 'veiculo' });
+  if (!sale.vehicle?.renavam) missing.push({ key: 'renavam', label: 'Renavam', category: 'veiculo' });
+  if (!sale.vehicle?.color) missing.push({ key: 'color', label: 'Cor', category: 'veiculo' });
+
+  return missing;
+}
+
 export function SaleCard({ sale, hasContract = false, onEdit, onDelete, onGenerateContract }: SaleCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const missingFields = useMemo(() => getMissingContractFields(sale), [sale]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -67,28 +95,69 @@ export function SaleCard({ sale, hasContract = false, onEdit, onDelete, onGenera
           </div>
 
           {/* Contract Status Indicator */}
-          <div className="pt-2 border-t border-border/50">
+          <div className="pt-2 border-t border-border/50 space-y-2">
             {hasContract ? (
               <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
                 <FileText className="h-3 w-3 mr-1" />
                 Contrato Gerado
               </Badge>
             ) : (
-              <div className="flex items-center justify-between">
-                <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30">
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  Sem Contrato
-                </Badge>
-                {onGenerateContract && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-xs h-7"
-                    onClick={(e) => { e.stopPropagation(); onGenerateContract(sale); }}
-                  >
-                    <FileText className="h-3 w-3 mr-1" />
-                    Gerar Contrato
-                  </Button>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30 cursor-help">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Sem Contrato
+                        </Badge>
+                      </TooltipTrigger>
+                      {missingFields.length > 0 && (
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p className="font-medium mb-1">Campos faltantes:</p>
+                          <ul className="text-xs space-y-0.5">
+                            {missingFields.map((f) => (
+                              <li key={f.key}>• {f.label} ({f.category === 'cliente' ? 'Cliente' : 'Veículo'})</li>
+                            ))}
+                          </ul>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
+                  {onGenerateContract && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7"
+                      onClick={(e) => { e.stopPropagation(); onGenerateContract(sale); }}
+                    >
+                      <FileText className="h-3 w-3 mr-1" />
+                      Gerar Contrato
+                    </Button>
+                  )}
+                </div>
+
+                {/* Missing fields display */}
+                {missingFields.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {missingFields.slice(0, 4).map((field) => (
+                      <Badge 
+                        key={field.key} 
+                        variant="outline" 
+                        className="text-[10px] px-1.5 py-0 h-5 bg-muted/50 text-muted-foreground border-muted-foreground/30"
+                      >
+                        {field.label}
+                      </Badge>
+                    ))}
+                    {missingFields.length > 4 && (
+                      <Badge 
+                        variant="outline" 
+                        className="text-[10px] px-1.5 py-0 h-5 bg-muted/50 text-muted-foreground border-muted-foreground/30"
+                      >
+                        +{missingFields.length - 4}
+                      </Badge>
+                    )}
+                  </div>
                 )}
               </div>
             )}

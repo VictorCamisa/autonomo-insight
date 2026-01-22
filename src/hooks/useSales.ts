@@ -108,8 +108,8 @@ export function useSales() {
         .from('sales')
         .select(`
           *,
-          customer:customers(id, name, phone),
-          vehicle:vehicles(id, brand, model, year_model, plate)
+          customer:customers(id, name, phone, cpf_cnpj, rg, email, address, city, state),
+          vehicle:vehicles(id, brand, model, year_model, year_fabrication, plate, color, renavam, km)
         `)
         .order('sale_date', { ascending: false });
 

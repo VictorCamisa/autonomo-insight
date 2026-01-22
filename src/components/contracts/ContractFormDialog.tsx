@@ -45,13 +45,61 @@ export function ContractFormDialog({ open, onOpenChange, initialData }: Contract
   const [hasTradeIn, setHasTradeIn] = useState(false);
   const [hasInstallments, setHasInstallments] = useState(false);
 
-  // Carrega dados iniciais quando o dialog abre
+  // Carrega dados iniciais quando o dialog abre - busca dados completos do cliente e veículo
   useEffect(() => {
     if (open && initialData) {
-      setFormData(prev => ({
-        ...prev,
+      // Primeiro aplica os dados iniciais passados
+      let newFormData: ContractFormData = {
+        contract_type: initialData.contract_type || 'venda',
+        customer_name: initialData.customer_name || '',
+        vehicle_brand: initialData.vehicle_brand || '',
+        vehicle_model: initialData.vehicle_model || '',
+        vehicle_year: initialData.vehicle_year || '',
+        vehicle_value: initialData.vehicle_value || 0,
         ...initialData,
-      }));
+      };
+
+      // Se tem customer_id, busca dados completos do cliente
+      if (initialData.customer_id) {
+        const customer = customers.find(c => c.id === initialData.customer_id);
+        if (customer) {
+          newFormData = {
+            ...newFormData,
+            customer_id: customer.id,
+            customer_name: customer.name || newFormData.customer_name,
+            customer_cpf: customer.cpf_cnpj || newFormData.customer_cpf || '',
+            customer_rg: customer.rg || newFormData.customer_rg || '',
+            customer_phone: customer.phone || newFormData.customer_phone || '',
+            customer_email: customer.email || newFormData.customer_email || '',
+            customer_address: customer.address || newFormData.customer_address || '',
+            customer_city: customer.city || newFormData.customer_city || '',
+            customer_state: customer.state || newFormData.customer_state || '',
+          };
+        }
+      }
+
+      // Se tem vehicle_id, busca dados completos do veículo
+      if (initialData.vehicle_id) {
+        const vehicle = vehicles.find(v => v.id === initialData.vehicle_id);
+        if (vehicle) {
+          newFormData = {
+            ...newFormData,
+            vehicle_id: vehicle.id,
+            vehicle_brand: vehicle.brand || newFormData.vehicle_brand,
+            vehicle_model: vehicle.model || newFormData.vehicle_model,
+            vehicle_year: `${vehicle.year_fabrication}/${vehicle.year_model}`,
+            vehicle_plate: vehicle.plate || newFormData.vehicle_plate || '',
+            vehicle_color: vehicle.color || newFormData.vehicle_color || '',
+            vehicle_renavam: vehicle.renavam || newFormData.vehicle_renavam || '',
+            vehicle_odometer: vehicle.km || newFormData.vehicle_odometer || 0,
+            // Mantém o valor da venda, não o preço do veículo
+            vehicle_value: newFormData.vehicle_value || vehicle.sale_price || 0,
+          };
+        }
+      }
+
+      setFormData(newFormData);
+
       // Verifica se tem dados de troca ou parcelamento
       if (initialData.trade_in_brand || initialData.trade_in_value) {
         setHasTradeIn(true);
@@ -59,8 +107,20 @@ export function ContractFormDialog({ open, onOpenChange, initialData }: Contract
       if (initialData.installments_count && initialData.installments_count > 0) {
         setHasInstallments(true);
       }
+    } else if (!open) {
+      // Limpa o formulário quando fecha
+      setFormData({
+        contract_type: 'venda',
+        customer_name: '',
+        vehicle_brand: '',
+        vehicle_model: '',
+        vehicle_year: '',
+        vehicle_value: 0,
+      });
+      setHasTradeIn(false);
+      setHasInstallments(false);
     }
-  }, [open, initialData]);
+  }, [open, initialData, customers, vehicles]);
 
   const availableVehicles = vehicles.filter(v => v.status === 'disponivel' || v.id === initialData?.vehicle_id);
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, Plus, Calendar, Gauge, Car, DollarSign, Clock, TrendingUp, TrendingDown, AlertTriangle, Globe, EyeOff, Image, Share2, Copy, FileText, Bookmark, CircleCheck, CircleDashed, Wrench, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { parseDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VehiclePhotosUpload } from '@/components/inventory/VehiclePhotosUpload';
@@ -72,8 +73,9 @@ export default function VehicleDetails() {
   };
 
   const formatDate = (date: string | null) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('pt-BR');
+    const parsed = parseDate(date);
+    if (!parsed) return '-';
+    return parsed.toLocaleDateString('pt-BR');
   };
 
   if (isLoading || dreLoading) {

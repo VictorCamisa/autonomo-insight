@@ -1201,6 +1201,67 @@ export type Database = {
           },
         ]
       }
+      conversation_embeddings: {
+        Row: {
+          content: string
+          conversation_id: string | null
+          created_at: string | null
+          embedding: string | null
+          id: string
+          lead_id: string | null
+          message_id: string | null
+          metadata: Json | null
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          conversation_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          metadata?: Json | null
+          role: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          conversation_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          metadata?: Json | null
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_embeddings_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_embeddings_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_embeddings_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -4699,6 +4760,23 @@ export type Database = {
       }
       move_stale_negotiations_to_follow_up: { Args: never; Returns: undefined }
       reset_daily_lead_counts: { Args: never; Returns: undefined }
+      search_similar_conversations: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          p_lead_id?: string
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          conversation_id: string
+          created_at: string
+          embedding_id: string
+          lead_id: string
+          role: string
+          similarity: number
+        }[]
+      }
       search_similar_vehicles: {
         Args: {
           match_count?: number

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 
 // Icons
+import { BarChart3 } from 'lucide-react';
 import { 
   Search, 
   XCircle, 
@@ -40,6 +41,8 @@ import {
 // Follow-up Flows components
 import { FollowUpFlowCard } from '@/components/crm/FollowUpFlowCard';
 import { FollowUpFlowFormNew } from '@/components/crm/FollowUpFlowFormNew';
+import { ReactivationDashboard } from '@/components/crm/ReactivationDashboard';
+import { FlowBuilder } from '@/components/crm/FlowBuilder';
 import {
   useFollowUpFlows,
   useCreateFollowUpFlow,
@@ -116,7 +119,7 @@ const alertStatusColors: Record<string, string> = {
 
 export default function FollowUp() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('execucao');
+  const [activeTab, setActiveTab] = useState('dashboard');
   
   // Follow-up Flows state
   const [isFlowFormOpen, setIsFlowFormOpen] = useState(false);
@@ -554,6 +557,16 @@ export default function FollowUp() {
             )}
           </div>
         </div>
+
+        {/* ========== Dashboard Tab ========== */}
+        <TabsContent value="dashboard" className="mt-4">
+          <ReactivationDashboard />
+        </TabsContent>
+
+        {/* ========== Builder Tab ========== */}
+        <TabsContent value="builder" className="mt-4">
+          <FlowBuilder />
+        </TabsContent>
 
         {/* ========== Em Execução Tab ========== */}
         <TabsContent value="execucao" className="mt-4">

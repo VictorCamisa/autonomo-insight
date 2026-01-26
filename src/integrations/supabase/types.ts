@@ -2036,6 +2036,73 @@ export type Database = {
           },
         ]
       }
+      lead_follow_up_tracking: {
+        Row: {
+          created_at: string | null
+          current_step: number | null
+          flow_id: string | null
+          id: string
+          last_step_at: string | null
+          lead_id: string | null
+          negotiation_id: string | null
+          next_step_at: string | null
+          reactivated_count: number | null
+          started_at: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_step?: number | null
+          flow_id?: string | null
+          id?: string
+          last_step_at?: string | null
+          lead_id?: string | null
+          negotiation_id?: string | null
+          next_step_at?: string | null
+          reactivated_count?: number | null
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_step?: number | null
+          flow_id?: string | null
+          id?: string
+          last_step_at?: string | null
+          lead_id?: string | null
+          negotiation_id?: string | null
+          next_step_at?: string | null
+          reactivated_count?: number | null
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_follow_up_tracking_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_follow_up_tracking_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_follow_up_tracking_negotiation_id_fkey"
+            columns: ["negotiation_id"]
+            isOneToOne: false
+            referencedRelation: "negotiations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_interactions: {
         Row: {
           created_at: string
@@ -4630,6 +4697,7 @@ export type Database = {
         }
         Returns: string
       }
+      move_stale_negotiations_to_follow_up: { Args: never; Returns: undefined }
       reset_daily_lead_counts: { Args: never; Returns: undefined }
       search_similar_vehicles: {
         Args: {

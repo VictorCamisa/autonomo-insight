@@ -174,7 +174,7 @@ const App = () => (
                     </ProtectedRoute>
                   }>
                     <Route index element={<CRMHome />} />
-                    <Route path="leads" element={<Leads />} />
+                    <Route path="contatos" element={<Leads />} />
                     <Route path="follow-up" element={<FollowUp />} />
                     <Route path="analytics" element={<CRMAnalytics />} />
                   </Route>

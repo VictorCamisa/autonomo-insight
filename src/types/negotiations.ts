@@ -1,4 +1,4 @@
-export type NegotiationStatus = 'em_andamento' | 'proposta_enviada' | 'negociando' | 'ganho' | 'perdido' | 'pausado';
+export type NegotiationStatus = 'atendimento_ia' | 'negociando' | 'ganho' | 'follow_up' | 'perdido';
 export type LossReasonType = 'sem_entrada' | 'sem_credito' | 'curioso' | 'caro' | 'comprou_outro' | 'desistiu' | 'sem_contato' | 'veiculo_vendido' | 'outros';
 
 export interface Negotiation {
@@ -17,6 +17,8 @@ export interface Negotiation {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  // Tracking de última mensagem
+  last_message_at: string | null;
   // Appointment tracking
   appointment_date: string | null;
   appointment_time: string | null;
@@ -50,28 +52,27 @@ export interface Negotiation {
 }
 
 export const negotiationStatusLabels: Record<NegotiationStatus, string> = {
-  em_andamento: 'Em Andamento',
-  proposta_enviada: 'Proposta Enviada',
+  atendimento_ia: 'Em Atendimento IA',
   negociando: 'Negociando',
   ganho: 'Ganho',
+  follow_up: 'Follow-up',
   perdido: 'Perdido',
-  pausado: 'Pausado',
 };
 
 export const negotiationStatusColors: Record<NegotiationStatus, string> = {
-  em_andamento: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  proposta_enviada: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+  atendimento_ia: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
   negociando: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
   ganho: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  follow_up: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   perdido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  pausado: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 };
 
+// Ordem das colunas no pipeline
 export const pipelineColumns: NegotiationStatus[] = [
-  'em_andamento',
-  'proposta_enviada',
+  'atendimento_ia',
   'negociando',
   'ganho',
+  'follow_up',
   'perdido',
 ];
 
@@ -101,3 +102,19 @@ export const objectionOptions = [
   { value: 'troca', label: 'Valor da Troca' },
   { value: 'prazo', label: 'Prazo de Entrega' },
 ];
+
+// Interface para tracking de follow-up
+export interface LeadFollowUpTracking {
+  id: string;
+  lead_id: string | null;
+  negotiation_id: string | null;
+  flow_id: string | null;
+  current_step: number;
+  started_at: string;
+  last_step_at: string | null;
+  next_step_at: string | null;
+  status: 'active' | 'completed' | 'reactivated' | 'expired' | 'paused';
+  reactivated_count: number;
+  created_at: string;
+  updated_at: string;
+}

@@ -89,7 +89,7 @@ export function SalespersonDashboard() {
     // Negociações do vendedor
     const myNegotiations = negotiations?.filter(n => n.salesperson_id === userId) || [];
     const activeNegotiations = myNegotiations.filter(n => 
-      n.status === 'em_andamento' || n.status === 'proposta_enviada' || n.status === 'negociando'
+      n.status === 'atendimento_ia' || n.status === 'negociando' || n.status === 'follow_up'
     );
     const wonThisMonth = myNegotiations.filter(n => {
       if (n.status !== 'ganho') return false;

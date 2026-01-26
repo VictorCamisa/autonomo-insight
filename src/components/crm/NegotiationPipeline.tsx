@@ -3,7 +3,7 @@ import { NegotiationCard } from './NegotiationCard';
 import type { Negotiation, NegotiationStatus } from '@/types/negotiations';
 import { negotiationStatusLabels, pipelineColumns } from '@/types/negotiations';
 import { useUpdateNegotiation } from '@/hooks/useNegotiations';
-import { Plus, Target } from 'lucide-react';
+import { Plus, Target, Bot, Handshake, Trophy, Clock, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SaleFromNegotiationModal } from '@/components/sales/SaleFromNegotiationModal';
 import { StageTransitionModal, StageTransitionData } from './StageTransitionModal';
@@ -15,6 +15,35 @@ interface NegotiationPipelineProps {
   onCreateLead?: () => void;
   showSalesperson?: boolean;
 }
+
+// Ícones e cores para cada estágio
+const stageConfig: Record<NegotiationStatus, { icon: React.ReactNode; color: string; bgColor: string }> = {
+  atendimento_ia: {
+    icon: <Bot className="h-4 w-4" />,
+    color: 'text-blue-600 dark:text-blue-400',
+    bgColor: 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800',
+  },
+  negociando: {
+    icon: <Handshake className="h-4 w-4" />,
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bgColor: 'bg-yellow-50 dark:bg-yellow-950/50 border-yellow-200 dark:border-yellow-800',
+  },
+  ganho: {
+    icon: <Trophy className="h-4 w-4" />,
+    color: 'text-green-600 dark:text-green-400',
+    bgColor: 'bg-green-50 dark:bg-green-950/50 border-green-200 dark:border-green-800',
+  },
+  follow_up: {
+    icon: <Clock className="h-4 w-4" />,
+    color: 'text-orange-600 dark:text-orange-400',
+    bgColor: 'bg-orange-50 dark:bg-orange-950/50 border-orange-200 dark:border-orange-800',
+  },
+  perdido: {
+    icon: <XCircle className="h-4 w-4" />,
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-800',
+  },
+};
 
 export function NegotiationPipeline({ 
   negotiations, 
@@ -48,8 +77,8 @@ export function NegotiationPipeline({
     e.dataTransfer.dropEffect = 'move';
   };
 
-  // Stages that require transition modal
-  const stagesRequiringModal: NegotiationStatus[] = ['proposta_enviada', 'negociando', 'perdido'];
+  // Estágios que requerem modal de transição
+  const stagesRequiringModal: NegotiationStatus[] = ['negociando', 'perdido'];
 
   const handleDrop = (e: React.DragEvent, newStatus: NegotiationStatus) => {
     e.preventDefault();
@@ -59,24 +88,24 @@ export function NegotiationPipeline({
     const negotiation = negotiations.find(n => n.id === negotiationId);
     if (!negotiation) return;
 
-    // If same status, do nothing
+    // Se mesmo status, não faz nada
     if (negotiation.status === newStatus) return;
 
-    // "Ganho" opens sale modal
+    // "Ganho" abre modal de venda
     if (newStatus === 'ganho') {
       setPendingWonNegotiation(negotiation);
       setSaleModalOpen(true);
       return;
     }
 
-    // Stages that require transition modal
+    // Estágios que requerem modal de transição
     if (stagesRequiringModal.includes(newStatus)) {
       setPendingTransition({ negotiation, targetStatus: newStatus });
       setTransitionModalOpen(true);
       return;
     }
 
-    // Other transitions: direct update
+    // Outras transições: atualização direta
     updateNegotiation.mutate({ id: negotiationId, status: newStatus });
   };
 
@@ -124,6 +153,8 @@ export function NegotiationPipeline({
     .filter(n => !['ganho', 'perdido'].includes(n.status))
     .reduce((sum, n) => sum + (n.estimated_value || 0), 0);
 
+  const activeNegotiationsCount = negotiations.filter(n => !['ganho', 'perdido'].includes(n.status)).length;
+
   return (
     <div className="h-full w-full flex flex-col overflow-hidden">
       {/* Pipeline Header */}
@@ -135,7 +166,7 @@ export function NegotiationPipeline({
           <div>
             <h2 className="font-semibold text-lg">Pipeline de Vendas</h2>
             <p className="text-sm text-muted-foreground">
-              {negotiations.filter(n => !['ganho', 'perdido'].includes(n.status)).length} negociações ativas • {formatCurrency(totalPipelineValue)}
+              {activeNegotiationsCount} negociações ativas • {formatCurrency(totalPipelineValue)}
             </p>
           </div>
         </div>
@@ -161,20 +192,24 @@ export function NegotiationPipeline({
           {pipelineColumns.map((status) => {
             const columnNegotiations = getNegotiationsByStatus(status);
             const totalValue = columnNegotiations.reduce((sum, n) => sum + (n.estimated_value || 0), 0);
+            const config = stageConfig[status];
 
             return (
               <div
                 key={status}
-                className="flex-shrink-0 w-72 rounded-lg border border-border bg-muted/20 flex flex-col h-full transition-colors"
+                className={`flex-shrink-0 w-72 rounded-lg border ${config.bgColor} flex flex-col h-full transition-colors`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, status)}
               >
                 {/* Column Header */}
-                <div className="p-3 rounded-t-lg shrink-0 bg-muted/40 border-b border-border">
+                <div className="p-3 rounded-t-lg shrink-0 border-b border-border/50">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-sm">
-                      {negotiationStatusLabels[status]}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className={config.color}>{config.icon}</span>
+                      <h3 className="font-semibold text-sm">
+                        {negotiationStatusLabels[status]}
+                      </h3>
+                    </div>
                     <span className="text-xs font-medium bg-background text-foreground px-2 py-0.5 rounded-full">
                       {columnNegotiations.length}
                     </span>
@@ -204,7 +239,8 @@ export function NegotiationPipeline({
                   ))}
                   
                   {columnNegotiations.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-32 text-muted-foreground border-2 border-dashed border-border/50 rounded-lg">
+                    <div className="flex flex-col items-center justify-center h-32 text-muted-foreground border-2 border-dashed border-border/50 rounded-lg bg-background/50">
+                      <span className={`mb-1 ${config.color}`}>{config.icon}</span>
                       <span className="text-xs">Arraste negociações aqui</span>
                     </div>
                   )}

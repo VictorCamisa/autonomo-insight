@@ -181,25 +181,36 @@ serve(async (req) => {
       };
     }
 
-    // NEGOTIATIONS - Negociações
+    // NEGOTIATIONS - Negociações (using new status system)
     if (activeDataSources.includes('negotiations')) {
       const { data: negotiations } = await supabase
         .from('negotiations')
         .select(`
-          id, status, proposed_value, appointment_date, showed_up, notes,
+          id, status, proposed_value, appointment_date, showed_up, notes, last_message_at,
           leads:lead_id (name, phone),
           vehicles:vehicle_id (brand, model, year)
         `)
         .order('created_at', { ascending: false })
         .limit(20);
 
+      // Map new status names for display
+      const statusLabels: Record<string, string> = {
+        'atendimento_ia': 'Em Atendimento IA',
+        'negociando': 'Negociando',
+        'follow_up': 'Follow-up',
+        'ganho': 'Ganho',
+        'perdido': 'Perdido',
+      };
+
       contextData.negociacoes = {
         total: negotiations?.length || 0,
-        em_andamento: negotiations?.filter(n => n.status === 'em_negociacao').length || 0,
+        em_atendimento_ia: negotiations?.filter(n => n.status === 'atendimento_ia').length || 0,
+        em_negociacao: negotiations?.filter(n => n.status === 'negociando').length || 0,
+        em_follow_up: negotiations?.filter(n => n.status === 'follow_up').length || 0,
         lista: negotiations?.slice(0, 10).map(n => ({
           cliente: (n.leads as any)?.name || 'N/A',
           veiculo: n.vehicles ? `${(n.vehicles as any).brand} ${(n.vehicles as any).model} ${(n.vehicles as any).year}` : 'N/A',
-          status: n.status,
+          status: statusLabels[n.status] || n.status,
           valor_proposto: n.proposed_value ? `R$ ${n.proposed_value.toLocaleString('pt-BR')}` : 'N/A',
           agendamento: n.appointment_date,
           compareceu: n.showed_up,

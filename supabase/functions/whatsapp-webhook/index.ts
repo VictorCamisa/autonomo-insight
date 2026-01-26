@@ -1531,20 +1531,21 @@ async function createLeadWithRoundRobin(
 
   console.log('[Lead Creation Q0] Lead created:', lead.id, 'source:', origin.source, '- awaiting Q1 for assignment');
 
-  // Create negotiation WITHOUT salesperson - will be updated at Q1
+  // Create negotiation with atendimento_ia status (AI handling) - salesperson assigned at Q1
   const { error: negError } = await supabase.from('negotiations').insert({
     lead_id: lead.id,
     salesperson_id: null, // Will be assigned at Q1
-    status: 'em_andamento',
+    status: 'atendimento_ia', // NEW: Start in AI handling stage
+    last_message_at: new Date().toISOString(), // Track last message for follow-up logic
     notes: origin.meta_campaign_id 
-      ? `Negociação criada via ${origin.source.toUpperCase()} - Campanha: ${origin.campaign_name} - Q0 (aguardando qualificação)` 
-      : 'Negociação criada via WhatsApp - Q0 (aguardando qualificação)',
+      ? `Negociação iniciada via ${origin.source.toUpperCase()} - Campanha: ${origin.campaign_name} - Atendimento IA` 
+      : 'Negociação iniciada via WhatsApp - Atendimento IA',
   });
 
   if (negError) {
     console.error('Error creating negotiation:', negError);
   } else {
-    console.log('[Lead Creation Q0] Negotiation created for lead:', lead.id, '- no salesperson yet');
+    console.log('[Lead Creation Q0] Negotiation created with atendimento_ia status for lead:', lead.id);
   }
 
   // Create qualification data tracker at Q0 level
@@ -1596,23 +1597,23 @@ async function checkAndProgressNegotiation(
     .update({ message_count: count })
     .eq('lead_id', leadId);
 
-  // If >= 4 messages and negotiation is "em_andamento", move to "proposta_enviada"
-  if (count >= 4) {
-    const { data: negotiation } = await supabase
-      .from('negotiations')
-      .select('id, status')
-      .eq('lead_id', leadId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+  // Update last_message_at on negotiation for follow-up tracking
+  const { data: negotiation } = await supabase
+    .from('negotiations')
+    .select('id, status')
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
 
-    if (negotiation && negotiation.status === 'em_andamento') {
-      console.log('[Qualification] Moving negotiation to proposta_enviada (4+ messages)');
-      await supabase
-        .from('negotiations')
-        .update({ status: 'proposta_enviada' })
-        .eq('id', negotiation.id);
-    }
+  if (negotiation) {
+    // Always update last_message_at for active conversations
+    await supabase
+      .from('negotiations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', negotiation.id);
+    
+    console.log('[Qualification] Updated last_message_at for negotiation:', negotiation.id);
   }
 }
 
@@ -1839,11 +1840,11 @@ async function extractAndSaveQualificationData(
         .update({ qualification_status: 'qualificado' })
         .eq('id', leadId);
       
-      // Update negotiation status
+      // Update negotiation status from atendimento_ia → negociando (Q2 handoff)
       await supabase
         .from('negotiations')
         .update({
-          status: 'negociando',
+          status: 'negociando', // Move from AI handling to active negotiation
           notes: 'Lead qualificado (Q2) - transferido ao vendedor',
         })
         .eq('lead_id', leadId);
@@ -2095,11 +2096,14 @@ async function assignSalespersonOnQualification(
     .update({ qualification_status: 'qualificado' })
     .eq('id', leadId);
 
-  // Update negotiation status to "negociando" (salesperson already set)
+  // Update negotiation from atendimento_ia → negociando
+
+  // Update negotiation from atendimento_ia → negociando (salesperson already set)
   await supabase
     .from('negotiations')
     .update({
       status: 'negociando',
+      last_message_at: new Date().toISOString(),
       notes: 'Lead qualificado pelo bot - transferido ao vendedor',
     })
     .eq('lead_id', leadId);

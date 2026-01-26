@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 
 // Icons
 import { 
@@ -31,6 +32,9 @@ import {
   Loader2,
   Settings,
   Clock,
+  Pause,
+  RotateCcw,
+  Activity,
 } from 'lucide-react';
 
 // Follow-up Flows components
@@ -45,6 +49,13 @@ import {
 } from '@/hooks/useFollowUpFlows';
 import { useProcessFollowUps } from '@/hooks/useProcessFollowUps';
 import { useFollowUpSettings } from '@/hooks/useFollowUpSettings';
+import {
+  useUpcomingFollowUps,
+  useFollowUpStats,
+  usePauseFollowUpTracking,
+  useResumeFollowUpTracking,
+  useCancelFollowUpTracking,
+} from '@/hooks/useLeadFollowUpTracking';
 
 // Loss Recovery components
 import { LossRecoveryRuleForm } from '@/components/crm/LossRecoveryRuleForm';
@@ -67,7 +78,7 @@ import {
   LossRecoveryRule,
 } from '@/hooks/useLossRecoveryRules';
 
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { lossReasonLabels, LossReasonType, Negotiation } from '@/types/negotiations';
 import { supabase } from '@/integrations/supabase/client';
@@ -105,7 +116,7 @@ const alertStatusColors: Record<string, string> = {
 
 export default function FollowUp() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('fluxos');
+  const [activeTab, setActiveTab] = useState('execucao');
   
   // Follow-up Flows state
   const [isFlowFormOpen, setIsFlowFormOpen] = useState(false);
@@ -131,6 +142,13 @@ export default function FollowUp() {
   
   // ========== Automation Settings ==========
   const { settings: automationSettings, toggleAutomation, updateInterval, isUpdating: isUpdatingSettings } = useFollowUpSettings();
+
+  // ========== Follow-up Tracking (Em Execução) ==========
+  const { data: upcomingFollowUps = [], isLoading: isLoadingTracking } = useUpcomingFollowUps(20);
+  const { data: followUpStats } = useFollowUpStats();
+  const pauseTrackingMutation = usePauseFollowUpTracking();
+  const resumeTrackingMutation = useResumeFollowUpTracking();
+  const cancelTrackingMutation = useCancelFollowUpTracking();
 
   // ========== Loss Recovery Queries ==========
   const { data: negotiations = [], isLoading: isLoadingNegotiations } = useNegotiations();
@@ -477,6 +495,10 @@ export default function FollowUp() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <TabsList>
+            <TabsTrigger value="execucao" className="gap-1">
+              <Activity className="h-4 w-4" />
+              Em Execução ({followUpStats?.active || 0})
+            </TabsTrigger>
             <TabsTrigger value="fluxos" className="gap-1">
               <Workflow className="h-4 w-4" />
               Fluxos ({flows?.length || 0})
@@ -532,6 +554,144 @@ export default function FollowUp() {
             )}
           </div>
         </div>
+
+        {/* ========== Em Execução Tab ========== */}
+        <TabsContent value="execucao" className="mt-4">
+          {isLoadingTracking ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-24" />
+              ))}
+            </div>
+          ) : upcomingFollowUps.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-semibold mb-2">Nenhum follow-up em execução</h3>
+                <p className="text-muted-foreground mb-4">
+                  Quando negociações entrarem no estágio "Follow-up", os fluxos serão ativados automaticamente.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="pt-4 pb-4">
+                    <div className="text-2xl font-bold text-primary">{followUpStats?.active || 0}</div>
+                    <p className="text-sm text-muted-foreground">Ativos</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 pb-4">
+                    <div className="text-2xl font-bold text-green-600">{followUpStats?.completed || 0}</div>
+                    <p className="text-sm text-muted-foreground">Concluídos</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 pb-4">
+                    <div className="text-2xl font-bold text-blue-600">{followUpStats?.reactivated || 0}</div>
+                    <p className="text-sm text-muted-foreground">Reativados</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 pb-4">
+                    <div className="text-2xl font-bold">{followUpStats?.totalStepsExecuted || 0}</div>
+                    <p className="text-sm text-muted-foreground">Steps Executados</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tracking List */}
+              <div className="space-y-3">
+                {upcomingFollowUps.map((tracking: any) => {
+                  const flow = tracking.flow;
+                  const lead = tracking.lead;
+                  const negotiation = tracking.negotiation;
+                  const currentStep = tracking.current_step || 0;
+                  const totalSteps = 3; // Estimate - could fetch from flow
+                  const progress = totalSteps > 0 ? (currentStep / totalSteps) * 100 : 0;
+                  
+                  return (
+                    <Card key={tracking.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium truncate">{lead?.name || 'Lead desconhecido'}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {flow?.name || 'Fluxo'}
+                              </Badge>
+                              {negotiation?.status === 'follow_up' && (
+                                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
+                                  Follow-up
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
+                              {lead?.phone && (
+                                <div className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {lead.phone}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1">
+                                <MessageSquare className="h-3 w-3" />
+                                Passo {currentStep} de ~{totalSteps}
+                              </div>
+                              {tracking.next_step_at && (
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  Próximo: {formatDistanceToNow(new Date(tracking.next_step_at), { addSuffix: true, locale: ptBR })}
+                                </div>
+                              )}
+                            </div>
+
+                            <Progress value={Math.min(progress, 100)} className="h-2" />
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {tracking.status === 'active' ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => pauseTrackingMutation.mutate(tracking.id)}
+                                disabled={pauseTrackingMutation.isPending}
+                              >
+                                <Pause className="h-4 w-4" />
+                              </Button>
+                            ) : tracking.status === 'paused' ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => resumeTrackingMutation.mutate(tracking.id)}
+                                disabled={resumeTrackingMutation.isPending}
+                              >
+                                <Play className="h-4 w-4" />
+                              </Button>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => cancelTrackingMutation.mutate(tracking.id)}
+                              disabled={cancelTrackingMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </TabsContent>
 
         {/* ========== Fluxos Tab ========== */}
         <TabsContent value="fluxos" className="mt-4">

@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.import-vehicle-transactions]
 verify_jwt = false
+
+[functions.sync-conversation-embeddings]
+verify_jwt = false
+
+[functions.ai-orchestrator]
+verify_jwt = false

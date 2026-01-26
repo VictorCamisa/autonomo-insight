@@ -26,6 +26,7 @@ const agentNavItems = [
   { path: 'memoria', label: 'Memória', icon: Database },
   { path: 'ferramentas', label: 'Ferramentas', icon: Wrench },
   { path: 'workflows', label: 'Workflows', icon: GitBranch },
+  { path: 'estagios', label: 'Config. Estágios', icon: GitBranch },
   { path: 'guardrails', label: 'Guardrails', icon: Shield },
   { path: 'monitoramento', label: 'Métricas', icon: BarChart3 },
   { path: 'testes', label: 'Testes', icon: TestTube },

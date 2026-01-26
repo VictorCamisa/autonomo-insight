@@ -24,6 +24,7 @@ interface FollowUpFlow {
   trigger_type: string;
   target_lead_status: string[];
   target_lead_sources: string[];
+  target_negotiation_status: string[];
   exclude_converted_leads: boolean;
   exclude_lost_leads: boolean;
   whatsapp_instance_id: string | null;
@@ -39,22 +40,28 @@ interface Lead {
   assigned_to: string | null;
   created_at: string;
   vehicle_interest: string | null;
+  qualification_status: string | null;
 }
 
-interface StepExecution {
-  lead_id: string;
-  flow_id: string;
-  step_id: string;
-  step_order: number;
-  executed_at: string;
-}
-
-interface AIConversation {
+interface Negotiation {
   id: string;
   lead_id: string;
   status: string;
-  last_assistant_message_at: string | null;
-  last_user_message_at: string | null;
+  last_message_at: string | null;
+  lead: Lead;
+}
+
+interface FollowUpTracking {
+  id: string;
+  lead_id: string;
+  negotiation_id: string | null;
+  flow_id: string;
+  current_step: number;
+  status: string;
+  next_step_at: string | null;
+  last_step_at: string | null;
+  started_at: string | null;
+  reactivated_count: number;
 }
 
 // Substitui variáveis no template - suporta {{var}} e {var}
@@ -122,16 +129,58 @@ serve(async (req) => {
       console.log('🔧 Force execution requested (manual trigger)');
     }
 
-    // 1. Buscar fluxos ativos
+    // 1. Primeiro, mover negociações stale para follow_up (>24h sem resposta em negociando)
+    console.log('🔄 Moving stale negotiations to follow_up...');
+    const { error: staleError } = await supabase.rpc('move_stale_negotiations_to_follow_up');
+    if (staleError) {
+      console.error('Error moving stale negotiations:', staleError.message);
+    }
+
+    // 2. Buscar negociações no estágio follow_up
+    const { data: negotiationsData, error: negError } = await supabase
+      .from('negotiations')
+      .select(`
+        id,
+        lead_id,
+        status,
+        last_message_at,
+        lead:leads!inner(
+          id, name, phone, status, source, assigned_to, created_at, vehicle_interest, qualification_status
+        )
+      `)
+      .eq('status', 'follow_up');
+
+    if (negError) throw negError;
+
+    const negotiations: Negotiation[] = (negotiationsData || []).map((n: any) => ({
+      id: n.id,
+      lead_id: n.lead_id,
+      status: n.status,
+      last_message_at: n.last_message_at,
+      lead: n.lead,
+    }));
+
+    console.log(`Found ${negotiations.length} negotiations in follow_up stage`);
+
+    if (negotiations.length === 0) {
+      console.log('No negotiations in follow_up stage');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No negotiations in follow_up', processed: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 3. Buscar fluxos ativos com trigger 'negotiation_follow_up'
     const { data: flowsData, error: flowsError } = await supabase
       .from('follow_up_flows')
       .select('*')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .or('trigger_type.eq.negotiation_follow_up,trigger_type.eq.no_response_to_bot');
 
     if (flowsError) throw flowsError;
-    
+
     if (!flowsData || flowsData.length === 0) {
-      console.log('No active follow-up flows found');
+      console.log('No active follow-up flows for negotiation_follow_up trigger');
       return new Response(
         JSON.stringify({ success: true, message: 'No active flows', processed: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -140,7 +189,7 @@ serve(async (req) => {
 
     console.log(`Found ${flowsData.length} active flows`);
 
-    // 2. Buscar passos de cada fluxo
+    // 4. Buscar steps de cada fluxo
     const flowIds = flowsData.map(f => f.id);
     const { data: stepsData, error: stepsError } = await supabase
       .from('follow_up_steps')
@@ -150,114 +199,25 @@ serve(async (req) => {
 
     if (stepsError) throw stepsError;
 
-    // Agrupar passos por fluxo
+    // Agrupar steps por fluxo
     const flows: FollowUpFlow[] = flowsData.map(flow => ({
       ...flow,
-      steps: (stepsData || []).filter(s => s.flow_id === flow.id)
+      steps: (stepsData || []).filter(s => s.flow_id === flow.id),
     }));
 
-    // 3. Buscar conversas ativas com a IA para trigger "no_response_to_bot"
-    // Isso inclui a última mensagem de cada conversa para verificar se foi da IA
-    const { data: conversations, error: convError } = await supabase
-      .from('ai_agent_conversations')
-      .select('id, lead_id, status, updated_at')
+    // 5. Buscar tracking existente para as negociações
+    const negotiationIds = negotiations.map(n => n.id);
+    const { data: trackingData, error: trackingError } = await supabase
+      .from('lead_follow_up_tracking')
+      .select('*')
+      .in('negotiation_id', negotiationIds)
       .eq('status', 'active');
 
-    if (convError) throw convError;
+    if (trackingError) throw trackingError;
 
-    console.log(`Found ${conversations?.length || 0} active AI conversations`);
-
-    // Para cada conversa, buscar a última mensagem
-    const conversationDetails: AIConversation[] = [];
-    
-    for (const conv of (conversations || [])) {
-      // Buscar última mensagem da conversa
-      const { data: lastMessages } = await supabase
-        .from('ai_agent_messages')
-        .select('role, created_at')
-        .eq('conversation_id', conv.id)
-        .order('created_at', { ascending: false })
-        .limit(2);
-
-      if (lastMessages && lastMessages.length > 0) {
-        const lastMessage = lastMessages[0];
-        const lastAssistant = lastMessages.find(m => m.role === 'assistant');
-        const lastUser = lastMessages.find(m => m.role === 'user');
-        
-        conversationDetails.push({
-          id: conv.id,
-          lead_id: conv.lead_id,
-          status: conv.status,
-          last_assistant_message_at: lastAssistant?.created_at || null,
-          last_user_message_at: lastUser?.created_at || null
-        });
-
-        console.log(`Conv ${conv.lead_id}: last msg by ${lastMessage.role} at ${lastMessage.created_at}`);
-      }
-    }
-
-    // Filtrar apenas conversas onde a última mensagem foi da IA (assistant)
-    // E que a última mensagem da IA foi nas últimas 2 horas (janela máxima para follow-up)
-    const MAX_FOLLOW_UP_WINDOW_MINUTES = 120; // 2 horas
-    
-    const leadsWaitingResponse = conversationDetails.filter(conv => {
-      if (!conv.last_assistant_message_at) return false;
-      
-      // Verificar se a última mensagem da IA está dentro da janela de tempo
-      const minutesSinceLastBotMessage = (Date.now() - new Date(conv.last_assistant_message_at).getTime()) / (1000 * 60);
-      if (minutesSinceLastBotMessage > MAX_FOLLOW_UP_WINDOW_MINUTES) {
-        return false; // Muito antigo, não processar
-      }
-      
-      // Se não tem mensagem do usuário, ou se a última do assistant é depois da última do user
-      if (!conv.last_user_message_at) return true;
-      
-      return new Date(conv.last_assistant_message_at) > new Date(conv.last_user_message_at);
-    });
-
-    console.log(`${leadsWaitingResponse.length} leads waiting for response within ${MAX_FOLLOW_UP_WINDOW_MINUTES}min window`);
-
-    // 4. Buscar dados dos leads elegíveis
-    const eligibleLeadIds = leadsWaitingResponse.map(c => c.lead_id);
-    
-    if (eligibleLeadIds.length === 0) {
-      console.log('No leads waiting for response');
-      return new Response(
-        JSON.stringify({ success: true, message: 'No leads waiting for response', processed: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { data: leadsData, error: leadsError } = await supabase
-      .from('leads')
-      .select('*')
-      .in('id', eligibleLeadIds)
-      .not('status', 'eq', 'convertido');
-
-    if (leadsError) throw leadsError;
-    
-    console.log(`Found ${leadsData?.length || 0} eligible leads`);
-
-    // Criar mapa de conversa por lead
-    const convByLead = new Map<string, AIConversation>();
-    leadsWaitingResponse.forEach(c => convByLead.set(c.lead_id, c));
-
-    // 5. Buscar execuções existentes para não repetir
-    const { data: executionsData, error: execError } = await supabase
-      .from('follow_up_step_executions')
-      .select('lead_id, flow_id, step_id, step_order, executed_at')
-      .in('lead_id', eligibleLeadIds);
-
-    if (execError) throw execError;
-
-    // Mapear execuções por lead+flow
-    const executionMap = new Map<string, StepExecution[]>();
-    (executionsData || []).forEach(exec => {
-      const key = `${exec.lead_id}-${exec.flow_id}`;
-      if (!executionMap.has(key)) {
-        executionMap.set(key, []);
-      }
-      executionMap.get(key)!.push(exec);
+    const trackingMap = new Map<string, FollowUpTracking>();
+    (trackingData || []).forEach(t => {
+      trackingMap.set(t.negotiation_id!, t);
     });
 
     // 6. Buscar perfis de vendedores para substituição de template
@@ -270,287 +230,313 @@ serve(async (req) => {
       profilesMap.set(p.id, p.full_name || '');
     });
 
-    // 7. Processar cada fluxo
+    // 7. Processar cada negociação
     let totalProcessed = 0;
     let totalSent = 0;
     let totalSkipped = 0;
     const errors: string[] = [];
 
-    for (const flow of flows) {
-      // Só processar fluxos com trigger "no_response_to_bot"
-      if (flow.trigger_type !== 'no_response_to_bot') {
-        console.log(`Flow "${flow.name}" has trigger "${flow.trigger_type}", skipping (only no_response_to_bot supported)`);
+    for (const negotiation of negotiations) {
+      const lead = negotiation.lead;
+      totalProcessed++;
+
+      console.log(`\n📋 Processing: ${lead.name} (negotiation ${negotiation.id})`);
+
+      // Verificar se lead está convertido
+      if (lead.status === 'convertido') {
+        console.log('  ⏭️ Lead converted, skipping');
+        totalSkipped++;
         continue;
       }
 
-      if (flow.steps.length === 0) {
-        console.log(`Flow "${flow.name}" has no steps, skipping`);
-        continue;
-      }
-
-      console.log(`\nProcessing flow: ${flow.name} (${flow.steps.length} steps)`);
-
-      // Filtrar leads elegíveis para este fluxo
-      const eligibleLeads = (leadsData || []).filter(lead => {
-        // Excluir convertidos se configurado
+      // Encontrar fluxo aplicável
+      const applicableFlow = flows.find(flow => {
+        // Verificar filtros do fluxo
         if (flow.exclude_converted_leads && lead.status === 'convertido') return false;
-        
-        // Excluir perdidos se configurado
         if (flow.exclude_lost_leads && lead.status === 'perdido') return false;
         
-        // Filtrar por status se definido
         if (flow.target_lead_status?.length > 0 && !flow.target_lead_status.includes(lead.status)) {
           return false;
         }
         
-        // Filtrar por source se definido
         if (flow.target_lead_sources?.length > 0 && !flow.target_lead_sources.includes(lead.source)) {
           return false;
         }
+
+        if (flow.target_negotiation_status?.length > 0 && !flow.target_negotiation_status.includes(negotiation.status)) {
+          return false;
+        }
         
-        return true;
+        return flow.steps.length > 0;
       });
 
-      console.log(`${eligibleLeads.length} leads eligible for flow "${flow.name}"`);
+      if (!applicableFlow) {
+        console.log('  ⏭️ No applicable flow');
+        totalSkipped++;
+        continue;
+      }
 
-      for (const lead of eligibleLeads) {
-        totalProcessed++;
-        const leadFlowKey = `${lead.id}-${flow.id}`;
-        const executions = executionMap.get(leadFlowKey) || [];
-        const conversation = convByLead.get(lead.id);
-        
-        if (!conversation) {
-          console.log(`  Lead ${lead.name}: no conversation found, skipping`);
+      console.log(`  🔄 Using flow: ${applicableFlow.name}`);
+
+      // Buscar ou criar tracking
+      let tracking: FollowUpTracking | null = trackingMap.get(negotiation.id) || null;
+      
+      if (!tracking) {
+        // Criar novo tracking
+        const { data: newTracking, error: createError } = await supabase
+          .from('lead_follow_up_tracking')
+          .insert({
+            lead_id: lead.id,
+            negotiation_id: negotiation.id,
+            flow_id: applicableFlow.id,
+            current_step: 0,
+            status: 'active',
+            started_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (createError || !newTracking) {
+          console.error('  ❌ Error creating tracking:', createError?.message);
+          errors.push(`${lead.name}: Error creating tracking`);
           continue;
         }
 
-        // Verificar qual é o próximo passo
-        const executedStepOrders = executions.map(e => e.step_order);
-        const lastExecutedOrder = Math.max(0, ...executedStepOrders);
-        const lastExecution = executions.find(e => e.step_order === lastExecutedOrder);
+        tracking = newTracking as FollowUpTracking;
+        console.log('  📝 Created new tracking');
+      }
+
+      // Encontrar próximo step
+      const currentStepOrder = tracking!.current_step || 0;
+      const nextStep = applicableFlow.steps.find(s => s.step_order === currentStepOrder + 1);
+
+      if (!nextStep) {
+        console.log('  ✅ All steps completed');
         
-        // Encontrar próximo passo
-        const nextStep = flow.steps.find(s => s.step_order > lastExecutedOrder);
+        // Marcar tracking como completo
+        await supabase
+          .from('lead_follow_up_tracking')
+          .update({ status: 'completed', updated_at: new Date().toISOString() })
+          .eq('id', tracking!.id);
         
-        if (!nextStep) {
-          // Todos os passos já foram executados
-          console.log(`  Lead ${lead.name}: all steps already executed`);
-          continue;
-        }
+        continue;
+      }
 
-        // Calcular tempo desde a última mensagem da IA (não desde criação do lead!)
-        const lastBotMessageTime = conversation.last_assistant_message_at 
-          ? new Date(conversation.last_assistant_message_at) 
-          : null;
+      // Calcular tempo desde último step/início
+      const referenceTime = tracking!.last_step_at 
+        ? new Date(tracking!.last_step_at)
+        : new Date(tracking!.started_at || negotiation.last_message_at || new Date());
+      
+      const minutesSinceReference = (Date.now() - referenceTime.getTime()) / (1000 * 60);
 
-        if (!lastBotMessageTime) {
-          console.log(`  Lead ${lead.name}: no bot message found, skipping`);
-          continue;
-        }
+      console.log(`  ⏱️ Minutes since reference: ${minutesSinceReference.toFixed(1)}, step needs: ${nextStep.delay_minutes}`);
 
-        const minutesSinceLastBotMessage = (Date.now() - lastBotMessageTime.getTime()) / (1000 * 60);
+      if (minutesSinceReference < nextStep.delay_minutes) {
+        console.log('  ⏳ Not time yet');
         
-        console.log(`  Lead ${lead.name}: ${minutesSinceLastBotMessage.toFixed(1)}min since last bot message, step needs ${nextStep.delay_minutes}min`);
-
-        if (minutesSinceLastBotMessage < nextStep.delay_minutes) {
-          // Ainda não é hora de executar este passo
-          console.log(`    -> Not time yet, skipping`);
-          continue;
-        }
-
-        console.log(`  Lead ${lead.name}: ready for step ${nextStep.step_order}`);
-
-        // Verificar condições de parada
-        let shouldSkip = false;
-        let skipReason = '';
-
-        // Verificar se lead foi qualificado
-        if (nextStep.stop_if_qualified) {
-          const { data: qualData } = await supabase
-            .from('lead_qualification_data')
-            .select('is_qualified')
-            .eq('lead_id', lead.id)
-            .single();
-          
-          if (qualData?.is_qualified) {
-            shouldSkip = true;
-            skipReason = 'Lead já qualificado';
-          }
-        }
-
-        // Verificar se foi transferido para vendedor (qualification_status = 'qualificado')
-        // Nota: assigned_to sempre existe desde a criação (Round-Robin), então verificamos qualification_status
-        if (!shouldSkip && nextStep.stop_if_assigned_to_salesperson && lead.qualification_status === 'qualificado') {
-          shouldSkip = true;
-          skipReason = 'Lead já transferido para vendedor (qualificado)';
-        }
-
-        // Verificar se lead respondeu desde última execução deste fluxo
-        if (!shouldSkip && nextStep.stop_if_responded && lastExecution) {
-          const lastExecTime = new Date(lastExecution.executed_at);
-          const lastUserTime = conversation.last_user_message_at 
-            ? new Date(conversation.last_user_message_at) 
-            : null;
-
-          if (lastUserTime && lastUserTime > lastExecTime) {
-            shouldSkip = true;
-            skipReason = 'Lead respondeu após último follow-up';
-          }
-        }
-
-        if (shouldSkip) {
-          console.log(`    ⏭️ Skipping: ${skipReason}`);
-          totalSkipped++;
-          
-          // Registrar skip
+        // Atualizar next_step_at se não estiver definido
+        if (!tracking!.next_step_at) {
+          const nextStepTime = new Date(referenceTime.getTime() + nextStep.delay_minutes * 60 * 1000);
           await supabase
-            .from('follow_up_step_executions')
-            .insert({
-              lead_id: lead.id,
-              flow_id: flow.id,
-              step_id: nextStep.id,
-              step_order: nextStep.step_order,
-              status: 'skipped',
-              error_message: skipReason
-            });
-          
-          continue;
+            .from('lead_follow_up_tracking')
+            .update({ next_step_at: nextStepTime.toISOString() })
+            .eq('id', tracking!.id);
         }
+        
+        continue;
+      }
 
-        // Processar template da mensagem
-        const salespersonName = lead.assigned_to ? profilesMap.get(lead.assigned_to) : undefined;
-        const message = processTemplate(nextStep.message_template, lead, salespersonName);
+      // Verificar condições de parada
+      let shouldSkip = false;
+      let skipReason = '';
 
-        // Enviar via WhatsApp
-        try {
-          const evolutionUrl = (Deno.env.get('EVOLUTION_API_URL') ?? '').replace(/\/$/, '');
-          const evolutionKey = Deno.env.get('EVOLUTION_API_KEY') ?? '';
+      // Verificar se foi qualificado
+      if (nextStep.stop_if_qualified && lead.qualification_status === 'qualificado') {
+        shouldSkip = true;
+        skipReason = 'Lead já qualificado';
+      }
 
-          // Buscar instância (do fluxo ou default)
-          let instanceName = '';
-          
-          if (flow.whatsapp_instance_id) {
-            const { data: instance } = await supabase
-              .from('whatsapp_instances')
-              .select('instance_name, status')
-              .eq('id', flow.whatsapp_instance_id)
-              .single();
-            
-            if (instance?.status === 'connected') {
-              instanceName = instance.instance_name;
-            }
-          }
-          
-          // Fallback para primeira instância conectada
-          if (!instanceName) {
-            const { data: defaultInstance } = await supabase
-              .from('whatsapp_instances')
-              .select('instance_name')
-              .eq('status', 'connected')
-              .limit(1)
-              .single();
-            
-            if (defaultInstance) {
-              instanceName = defaultInstance.instance_name;
-            }
-          }
+      // Verificar se transferido para vendedor
+      if (!shouldSkip && nextStep.stop_if_assigned_to_salesperson && lead.qualification_status === 'qualificado') {
+        shouldSkip = true;
+        skipReason = 'Lead já transferido para vendedor';
+      }
 
-          if (!instanceName) {
-            throw new Error('Nenhuma instância WhatsApp conectada');
-          }
+      // Verificar se respondeu recentemente (negociação saiu de follow_up e voltou)
+      if (!shouldSkip && nextStep.stop_if_responded && tracking!.reactivated_count && tracking!.reactivated_count > 0) {
+        shouldSkip = true;
+        skipReason = 'Lead respondeu recentemente';
+      }
 
-          // Formatar telefone
-          let phone = lead.phone.replace(/\D/g, '');
-          if (!phone.startsWith('55')) {
-            phone = '55' + phone;
-          }
+      if (shouldSkip) {
+        console.log(`  ⏭️ Skipping: ${skipReason}`);
+        totalSkipped++;
 
-          // Enviar mensagem
-          const sendUrl = `${evolutionUrl}/message/sendText/${instanceName}`;
-          console.log(`    📤 Sending to ${phone}: "${message.substring(0, 50)}..."`);
-
-          const response = await fetch(sendUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': evolutionKey,
-            },
-            body: JSON.stringify({
-              number: phone,
-              text: message,
-            }),
+        // Registrar skip
+        await supabase
+          .from('follow_up_step_executions')
+          .insert({
+            lead_id: lead.id,
+            flow_id: applicableFlow.id,
+            step_id: nextStep.id,
+            step_order: nextStep.step_order,
+            status: 'skipped',
+            error_message: skipReason,
           });
 
-          const result = await response.json();
+        continue;
+      }
 
-          if (!response.ok) {
-            throw new Error(result.message || 'Erro ao enviar WhatsApp');
+      // Processar template
+      const salespersonName = lead.assigned_to ? profilesMap.get(lead.assigned_to) : undefined;
+      const message = processTemplate(nextStep.message_template, lead, salespersonName);
+
+      // Enviar via WhatsApp
+      try {
+        const evolutionUrl = (Deno.env.get('EVOLUTION_API_URL') ?? '').replace(/\/$/, '');
+        const evolutionKey = Deno.env.get('EVOLUTION_API_KEY') ?? '';
+
+        // Buscar instância
+        let instanceName = '';
+
+        if (applicableFlow.whatsapp_instance_id) {
+          const { data: instance } = await supabase
+            .from('whatsapp_instances')
+            .select('instance_name, status')
+            .eq('id', applicableFlow.whatsapp_instance_id)
+            .single();
+
+          if (instance?.status === 'connected') {
+            instanceName = instance.instance_name;
           }
+        }
 
-          console.log(`    ✅ Sent successfully!`);
-          totalSent++;
+        // Fallback para primeira instância conectada
+        if (!instanceName) {
+          const { data: defaultInstance } = await supabase
+            .from('whatsapp_instances')
+            .select('instance_name')
+            .eq('status', 'connected')
+            .limit(1)
+            .single();
 
-          // Registrar execução
-          await supabase
-            .from('follow_up_step_executions')
-            .insert({
-              lead_id: lead.id,
-              flow_id: flow.id,
-              step_id: nextStep.id,
-              step_order: nextStep.step_order,
-              message_sent: message,
-              whatsapp_instance_id: flow.whatsapp_instance_id,
-              status: 'sent'
-            });
-
-          // Salvar mensagem no histórico de WhatsApp
-          const { data: contact } = await supabase
-            .from('whatsapp_contacts')
-            .select('id')
-            .eq('lead_id', lead.id)
-            .maybeSingle();
-
-          if (contact) {
-            await supabase
-              .from('whatsapp_messages')
-              .insert({
-                contact_id: contact.id,
-                remote_jid: `${phone}@s.whatsapp.net`,
-                message_id: result.key?.id,
-                direction: 'outgoing',
-                message_type: 'text',
-                content: message,
-                status: 'sent',
-                lead_id: lead.id,
-              });
+          if (defaultInstance) {
+            instanceName = defaultInstance.instance_name;
           }
+        }
 
-          // Registrar interação no lead
+        if (!instanceName) {
+          throw new Error('Nenhuma instância WhatsApp conectada');
+        }
+
+        // Formatar telefone
+        let phone = lead.phone.replace(/\D/g, '');
+        if (!phone.startsWith('55')) {
+          phone = '55' + phone;
+        }
+
+        // Enviar mensagem
+        const sendUrl = `${evolutionUrl}/message/sendText/${instanceName}`;
+        console.log(`  📤 Sending to ${phone}: "${message.substring(0, 50)}..."`);
+
+        const response = await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': evolutionKey,
+          },
+          body: JSON.stringify({
+            number: phone,
+            text: message,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || 'Erro ao enviar WhatsApp');
+        }
+
+        console.log('  ✅ Sent successfully!');
+        totalSent++;
+
+        // Calcular próximo step
+        const nextNextStep = applicableFlow.steps.find(s => s.step_order === nextStep.step_order + 1);
+        const nextStepAt = nextNextStep 
+          ? new Date(Date.now() + nextNextStep.delay_minutes * 60 * 1000).toISOString()
+          : null;
+
+        // Atualizar tracking
+        await supabase
+          .from('lead_follow_up_tracking')
+          .update({
+            current_step: nextStep.step_order,
+            last_step_at: new Date().toISOString(),
+            next_step_at: nextStepAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', tracking!.id);
+
+        // Registrar execução
+        await supabase
+          .from('follow_up_step_executions')
+          .insert({
+            lead_id: lead.id,
+            flow_id: applicableFlow.id,
+            step_id: nextStep.id,
+            step_order: nextStep.step_order,
+            message_sent: message,
+            whatsapp_instance_id: applicableFlow.whatsapp_instance_id,
+            status: 'sent',
+          });
+
+        // Salvar mensagem no histórico de WhatsApp
+        const { data: contact } = await supabase
+          .from('whatsapp_contacts')
+          .select('id')
+          .eq('lead_id', lead.id)
+          .maybeSingle();
+
+        if (contact) {
           await supabase
-            .from('lead_interactions')
+            .from('whatsapp_messages')
             .insert({
+              contact_id: contact.id,
+              remote_jid: `${phone}@s.whatsapp.net`,
+              message_id: result.key?.id,
+              direction: 'outgoing',
+              message_type: 'text',
+              content: message,
+              status: 'sent',
               lead_id: lead.id,
-              type: 'follow_up',
-              description: `Follow-up automático (${flow.name} - Passo ${nextStep.step_order}): ${message.substring(0, 100)}...`
-            });
-
-        } catch (sendError) {
-          const errorMsg = sendError instanceof Error ? sendError.message : 'Erro desconhecido';
-          console.error(`    ❌ Send error: ${errorMsg}`);
-          errors.push(`Lead ${lead.name}: ${errorMsg}`);
-
-          // Registrar falha
-          await supabase
-            .from('follow_up_step_executions')
-            .insert({
-              lead_id: lead.id,
-              flow_id: flow.id,
-              step_id: nextStep.id,
-              step_order: nextStep.step_order,
-              status: 'failed',
-              error_message: errorMsg
             });
         }
+
+        // Registrar interação no lead
+        await supabase
+          .from('lead_interactions')
+          .insert({
+            lead_id: lead.id,
+            type: 'follow_up',
+            description: `Follow-up automático (${applicableFlow.name} - Passo ${nextStep.step_order}): ${message.substring(0, 100)}...`,
+          });
+
+      } catch (sendError) {
+        const errorMsg = sendError instanceof Error ? sendError.message : 'Erro desconhecido';
+        console.error(`  ❌ Send error: ${errorMsg}`);
+        errors.push(`Lead ${lead.name}: ${errorMsg}`);
+
+        // Registrar falha
+        await supabase
+          .from('follow_up_step_executions')
+          .insert({
+            lead_id: lead.id,
+            flow_id: applicableFlow.id,
+            step_id: nextStep.id,
+            step_order: nextStep.step_order,
+            status: 'failed',
+            error_message: errorMsg,
+          });
       }
     }
 
@@ -558,7 +544,7 @@ serve(async (req) => {
     await supabase
       .from('follow_up_settings')
       .update({ last_execution_at: new Date().toISOString() })
-      .neq('id', '00000000-0000-0000-0000-000000000000'); // Update all rows
+      .neq('id', '00000000-0000-0000-0000-000000000000');
 
     const duration = Date.now() - startTime;
     console.log(`\n✅ Processing complete in ${duration}ms`);
@@ -572,7 +558,7 @@ serve(async (req) => {
         skipped: totalSkipped,
         errors: errors.length,
         errorDetails: errors.slice(0, 10),
-        durationMs: duration
+        durationMs: duration,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

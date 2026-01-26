@@ -2810,6 +2810,7 @@ export type Database = {
           estimated_value: number | null
           expected_close_date: string | null
           id: string
+          last_message_at: string | null
           lead_id: string
           loss_reason: string | null
           no_show_count: number | null
@@ -2837,6 +2838,7 @@ export type Database = {
           estimated_value?: number | null
           expected_close_date?: string | null
           id?: string
+          last_message_at?: string | null
           lead_id: string
           loss_reason?: string | null
           no_show_count?: number | null
@@ -2864,6 +2866,7 @@ export type Database = {
           estimated_value?: number | null
           expected_close_date?: string | null
           id?: string
+          last_message_at?: string | null
           lead_id?: string
           loss_reason?: string | null
           no_show_count?: number | null
@@ -4685,6 +4688,8 @@ export type Database = {
         | "ganho"
         | "perdido"
         | "pausado"
+        | "atendimento_ia"
+        | "follow_up"
       payment_method:
         | "dinheiro"
         | "pix"
@@ -4879,6 +4884,8 @@ export const Constants = {
         "ganho",
         "perdido",
         "pausado",
+        "atendimento_ia",
+        "follow_up",
       ],
       payment_method: [
         "dinheiro",

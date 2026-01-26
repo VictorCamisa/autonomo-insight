@@ -63,17 +63,10 @@ export function StageTransitionModal({
 
   const getRequiredFields = () => {
     switch (targetStatus) {
-      case 'proposta_enviada':
-        return {
-          title: 'Enviar Proposta',
-          description: 'Para mover para "Proposta Enviada", informe os detalhes da proposta.',
-          requireValue: true,
-          showProposalDescription: true,
-        };
       case 'negociando':
         return {
           title: 'Iniciar Negociação',
-          description: 'Registre observações relevantes para a fase de negociação.',
+          description: 'Lead qualificado! Registre observações relevantes para a fase de negociação.',
           requireValue: false,
           showNotes: true,
         };
@@ -82,6 +75,12 @@ export function StageTransitionModal({
           title: 'Marcar como Perdido',
           description: 'Registre o motivo da perda.',
           requireLossReason: true,
+        };
+      case 'follow_up':
+        return {
+          title: 'Mover para Follow-up',
+          description: 'Este lead será monitorado para reativação automática.',
+          showNotes: true,
         };
       default:
         return null;
@@ -199,19 +198,7 @@ export function StageTransitionModal({
             </div>
           )}
 
-          {/* Proposal Description */}
-          {config.showProposalDescription && (
-            <div className="space-y-2">
-              <Label>Descrição da Proposta</Label>
-              <Textarea
-                placeholder="Descreva os detalhes da proposta enviada..."
-                value={proposalDescription}
-                onChange={(e) => setProposalDescription(e.target.value)}
-              />
-            </div>
-          )}
-
-          {/* Notes for negociando */}
+          {/* Notes for negociando and follow_up */}
           {config.showNotes && (
             <div className="space-y-2">
               <Label>Observações</Label>

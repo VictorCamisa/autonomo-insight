@@ -141,12 +141,12 @@ export default function Dashboard() {
       return daysInStock > 45;
     });
     
-    // Negotiations by status (use correct status values: 'ganho' and 'perdido')
+    // Negotiations by status (novos status do pipeline)
     const negotiationsByStatus = {
-      em_andamento: negotiations?.filter(n => n.status === 'em_andamento').length || 0,
-      proposta_enviada: negotiations?.filter(n => n.status === 'proposta_enviada').length || 0,
+      atendimento_ia: negotiations?.filter(n => n.status === 'atendimento_ia').length || 0,
       negociando: negotiations?.filter(n => n.status === 'negociando').length || 0,
       ganho: negotiations?.filter(n => n.status === 'ganho').length || 0,
+      follow_up: negotiations?.filter(n => n.status === 'follow_up').length || 0,
       perdido: negotiations?.filter(n => n.status === 'perdido').length || 0,
     };
     
@@ -178,7 +178,7 @@ export default function Dashboard() {
       leadSourceData,
       topSalespeople,
       totalNegotiations: negotiations?.length || 0,
-      activeNegotiations: (negotiationsByStatus.em_andamento + negotiationsByStatus.proposta_enviada + negotiationsByStatus.negociando),
+      activeNegotiations: (negotiationsByStatus.atendimento_ia + negotiationsByStatus.negociando + negotiationsByStatus.follow_up),
     };
   }, [leads, vehicles, negotiations, teamMetrics]);
 
@@ -262,10 +262,10 @@ export default function Dashboard() {
   // Negotiations funnel data
   const funnelData = useMemo(() => {
     return [
-      { name: 'Em Andamento', value: dashboardMetrics.negotiationsByStatus.em_andamento, color: CHART_COLORS.blue },
-      { name: 'Proposta Enviada', value: dashboardMetrics.negotiationsByStatus.proposta_enviada, color: CHART_COLORS.violet },
+      { name: 'Atend. IA', value: dashboardMetrics.negotiationsByStatus.atendimento_ia, color: CHART_COLORS.blue },
       { name: 'Negociando', value: dashboardMetrics.negotiationsByStatus.negociando, color: CHART_COLORS.amber },
       { name: 'Ganhas', value: dashboardMetrics.negotiationsByStatus.ganho, color: CHART_COLORS.emerald },
+      { name: 'Follow-up', value: dashboardMetrics.negotiationsByStatus.follow_up, color: CHART_COLORS.violet },
       { name: 'Perdidas', value: dashboardMetrics.negotiationsByStatus.perdido, color: CHART_COLORS.rose },
     ];
   }, [dashboardMetrics.negotiationsByStatus]);

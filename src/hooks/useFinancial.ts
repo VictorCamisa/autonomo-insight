@@ -146,7 +146,7 @@ export function useFinancialDashboard() {
 
     // Pipeline projection
     const activeNegotiations = negotiations?.filter(n => 
-      n.status === 'em_andamento' || n.status === 'proposta_enviada' || n.status === 'negociando'
+      n.status === 'atendimento_ia' || n.status === 'negociando' || n.status === 'follow_up'
     ) || [];
     const pipelineValue = activeNegotiations.reduce((sum, n) => sum + (n.estimated_value || 0), 0);
     const weightedPipeline = activeNegotiations.reduce((sum, n) => 

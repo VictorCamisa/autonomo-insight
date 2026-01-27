@@ -1078,10 +1078,13 @@ Ele já está com todo o histórico da nossa conversa! 👍`;
 
 // Call OpenAI API
 async function callOpenAI(agent: any, systemPrompt: string, messages: any[]): Promise<string | null> {
-  const apiKey = agent.api_key_encrypted || Deno.env.get('OPENAI_API_KEY');
+  // CRITICAL: ALWAYS use environment variable - ignore any stored key
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  
+  console.log('[OpenAI] Using API key from env:', apiKey ? `${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 4)}` : 'NOT SET');
   
   if (!apiKey) {
-    console.error('No OpenAI API key configured');
+    console.error('No OpenAI API key configured in environment');
     return null;
   }
 

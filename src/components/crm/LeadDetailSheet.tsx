@@ -19,7 +19,7 @@ import { negotiationStatusLabels, negotiationStatusColors } from '@/types/negoti
 import { WhatsAppChatModal } from '@/components/whatsapp/WhatsAppChatModal';
 import { LeadQualificationPanel } from './LeadQualificationPanel';
 import { LeadQualificationProgress } from './LeadQualificationProgress';
-import { cn } from '@/lib/utils';
+import { cn, parseDate } from '@/lib/utils';
 
 interface LeadDetailSheetProps {
   lead: Lead | null;
@@ -303,16 +303,16 @@ export function LeadDetailSheet({ lead, open, onOpenChange, onStartNegotiation }
                   <CardContent className="space-y-2 text-xs">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Criado em</span>
-                      <span>{format(new Date(lead.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                      <span>{(() => { const d = parseDate(lead.created_at); return d ? format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'; })()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Atualizado em</span>
-                      <span>{format(new Date(lead.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                      <span>{(() => { const d = parseDate(lead.updated_at); return d ? format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'; })()}</span>
                     </div>
                     {lead.first_response_at && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Primeira resposta</span>
-                        <span>{format(new Date(lead.first_response_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                        <span>{(() => { const d = parseDate(lead.first_response_at); return d ? format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'; })()}</span>
                       </div>
                     )}
                   </CardContent>

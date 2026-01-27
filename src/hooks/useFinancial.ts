@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { startOfMonth, endOfMonth, subMonths, isWithinInterval, format, differenceInDays, addMonths, startOfWeek, endOfWeek, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tables } from '@/integrations/supabase/types';
+import { parseDate } from '@/lib/utils';
 
 export interface DRECategoryDetail {
   category: string;
@@ -760,13 +761,14 @@ export function useFinancialAlerts() {
 
     // Pending commissions overdue
     commissions?.filter(c => c.status === 'approved' && !c.paid).forEach(comm => {
-      if (comm.payment_due_date && new Date(comm.payment_due_date) < now) {
+      const dueDate = parseDate(comm.payment_due_date);
+      if (dueDate && dueDate < now) {
         items.push({
           id: `comm-overdue-${comm.id}`,
           type: 'comissao_pendente',
           severity: 'critical',
           title: 'Comissão Atrasada',
-          description: `Comissão aprovada vencida desde ${format(new Date(comm.payment_due_date), 'dd/MM/yyyy')}`,
+          description: `Comissão aprovada vencida desde ${format(dueDate, 'dd/MM/yyyy')}`,
           value: comm.final_amount,
           entityId: comm.id,
           entityType: 'commission',

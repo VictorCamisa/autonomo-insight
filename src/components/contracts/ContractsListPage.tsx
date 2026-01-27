@@ -19,6 +19,7 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useContracts } from '@/hooks/useContracts';
+import { parseDate } from '@/lib/utils';
 import { ContractFormDialog } from './ContractFormDialog';
 import { TradeInVehicleDialog } from './TradeInVehicleDialog';
 import { downloadContractPDF } from '@/lib/contractPdf';
@@ -172,7 +173,10 @@ export function ContractsListPage() {
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="h-4 w-4" />
-                            {format(new Date(contract.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                            {(() => {
+                              const date = parseDate(contract.created_at);
+                              return date ? format(date, "dd/MM/yyyy", { locale: ptBR }) : '-';
+                            })()}
                           </span>
                         </div>
                       </div>

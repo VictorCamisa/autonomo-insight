@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { AnimatedGradient } from '@/components/ui/animated-gradient';
+import { parseDate } from '@/lib/utils';
 import {
   Phone,
   Mail,
@@ -183,7 +184,7 @@ export function CustomerDetailSheet({
                       )}
                       <Badge variant="outline" className="border-background/50 text-foreground/80">
                         <Clock className="h-3 w-3 mr-1" />
-                        Cliente desde {format(new Date(customerData.created_at), "MMM/yyyy", { locale: ptBR })}
+                        Cliente desde {(() => { const d = parseDate(customerData.created_at); return d ? format(d, "MMM/yyyy", { locale: ptBR }) : '-'; })()}
                       </Badge>
                     </div>
                   </div>

@@ -45,7 +45,8 @@ export function SaleDetailModal({ sale, open, onOpenChange }: SaleDetailModalPro
 
   const formatDateTime = (dateString: string | null | undefined) => {
     if (!dateString) return '-';
-    return format(new Date(dateString), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+    const date = parseDate(dateString);
+    return date ? format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-';
   };
 
   const totalCosts = (sale.documentation_cost || 0) + (sale.transfer_cost || 0) + (sale.other_sale_costs || 0);

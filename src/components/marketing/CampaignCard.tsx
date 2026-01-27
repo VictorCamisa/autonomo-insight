@@ -6,6 +6,7 @@ import { Edit, Trash2, Calendar, DollarSign, TrendingUp } from 'lucide-react';
 import { MarketingCampaign, platformLabels } from '@/types/marketing';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 interface CampaignCardProps {
   campaign: MarketingCampaign;
@@ -39,8 +40,13 @@ export function CampaignCard({ campaign, onEdit, onDelete }: CampaignCardProps) 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
           <span>
-            {format(new Date(campaign.start_date), 'dd/MM/yyyy', { locale: ptBR })}
-            {campaign.end_date && ` - ${format(new Date(campaign.end_date), 'dd/MM/yyyy', { locale: ptBR })}`}
+            {(() => {
+              const startDate = parseDate(campaign.start_date);
+              const endDate = parseDate(campaign.end_date);
+              const startFormatted = startDate ? format(startDate, 'dd/MM/yyyy', { locale: ptBR }) : '-';
+              const endFormatted = endDate ? ` - ${format(endDate, 'dd/MM/yyyy', { locale: ptBR })}` : '';
+              return startFormatted + endFormatted;
+            })()}
           </span>
         </div>
 

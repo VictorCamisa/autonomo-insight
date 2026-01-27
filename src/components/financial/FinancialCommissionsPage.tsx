@@ -28,6 +28,7 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { parseDate } from '@/lib/utils';
 
 export function FinancialCommissionsPage() {
   const { data: commissions, isLoading } = useSaleCommissions();
@@ -163,10 +164,10 @@ export function FinancialCommissionsPage() {
                         {comm.user_id?.substring(0, 8)}...
                       </TableCell>
                       <TableCell>
-                        {comm.payment_due_date 
-                          ? format(new Date(comm.payment_due_date), 'dd/MM/yyyy', { locale: ptBR })
-                          : '-'
-                        }
+                        {(() => {
+                          const date = parseDate(comm.payment_due_date);
+                          return date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-';
+                        })()}
                       </TableCell>
                       <TableCell className="text-right font-semibold text-green-500">
                         {formatCurrency(comm.final_amount)}
@@ -241,7 +242,10 @@ function CommissionsTable({
           {commissions.map((comm) => (
             <TableRow key={comm.id}>
               <TableCell>
-                {format(new Date(comm.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+                {(() => {
+                  const date = parseDate(comm.created_at);
+                  return date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-';
+                })()}
               </TableCell>
               <TableCell>
                 <Badge variant={

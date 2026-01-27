@@ -12,8 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { format, parseISO } from 'date-fns';
+import { cn, parseDate } from '@/lib/utils';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { MetaCampaign } from '@/types/meta-ads';
 import { statusLabels, statusColors, objectiveLabels } from '@/types/meta-ads';
@@ -30,11 +30,8 @@ const formatCurrency = (value: number | null) => {
 
 const formatDate = (dateString: string | null) => {
   if (!dateString) return '-';
-  try {
-    return format(parseISO(dateString), 'dd/MM/yyyy', { locale: ptBR });
-  } catch {
-    return '-';
-  }
+  const date = parseDate(dateString);
+  return date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-';
 };
 
 export default function MetaCampaignsList({ campaigns, isLoading }: MetaCampaignsListProps) {

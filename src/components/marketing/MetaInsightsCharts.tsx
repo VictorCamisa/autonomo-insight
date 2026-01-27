@@ -16,9 +16,10 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { MetaInsight } from '@/types/meta-ads';
+import { parseDate } from '@/lib/utils';
 
 interface MetaInsightsChartsProps {
   dailyInsights: MetaInsight[];
@@ -47,15 +48,18 @@ const formatNumber = (value: number) => {
 export default function MetaInsightsCharts({ dailyInsights, campaignInsights, isLoading }: MetaInsightsChartsProps) {
   // Prepare daily data for area chart
   const dailyData = useMemo(() => {
-    return dailyInsights.map(insight => ({
-      date: format(parseISO(insight.date_start), 'dd/MM', { locale: ptBR }),
-      fullDate: format(parseISO(insight.date_start), 'dd MMM yyyy', { locale: ptBR }),
-      spend: insight.spend,
-      impressions: insight.impressions,
-      clicks: insight.clicks,
-      ctr: insight.ctr,
-      reach: insight.reach,
-    }));
+    return dailyInsights.map(insight => {
+      const date = parseDate(insight.date_start);
+      return {
+        date: date ? format(date, 'dd/MM', { locale: ptBR }) : '-',
+        fullDate: date ? format(date, 'dd MMM yyyy', { locale: ptBR }) : '-',
+        spend: insight.spend,
+        impressions: insight.impressions,
+        clicks: insight.clicks,
+        ctr: insight.ctr,
+        reach: insight.reach,
+      };
+    });
   }, [dailyInsights]);
 
   // Prepare campaign data for bar chart

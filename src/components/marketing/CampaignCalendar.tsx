@@ -16,7 +16,7 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, parseDate } from '@/lib/utils';
 import { toast } from 'sonner';
 import { eventTypeLabels, eventTypeColors } from '@/types/marketing-module';
 
@@ -96,7 +96,10 @@ export function CampaignCalendar() {
 
   // Get events for a specific day
   const getEventsForDay = (date: Date) => {
-    return events?.filter(event => isSameDay(new Date(event.start_date), date)) || [];
+    return events?.filter(event => {
+      const eventDate = parseDate(event.start_date);
+      return eventDate ? isSameDay(eventDate, date) : false;
+    }) || [];
   };
 
   const handlePrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));

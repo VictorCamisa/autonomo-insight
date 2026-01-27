@@ -3,11 +3,12 @@ import { NegotiationCard } from './NegotiationCard';
 import type { Negotiation, NegotiationStatus } from '@/types/negotiations';
 import { negotiationStatusLabels, pipelineColumns } from '@/types/negotiations';
 import { useUpdateNegotiation } from '@/hooks/useNegotiations';
-import { Plus, Target, Bot, Handshake, Trophy, Clock, XCircle } from 'lucide-react';
+import { Plus, Target, Bot, Handshake, Trophy, Clock, XCircle, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SaleFromNegotiationModal } from '@/components/sales/SaleFromNegotiationModal';
 import { StageTransitionModal, StageTransitionData } from './StageTransitionModal';
-
+import { PipelineColumnSettings } from './PipelineColumnSettings';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 interface NegotiationPipelineProps {
   negotiations: Negotiation[];
   onNegotiationClick?: (negotiation: Negotiation) => void;
@@ -62,6 +63,15 @@ export function NegotiationPipeline({
     negotiation: Negotiation;
     targetStatus: NegotiationStatus;
   } | null>(null);
+
+  // Column settings state
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedStage, setSelectedStage] = useState<NegotiationStatus | null>(null);
+
+  const handleOpenSettings = (stage: NegotiationStatus) => {
+    setSelectedStage(stage);
+    setSettingsOpen(true);
+  };
 
   const getNegotiationsByStatus = (status: NegotiationStatus) => {
     return negotiations.filter(n => n.status === status);
@@ -210,9 +220,24 @@ export function NegotiationPipeline({
                         {negotiationStatusLabels[status]}
                       </h3>
                     </div>
-                    <span className="text-xs font-medium bg-background text-foreground px-2 py-0.5 rounded-full">
-                      {columnNegotiations.length}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => handleOpenSettings(status)}
+                          >
+                            <Settings2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Configurar estágio</TooltipContent>
+                      </Tooltip>
+                      <span className="text-xs font-medium bg-background text-foreground px-2 py-0.5 rounded-full">
+                        {columnNegotiations.length}
+                      </span>
+                    </div>
                   </div>
                   {totalValue > 0 && (
                     <p className="text-xs text-muted-foreground mt-1 font-medium">
@@ -268,6 +293,15 @@ export function NegotiationPipeline({
         targetStatus={pendingTransition?.targetStatus || null}
         onConfirm={handleTransitionConfirm}
       />
+
+      {/* Column Settings Panel */}
+      {selectedStage && (
+        <PipelineColumnSettings
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          stage={selectedStage}
+        />
+      )}
     </div>
   );
 }

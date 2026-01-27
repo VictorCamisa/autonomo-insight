@@ -42,6 +42,7 @@ import {
 import { FollowUpFlowCard } from '@/components/crm/FollowUpFlowCard';
 import { FollowUpFlowFormNew } from '@/components/crm/FollowUpFlowFormNew';
 import { ReactivationDashboard } from '@/components/crm/ReactivationDashboard';
+import { AutomationsTab } from '@/components/crm/AutomationsTab';
 import { FlowBuilder } from '@/components/crm/FlowBuilder';
 import {
   useFollowUpFlows,
@@ -845,37 +846,12 @@ export default function FollowUp() {
 
         {/* ========== Automações Tab ========== */}
         <TabsContent value="automacoes" className="mt-4">
-          {isLoadingRules ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-48" />)}
-            </div>
-          ) : filteredRules.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Zap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="font-semibold mb-2">Nenhuma regra de automação</h3>
-                <p className="text-muted-foreground mb-4">
-                  Crie regras para automatizar ações baseadas no motivo de perda
-                </p>
-                <Button onClick={() => setShowRuleForm(true)} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Criar Primeira Regra
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {filteredRules.map(rule => (
-                <LossRecoveryRuleCard
-                  key={rule.id}
-                  rule={rule}
-                  onEdit={handleEditRule}
-                  onDelete={(id) => deleteRule.mutate(id)}
-                  onToggle={(id, is_active) => toggleRule.mutate({ id, is_active })}
-                />
-              ))}
-            </div>
-          )}
+          <AutomationsTab
+            onCreateLossRule={() => setShowRuleForm(true)}
+            onEditLossRule={handleEditRule}
+            onCreateFlow={() => setIsFlowFormOpen(true)}
+            onEditFlow={handleEditFlow}
+          />
         </TabsContent>
 
         {/* ========== Alertas Tab ========== */}

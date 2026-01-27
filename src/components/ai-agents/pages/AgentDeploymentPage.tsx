@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Rocket, Copy, Check, Globe, MessageSquare, Play, ExternalLink, Wifi, WifiOff } from 'lucide-react';
+import { Rocket, Copy, Check, Globe, MessageSquare, Play, ExternalLink, Wifi, WifiOff, RefreshCw, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAIAgent, useUpdateAIAgent } from '@/hooks/useAIAgents';
-import { useWhatsAppInstances } from '@/hooks/useWhatsApp';
+import { useWhatsAppInstances, useWhatsAppInstanceAction } from '@/hooks/useWhatsApp';
 import { toast } from 'sonner';
 import AgentChatPanel from '../AgentChatPanel';
 
@@ -23,9 +23,21 @@ export default function AgentDeploymentPage() {
   const { data: agent, isLoading } = useAIAgent(agentId);
   const { data: whatsappInstances = [], isLoading: isLoadingInstances } = useWhatsAppInstances();
   const updateAgent = useUpdateAIAgent();
+  const instanceAction = useWhatsAppInstanceAction();
 
   const connectedInstances = whatsappInstances.filter(i => i.status === 'connected');
   const selectedInstanceId = agent?.whatsapp_instance_id;
+  const selectedInstance = whatsappInstances.find(i => i.id === selectedInstanceId);
+
+  const handleReconfigureWebhook = async () => {
+    if (!selectedInstanceId) return;
+    try {
+      await instanceAction.mutateAsync({ action: 'setWebhook', instanceId: selectedInstanceId });
+      toast.success('Webhook reconfigurado! As mensagens devem começar a chegar.');
+    } catch {
+      toast.error('Erro ao reconfigurar webhook');
+    }
+  };
 
   const handleSelectInstance = (instanceId: string | null) => {
     updateAgent.mutate({ 
@@ -289,6 +301,29 @@ export default function AgentDeploymentPage() {
                   }
                 />
               </div>
+
+              {/* Troubleshooting Section */}
+              {selectedInstanceId && (
+                <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                    <Label className="text-sm">Resolução de Problemas</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Se o agente não está respondendo mensagens, clique abaixo para reconfigurar a conexão:
+                  </p>
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleReconfigureWebhook}
+                    disabled={instanceAction.isPending}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${instanceAction.isPending ? 'animate-spin' : ''}`} />
+                    Reconfigurar Webhook
+                  </Button>
+                </div>
+              )}
 
               <Button 
                 variant="outline" 

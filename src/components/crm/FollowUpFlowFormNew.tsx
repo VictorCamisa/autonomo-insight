@@ -78,6 +78,13 @@ const negotiationStages = [
     icon: Clock,
     color: 'orange'
   },
+  { 
+    value: 'perdido', 
+    label: 'Perdido', 
+    description: 'Lead marcado como perdido, pode ser reativado', 
+    icon: XCircle,
+    color: 'red'
+  },
 ];
 
 // Ações de fim de ciclo
@@ -254,6 +261,8 @@ export function FollowUpFlowFormNew({
         return 'bg-amber-100 dark:bg-amber-950 border-amber-500 text-amber-700 dark:text-amber-300';
       case 'orange':
         return 'bg-orange-100 dark:bg-orange-950 border-orange-500 text-orange-700 dark:text-orange-300';
+      case 'red':
+        return 'bg-red-100 dark:bg-red-950 border-red-500 text-red-700 dark:text-red-300';
       default:
         return 'bg-primary text-primary-foreground';
     }

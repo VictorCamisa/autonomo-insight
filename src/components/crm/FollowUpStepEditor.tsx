@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -60,6 +61,7 @@ const timePresets = [
   { value: 2880, label: '2 dias' },
   { value: 4320, label: '3 dias' },
   { value: 10080, label: '1 semana' },
+  { value: -1, label: 'Personalizado...' },
 ];
 
 export function FollowUpStepEditor({
@@ -73,7 +75,19 @@ export function FollowUpStepEditor({
     onChange({ ...step, [field]: value });
   };
 
-  const isCustomTime = !timePresets.some(p => p.value === step.delay_minutes);
+  // Verifica se é um tempo customizado (não está nos presets, excluindo o -1)
+  const standardPresets = timePresets.filter(p => p.value > 0);
+  const isCustomTime = !standardPresets.some(p => p.value === step.delay_minutes);
+  const [showCustomInput, setShowCustomInput] = useState(isCustomTime);
+  const [customDays, setCustomDays] = useState(Math.floor(step.delay_minutes / 1440));
+  const [customHours, setCustomHours] = useState(Math.floor((step.delay_minutes % 1440) / 60));
+  const [customMinutes, setCustomMinutes] = useState(step.delay_minutes % 60);
+
+  // Atualiza delay quando mudar os campos customizados
+  const updateCustomDelay = (days: number, hours: number, mins: number) => {
+    const totalMinutes = (days * 1440) + (hours * 60) + mins;
+    updateField('delay_minutes', Math.max(1, totalMinutes));
+  };
 
   return (
     <Card className="relative">
@@ -91,40 +105,94 @@ export function FollowUpStepEditor({
             {/* Tempo de espera */}
             <div className="flex items-center gap-3">
               <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-muted-foreground">Esperar</span>
-                <Select
-                  value={isCustomTime ? 'custom' : step.delay_minutes.toString()}
-                  onValueChange={(val) => {
-                    if (val !== 'custom') {
-                      updateField('delay_minutes', parseInt(val));
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Tempo">
-                      {isCustomTime ? formatDelay(step.delay_minutes) : undefined}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timePresets.map((preset) => (
-                      <SelectItem key={preset.value} value={preset.value.toString()}>
-                        {preset.label}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="custom">Personalizado...</SelectItem>
-                  </SelectContent>
-                </Select>
-                {isCustomTime && (
-                  <Input
-                    type="number"
-                    min={1}
-                    value={step.delay_minutes}
-                    onChange={(e) => updateField('delay_minutes', parseInt(e.target.value) || 5)}
-                    className="w-20"
-                  />
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-muted-foreground">Esperar</span>
+                  <Select
+                    value={showCustomInput ? '-1' : step.delay_minutes.toString()}
+                    onValueChange={(val) => {
+                      if (val === '-1') {
+                        setShowCustomInput(true);
+                        setCustomDays(0);
+                        setCustomHours(1);
+                        setCustomMinutes(0);
+                        updateField('delay_minutes', 60);
+                      } else {
+                        setShowCustomInput(false);
+                        updateField('delay_minutes', parseInt(val));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Tempo">
+                        {showCustomInput ? 'Personalizado' : undefined}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {standardPresets.map((preset) => (
+                        <SelectItem key={preset.value} value={preset.value.toString()}>
+                          {preset.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="-1">Personalizado...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!showCustomInput && (
+                    <span className="text-sm text-muted-foreground">sem resposta</span>
+                  )}
+                </div>
+                
+                {/* Campos personalizados para tempo */}
+                {showCustomInput && (
+                  <div className="flex items-center gap-2 flex-wrap bg-muted/50 p-2 rounded-md">
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={365}
+                        value={customDays}
+                        onChange={(e) => {
+                          const days = parseInt(e.target.value) || 0;
+                          setCustomDays(days);
+                          updateCustomDelay(days, customHours, customMinutes);
+                        }}
+                        className="w-16 h-8 text-center"
+                      />
+                      <span className="text-xs text-muted-foreground">dias</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={customHours}
+                        onChange={(e) => {
+                          const hours = parseInt(e.target.value) || 0;
+                          setCustomHours(hours);
+                          updateCustomDelay(customDays, hours, customMinutes);
+                        }}
+                        className="w-16 h-8 text-center"
+                      />
+                      <span className="text-xs text-muted-foreground">horas</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={59}
+                        value={customMinutes}
+                        onChange={(e) => {
+                          const mins = parseInt(e.target.value) || 0;
+                          setCustomMinutes(mins);
+                          updateCustomDelay(customDays, customHours, mins);
+                        }}
+                        className="w-16 h-8 text-center"
+                      />
+                      <span className="text-xs text-muted-foreground">min</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground ml-1">= {formatDelay(step.delay_minutes)}</span>
+                  </div>
                 )}
-                <span className="text-sm text-muted-foreground">sem resposta</span>
               </div>
             </div>
 

@@ -191,9 +191,9 @@ export function FollowUpFlowFormNew({
     },
   });
 
-  const watchLeadSources = form.watch('target_lead_sources');
-  const watchNegotiationStatus = form.watch('target_negotiation_status');
-  const watchEndCycleAction = form.watch('end_cycle_action');
+  const watchLeadSources = form.watch('target_lead_sources') || [];
+  const watchNegotiationStatus = form.watch('target_negotiation_status') || [];
+  const watchEndCycleAction = form.watch('end_cycle_action') || 'none';
 
   const toggleArrayValue = (
     field: 'target_negotiation_status' | 'target_lead_sources',

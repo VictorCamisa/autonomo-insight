@@ -509,6 +509,53 @@ async function processWithAIAgent(
     return;
   }
 
+  // ===== CHECK NEGOTIATION STAGE - AI only responds in atendimento_ia and follow_up =====
+  if (leadId) {
+    const { data: negotiation } = await supabase
+      .from('negotiations')
+      .select('status, salesperson_id')
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Stages where AI should be silent (salesperson handles)
+    const silentStages = ['negociando', 'ganho'];
+    
+    if (negotiation && silentStages.includes(negotiation.status)) {
+      console.log('[AI Agent] Stage is', negotiation.status, '- AI silenced, salesperson handles');
+      
+      // Still save the message for history
+      await supabase.from('ai_agent_messages').insert({
+        conversation_id: conversation.id,
+        role: 'user',
+        content: actualMessage,
+      });
+      
+      // Notify salesperson about new message
+      if (negotiation.salesperson_id) {
+        // Get lead name for notification
+        const { data: leadData } = await supabase
+          .from('leads')
+          .select('name')
+          .eq('id', leadId)
+          .single();
+        
+        await supabase.from('notifications').insert({
+          user_id: negotiation.salesperson_id,
+          type: 'whatsapp_message',
+          title: '💬 Nova mensagem do lead',
+          message: `${leadData?.name || 'Lead'}: "${actualMessage.substring(0, 100)}${actualMessage.length > 100 ? '...' : ''}"`,
+          link: '/whatsapp',
+        });
+        
+        console.log('[AI Agent] Notified salesperson:', negotiation.salesperson_id);
+      }
+      
+      return; // Do NOT generate AI response
+    }
+  }
+
   // Check for transfer keywords
   if (agent.transfer_to_human_enabled && agent.transfer_keywords?.length > 0) {
     const lowerContent = actualMessage.toLowerCase();

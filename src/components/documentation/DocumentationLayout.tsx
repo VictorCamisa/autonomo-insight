@@ -10,6 +10,7 @@ import { TutorialsSection } from "./sections/TutorialsSection";
 import { RoutesSection } from "./sections/RoutesSection";
 import { HooksSection } from "./sections/HooksSection";
 import { AIAgentSection } from "./sections/AIAgentSection";
+import { AgentConfigSection } from "./sections/AgentConfigSection";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, BookOpen, FileDown, Loader2 } from "lucide-react";
@@ -20,6 +21,7 @@ import jsPDF from "jspdf";
 export type DocSection = 
   | "overview" 
   | "ai-agent"
+  | "agent-config"
   | "modules" 
   | "database" 
   | "edge-functions" 
@@ -32,6 +34,7 @@ export type DocSection =
 const ALL_SECTIONS: DocSection[] = [
   "overview",
   "ai-agent",
+  "agent-config",
   "modules", 
   "database",
   "edge-functions",
@@ -45,6 +48,7 @@ const ALL_SECTIONS: DocSection[] = [
 const SECTION_TITLES: Record<DocSection, string> = {
   "overview": "Visão Geral",
   "ai-agent": "Documentação AI Agent",
+  "agent-config": "Configuração Anti-Alucinação",
   "modules": "Módulos do Sistema",
   "database": "Banco de Dados",
   "edge-functions": "Edge Functions",
@@ -67,6 +71,8 @@ export const DocumentationLayout = () => {
         return <OverviewSection searchTerm={searchTerm} />;
       case "ai-agent":
         return <AIAgentSection searchTerm={searchTerm} />;
+      case "agent-config":
+        return <AgentConfigSection />;
       case "modules":
         return <ModulesSection searchTerm={searchTerm} />;
       case "database":

@@ -277,6 +277,30 @@ Regras importantes:
 - Se não souber algo, ofereça transferir para um vendedor humano
 - Colete dados de contato de forma natural na conversa`;
 
+    // ===== ANTI-HALLUCINATION GUARDRAILS =====
+    const antiHallucinationRules = `
+
+===== ⚠️ REGRAS CRÍTICAS ANTI-ALUCINAÇÃO =====
+🚫 PROIBIDO: NUNCA invente informações sobre veículos!
+- NUNCA diga que um carro está disponível se ele NÃO está na lista
+- NUNCA invente cores, anos, versões ou preços
+- NUNCA afirme algo que não está explícito nos dados
+
+✅ SE NÃO SOUBER, DIGA: "Não tenho essa informação no momento. Deixa eu verificar com a equipe e te retorno!"
+✅ SE O CARRO NÃO EXISTIR NO ESTOQUE: "Esse modelo específico não está disponível agora, mas temos [sugerir alternativas DA LISTA]"
+✅ ANTES DE CONFIRMAR DISPONIBILIDADE: Verifique se o veículo está LITERALMENTE na lista acima
+
+Exemplo ERRADO (alucinação):
+Cliente: "Vocês têm Civic 2007?"
+IA: "Sim, temos o Civic 2007 prata!" ← ERRADO se não está na lista!
+
+Exemplo CORRETO:
+Cliente: "Vocês têm Civic 2007?"
+IA: "O Civic 2007 não está no nosso estoque atual. Mas temos o [citar veículos similares da lista]. Quer saber mais?"
+
+===== FIM DAS REGRAS =====
+`;
+
     // Ajuste automático: trocar Léo por Gabi e ajustar tom feminino
     let adjustedPrompt = rawSystemPrompt
       .replace(/\bLéo\b/gi, 'Gabi')
@@ -322,7 +346,8 @@ IMPORTANTE: Use APENAS URLs de fotos que existem no campo "todas_fotos" do veíc
       ? `\n\n=== DADOS ATUALIZADOS DO SISTEMA ===\n${JSON.stringify(contextData, null, 2)}\n=== FIM DOS DADOS ===\n\nUse estes dados para responder perguntas sobre estoque, preços, vendas, etc. Seja preciso e use os valores reais.`
       : '';
 
-    const fullSystemPrompt = defaultSystemPrompt + photoInstructions + contextString;
+    // Inject anti-hallucination rules before all other content
+    const fullSystemPrompt = antiHallucinationRules + defaultSystemPrompt + photoInstructions + contextString;
 
     // Build messages array
     const messages = [
@@ -364,7 +389,8 @@ IMPORTANTE: Use APENAS URLs de fotos que existem no campo "todas_fotos" do veíc
       body: JSON.stringify({
         model: selectedModel,
         messages,
-        temperature: agentConfig?.temperature || 0.7,
+        // ANTI-HALLUCINATION: Temperature baixa (0.3-0.4) para respostas mais precisas e factuais
+        temperature: Math.min(agentConfig?.temperature || 0.35, 0.5),
         max_tokens: agentConfig?.max_tokens || 2048,
       }),
     });

@@ -602,19 +602,25 @@ async function processWithAIAgent(
     }
   }
   
-  // Fallback: If no RAG results, fetch all available vehicles (limited)
-  if (relevantVehicles.length === 0) {
+  // ANTI-HALLUCINATION FIX: Only fetch fallback vehicles if user is asking about vehicles
+  // Otherwise, don't inject random cars into context which can cause hallucinations
+  if (relevantVehicles.length === 0 && messageHasVehicleIntent) {
+    console.log('[RAG] No RAG results but vehicle intent detected - fetching limited fallback');
     const { data: vehicles, error: vehiclesError } = await supabase
       .from('vehicles')
       .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
       .eq('status', 'disponivel')
-      .limit(30);
+      .order('created_at', { ascending: false })
+      .limit(10); // Reduced from 30 to 10 for more focused context
 
     if (vehiclesError) {
       console.error('Error fetching vehicles:', vehiclesError);
     } else {
       relevantVehicles = vehicles || [];
     }
+  } else if (relevantVehicles.length === 0) {
+    // No vehicle intent - don't inject any vehicles to prevent hallucinations
+    console.log('[RAG] No vehicle intent detected - NOT injecting vehicle context');
   }
 
   console.log('[AI Agent] Using', relevantVehicles.length, 'vehicles for context');
@@ -648,6 +654,36 @@ async function processWithAIAgent(
 
   // Build system prompt dynamically from database configuration
   let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
+  
+  // ===== ANTI-HALLUCINATION GUARDRAILS (CRITICAL) =====
+  const antiHallucinationRules = `
+
+===== ⚠️ REGRAS CRÍTICAS - LEIA COM ATENÇÃO =====
+🚫 VOCÊ ESTÁ PROIBIDA DE INVENTAR INFORMAÇÕES!
+
+❌ NUNCA faça isso:
+- Dizer que um carro está disponível se ele NÃO está na lista abaixo
+- Inventar cores, anos, versões, preços ou quilometragem
+- Afirmar algo que não está explícito nos dados
+- Criar detalhes "para ajudar" o cliente
+
+✅ SEMPRE faça isso:
+- SE NÃO SOUBER: "Deixa eu verificar com a equipe e já te retorno!"
+- SE O CARRO NÃO EXISTIR: "Esse modelo específico não temos agora, mas temos [CITE APENAS veículos da lista]"
+- ANTES DE CONFIRMAR: Verifique se o veículo está LITERALMENTE na lista
+
+EXEMPLO DE ERRO GRAVE (não faça):
+Cliente: "Tem Civic 2007?"
+IA: "Sim! Temos o Civic 2007 prata!" ← ERRADO! Você inventou isso!
+
+EXEMPLO CORRETO:
+Cliente: "Tem Civic 2007?"
+IA: "O Civic 2007 não está no estoque no momento. Posso te mostrar outros modelos que temos?"
+
+===== FIM DAS REGRAS CRÍTICAS =====
+`;
+
+  systemPrompt = antiHallucinationRules + systemPrompt;
   
   // Add identity from database (display_name, gender, tone, welcome_message)
   const displayName = agent.display_name || agent.name || 'Assistente';
@@ -1014,7 +1050,9 @@ async function callOpenAI(agent: any, systemPrompt: string, messages: any[]): Pr
         { role: 'system', content: systemPrompt },
         ...messages,
       ],
-      temperature: agent.temperature || 0.7,
+      // ANTI-HALLUCINATION: Temperature mais baixa para respostas precisas
+      // Forçamos máximo de 0.4 mesmo se configurado mais alto
+      temperature: Math.min(agent.temperature || 0.35, 0.4),
       max_tokens: agent.max_tokens || 1024,
     }),
   });

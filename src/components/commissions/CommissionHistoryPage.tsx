@@ -20,6 +20,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { commissionStatusLabels, commissionStatusColors, type SaleCommission } from '@/types/commissions';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -92,7 +93,10 @@ export function CommissionHistoryPage() {
             {commission.sale?.sale_date && (
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                {format(new Date(commission.sale.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                {(() => {
+                  const date = parseDate(commission.sale.sale_date);
+                  return date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-';
+                })()}
               </p>
             )}
             {commission.commission_rule && (

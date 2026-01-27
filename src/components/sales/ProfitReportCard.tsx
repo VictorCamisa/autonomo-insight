@@ -4,6 +4,7 @@ import { TrendingUp, TrendingDown, DollarSign, Car, Calendar, Target } from 'luc
 import { SaleProfitReport, saleStatusLabels, saleStatusColors } from '@/types/sales';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 interface ProfitReportCardProps {
   report: SaleProfitReport;
@@ -41,7 +42,10 @@ export function ProfitReportCard({ report }: ProfitReportCardProps) {
       <CardContent className="space-y-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
-          <span>{format(new Date(report.sale_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+          <span>{(() => {
+            const date = parseDate(report.sale_date);
+            return date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-';
+          })()}</span>
           {report.days_in_stock && (
             <span className="ml-2">• {report.days_in_stock} dias em estoque</span>
           )}

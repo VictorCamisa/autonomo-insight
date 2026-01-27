@@ -11,6 +11,7 @@ import { History, Loader2, FileText, Pencil, Trash2, Eye, Download, LogIn } from
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 interface UserActivityDialogProps {
   open: boolean;
@@ -97,9 +98,10 @@ export function UserActivityDialog({ open, onOpenChange, user }: UserActivityDia
                         </p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(log.created_at), "dd 'de' MMMM 'às' HH:mm", {
-                          locale: ptBR,
-                        })}
+                        {(() => {
+                          const date = parseDate(log.created_at);
+                          return date ? format(date, "dd 'de' MMMM 'às' HH:mm", { locale: ptBR }) : '-';
+                        })()}
                       </p>
                     </div>
                   </div>

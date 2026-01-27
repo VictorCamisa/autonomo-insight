@@ -15,7 +15,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
+import { cn, parseDate } from '@/lib/utils';
 
 export function CashFlowPage() {
   const [periodType, setPeriodType] = useState('month');
@@ -37,7 +37,8 @@ export function CashFlowPage() {
 
   // Group by month for chart
   const monthlyBalance = balanceData.reduce((acc, item) => {
-    const month = format(new Date(item.date), 'MMM/yy', { locale: ptBR });
+    const date = parseDate(item.date);
+    const month = date ? format(date, 'MMM/yy', { locale: ptBR }) : 'N/A';
     if (!acc[month]) {
       acc[month] = { month, entradas: 0, saidas: 0, saldo: 0 };
     }
@@ -179,15 +180,17 @@ function TransactionsTable({ data, formatCurrency }: { data: ReturnType<typeof u
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 100).map((item) => (
+          {data.slice(0, 100).map((item) => {
+            const date = parseDate(item.date);
+            return (
             <TableRow key={item.id}>
-              <TableCell className="whitespace-nowrap">{format(new Date(item.date), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+              <TableCell className="whitespace-nowrap">{date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
               <TableCell>{item.description}</TableCell>
               <TableCell><Badge variant="outline">{item.category}</Badge></TableCell>
               <TableCell><Badge variant={item.status === 'realizado' ? 'default' : 'secondary'}>{item.status === 'realizado' ? 'Realizado' : 'Previsto'}</Badge></TableCell>
               <TableCell className={`text-right font-semibold ${item.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>{item.type === 'entrada' ? '+' : '-'}{formatCurrency(item.value)}</TableCell>
             </TableRow>
-          ))}
+            );})}
           {data.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhuma movimentação encontrada</TableCell></TableRow>)}
         </TableBody>
       </Table>

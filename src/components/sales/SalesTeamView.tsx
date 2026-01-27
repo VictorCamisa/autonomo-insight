@@ -49,6 +49,7 @@ import {
 import { useSalesTeamMetrics } from '@/hooks/useSalesTeamMetrics';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 const roleLabels: Record<string, string> = {
   gerente: 'Gerente',
@@ -427,7 +428,10 @@ export function SalesTeamView() {
                         <div className="text-right">
                           <p className="font-medium">{assignment.salesperson?.full_name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {format(new Date(assignment.assigned_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            {(() => {
+                              const date = parseDate(assignment.assigned_at);
+                              return date ? format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-';
+                            })()}
                           </p>
                         </div>
                         <Badge variant="outline">

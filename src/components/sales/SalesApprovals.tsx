@@ -19,6 +19,7 @@ import { useContracts } from '@/hooks/useContracts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { paymentMethodLabels } from '@/types/sales';
+import { parseDate } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -179,7 +180,10 @@ export function SalesApprovals() {
                           <div>
                             <p className="text-muted-foreground">Data</p>
                             <p className="font-medium">
-                              {format(new Date(sale.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                              {(() => {
+                                const date = parseDate(sale.sale_date);
+                                return date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-';
+                              })()}
                             </p>
                           </div>
                         </div>

@@ -5,6 +5,7 @@ import type { Negotiation } from '@/types/negotiations';
 import { negotiationStatusLabels, negotiationStatusColors } from '@/types/negotiations';
 import { format, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 interface NegotiationCardProps {
   negotiation: Negotiation;
@@ -140,7 +141,10 @@ export function NegotiationCard({ negotiation, onClick, showSalesperson }: Negot
         {negotiation.expected_close_date && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            <span>Previsão: {format(new Date(negotiation.expected_close_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+            <span>Previsão: {(() => {
+              const date = parseDate(negotiation.expected_close_date);
+              return date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-';
+            })()}</span>
           </div>
         )}
 

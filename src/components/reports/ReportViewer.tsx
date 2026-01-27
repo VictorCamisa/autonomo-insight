@@ -5,6 +5,7 @@ import { Separator } from '@/components/ui/separator';
 import { Download, Calendar, TrendingUp, TrendingDown, Minus, Lightbulb } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 interface AIReport {
   title: string;
@@ -29,8 +30,9 @@ function getTrendIcon(trend?: string) {
 export function ReportViewer({ report }: ReportViewerProps) {
   const handleExport = () => {
     // Create a simple text export
+    const generatedDate = parseDate(report.generatedAt);
     let content = `${report.title}\n`;
-    content += `Gerado em: ${format(new Date(report.generatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}\n\n`;
+    content += `Gerado em: ${generatedDate ? format(generatedDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'}\n\n`;
     
     if (report.period) {
       content += `Período: ${report.period.from} - ${report.period.to}\n\n`;
@@ -77,7 +79,10 @@ export function ReportViewer({ report }: ReportViewerProps) {
             <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
               <Calendar className="h-3 w-3" />
               <span>
-                Gerado em {format(new Date(report.generatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                Gerado em {(() => {
+                  const date = parseDate(report.generatedAt);
+                  return date ? format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-';
+                })()}
               </span>
               {report.period && (
                 <>

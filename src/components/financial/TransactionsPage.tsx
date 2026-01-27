@@ -48,7 +48,7 @@ import {
   useDeleteTransaction,
   useFinancialSummary,
 } from '@/hooks/useFinancialTransactions';
-import { cn } from '@/lib/utils';
+import { cn, parseDate } from '@/lib/utils';
 
 const statusLabels = {
   pendente: 'Pendente',
@@ -296,7 +296,10 @@ export function TransactionsPage() {
                       <Badge variant="outline">{transaction.category}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {format(new Date(transaction.transaction_date), 'dd/MM/yyyy', { locale: ptBR })}
+                      {(() => {
+                        const date = parseDate(transaction.transaction_date);
+                        return date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : '-';
+                      })()}
                     </TableCell>
                     <TableCell>
                       <span className={cn(

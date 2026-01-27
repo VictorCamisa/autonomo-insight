@@ -2,6 +2,7 @@ import { Contract } from '@/hooks/useContracts';
 import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDate } from '@/lib/utils';
 
 // Brand colors
 const BRAND_RED = { r: 229, g: 57, b: 53 }; // #E53935
@@ -148,7 +149,8 @@ export function generateSaleContractPDF(contract: Contract) {
   // Buyer info
   y = addSectionHeader(doc, 'COMPRADOR', y, margin);
   doc.setFont('helvetica', 'normal');
-  const buyerText = `${contract.customer_name.toUpperCase()}, ${(contract.customer_nationality || 'BRASILEIRO(A)').toUpperCase()}, ${(contract.customer_profession || '').toUpperCase()}, ${(contract.customer_marital_status || '').toUpperCase()}, RG n° ${contract.customer_rg || '___________'}, CPF n° ${contract.customer_cpf || '___________'}, nascido em ${contract.customer_birth_date ? format(new Date(contract.customer_birth_date), 'dd/MM/yyyy') : '___/___/______'}, residente na ${contract.customer_address?.toUpperCase() || '___________'}, ${contract.customer_city?.toUpperCase() || '___________'}-${contract.customer_state?.toUpperCase() || '___'}, CEP ${contract.customer_zip || '___________'}, telefone ${contract.customer_phone || '___________'}. E-mail: ${contract.customer_email?.toUpperCase() || '___________'}`;
+  const birthDate = parseDate(contract.customer_birth_date);
+  const buyerText = `${contract.customer_name.toUpperCase()}, ${(contract.customer_nationality || 'BRASILEIRO(A)').toUpperCase()}, ${(contract.customer_profession || '').toUpperCase()}, ${(contract.customer_marital_status || '').toUpperCase()}, RG n° ${contract.customer_rg || '___________'}, CPF n° ${contract.customer_cpf || '___________'}, nascido em ${birthDate ? format(birthDate, 'dd/MM/yyyy') : '___/___/______'}, residente na ${contract.customer_address?.toUpperCase() || '___________'}, ${contract.customer_city?.toUpperCase() || '___________'}-${contract.customer_state?.toUpperCase() || '___'}, CEP ${contract.customer_zip || '___________'}, telefone ${contract.customer_phone || '___________'}. E-mail: ${contract.customer_email?.toUpperCase() || '___________'}`;
   const buyerLines = doc.splitTextToSize(buyerText, contentWidth);
   doc.text(buyerLines, margin, y);
   y += buyerLines.length * 4 + 6;

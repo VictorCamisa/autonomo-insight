@@ -16,6 +16,7 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { parseDate } from '@/lib/utils';
 import type { ScheduledReport } from '@/types/marketing-module';
 
 const reportTypeLabels: Record<string, { label: string; description: string }> = {
@@ -271,7 +272,10 @@ export function MarketingReportsPage() {
                       </div>
                       {report.last_sent_at && (
                         <p className="text-xs text-muted-foreground mt-2">
-                          Último envio: {format(new Date(report.last_sent_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          Último envio: {(() => {
+                            const date = parseDate(report.last_sent_at);
+                            return date ? format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-';
+                          })()}
                         </p>
                       )}
                     </div>

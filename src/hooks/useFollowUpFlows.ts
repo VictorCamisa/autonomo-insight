@@ -130,7 +130,11 @@ export interface CreateFollowUpFlowInput {
   exclude_converted_leads?: boolean;
   exclude_lost_leads?: boolean;
   priority?: number;
+  whatsapp_instance_id?: string | null;
   steps?: FollowUpStep[];
+  // Frontend-only fields that should be removed before sending to DB
+  end_cycle_action?: string;
+  end_cycle_days_before_restart?: number;
 }
 
 export function useCreateFollowUpFlow() {
@@ -138,7 +142,8 @@ export function useCreateFollowUpFlow() {
   
   return useMutation({
     mutationFn: async (input: CreateFollowUpFlowInput) => {
-      const { steps, ...flowData } = input;
+      // Remove campos que não existem na tabela do banco
+      const { steps, end_cycle_action, end_cycle_days_before_restart, ...flowData } = input;
       
       // Garante um message_template default se não tiver steps
       const sanitizedInput = {
@@ -196,8 +201,9 @@ export function useUpdateFollowUpFlow() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, steps, ...input }: UpdateFollowUpFlowInput) => {
+    mutationFn: async ({ id, steps, end_cycle_action, end_cycle_days_before_restart, ...input }: UpdateFollowUpFlowInput) => {
       // Convert empty string to null for time field
+      // Note: end_cycle_action and end_cycle_days_before_restart are removed as they don't exist in the DB
       const sanitizedInput = {
         ...input,
         specific_time: input.specific_time || null,

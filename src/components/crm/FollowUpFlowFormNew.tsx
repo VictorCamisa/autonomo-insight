@@ -30,10 +30,15 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { triggerTypeDescriptions } from '@/types/followUp';
 import { leadSourceLabels } from '@/types/crm';
-import { X, Settings2, Filter, ListOrdered, Plus, ArrowRight, MessageCircle } from 'lucide-react';
+import { 
+  X, Settings2, Filter, ListOrdered, Plus, ArrowRight, MessageCircle, 
+  Bot, Handshake, Trophy, Clock, XCircle, Target, Zap, AlertTriangle,
+  User, Bell
+} from 'lucide-react';
 import type { TriggerType } from '@/types/followUp';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FollowUpStepEditor, type FollowUpStep } from './FollowUpStepEditor';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // Hook para buscar instâncias WhatsApp
 function useWhatsAppInstances() {
@@ -50,29 +55,78 @@ function useWhatsAppInstances() {
   });
 }
 
-// Etapas do pipeline
-const pipelineStages = [
-  { value: 'gabi_primeiro_contato', label: 'Gabi: Primeiro Contato', description: 'Lead entrou, aguardando resposta do bot', group: 'gabi' },
-  { value: 'gabi_em_qualificacao', label: 'Gabi: Em Qualificação', description: 'Bot conversando, coletando informações', group: 'gabi' },
-  { value: 'gabi_qualificado', label: 'Gabi: Qualificado', description: 'Bot qualificou, pronto para Round Robin', group: 'gabi' },
-  { value: 'lead_novo', label: 'Lead Novo', description: 'Lead acabou de entrar, sem contato', group: 'lead' },
-  { value: 'lead_contato_inicial', label: 'Contato Inicial', description: 'Primeiro contato realizado', group: 'lead' },
-  { value: 'lead_qualificado', label: 'Lead Qualificado', description: 'Lead qualificado, sem negociação', group: 'lead' },
-  { value: 'negociacao_andamento', label: 'Em Negociação', description: 'Negociação iniciada', group: 'negotiation' },
-  { value: 'negociacao_proposta', label: 'Proposta Enviada', description: 'Aguardando retorno', group: 'negotiation' },
-  { value: 'negociacao_fechamento', label: 'Fechando Negócio', description: 'Fase final de fechamento', group: 'negotiation' },
-  { value: 'negociacao_pausada', label: 'Pausada', description: 'Cliente pediu tempo', group: 'negotiation' },
+// Etapas REAIS do pipeline (alinhado com NegotiationStatus)
+const negotiationStages = [
+  { 
+    value: 'atendimento_ia', 
+    label: 'Em Atendimento IA', 
+    description: 'Lead sendo atendido pela Gabi (bot)', 
+    icon: Bot,
+    color: 'blue'
+  },
+  { 
+    value: 'negociando', 
+    label: 'Negociando', 
+    description: 'Lead qualificado, em negociação com vendedor', 
+    icon: Handshake,
+    color: 'amber'
+  },
+  { 
+    value: 'follow_up', 
+    label: 'Follow-up', 
+    description: 'Lead sem resposta há mais de 24h', 
+    icon: Clock,
+    color: 'orange'
+  },
+];
+
+// Ações de fim de ciclo
+export type EndCycleAction = 'none' | 'mark_lost' | 'notify_manager' | 'move_to_manual' | 'restart_cycle';
+
+const endCycleActions = [
+  { 
+    value: 'none', 
+    label: 'Nenhuma', 
+    description: 'Apenas finaliza o fluxo sem ação adicional',
+    icon: XCircle
+  },
+  { 
+    value: 'mark_lost', 
+    label: 'Marcar como Perdido', 
+    description: 'Move a negociação para status "Perdido" automaticamente',
+    icon: Target
+  },
+  { 
+    value: 'notify_manager', 
+    label: 'Notificar Gerente', 
+    description: 'Envia alerta para o gerente/admin revisar manualmente',
+    icon: Bell
+  },
+  { 
+    value: 'move_to_manual', 
+    label: 'Passar para Vendedor', 
+    description: 'Move para "Negociando" para tentativa manual',
+    icon: User
+  },
+  { 
+    value: 'restart_cycle', 
+    label: 'Reiniciar Ciclo', 
+    description: 'Aguarda X dias e reinicia o fluxo (máx 3 vezes)',
+    icon: Zap
+  },
 ];
 
 const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
   description: z.string().optional(),
   is_active: z.boolean().default(true),
-  pipeline_stages: z.array(z.string()).default([]),
+  target_negotiation_status: z.array(z.string()).default([]),
   target_lead_sources: z.array(z.string()).default([]),
   trigger_type: z.string().default('no_response_to_bot'),
   priority: z.number().default(0),
   whatsapp_instance_id: z.string().optional().nullable(),
+  end_cycle_action: z.string().default('none'),
+  end_cycle_days_before_restart: z.number().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -89,53 +143,22 @@ export interface FollowUpFlowFormNewProps {
     trigger_type?: string;
     priority?: number;
     steps?: FollowUpStep[];
-    pipeline_stages?: string[];
     whatsapp_instance_id?: string | null;
+    end_cycle_action?: string;
+    end_cycle_days_before_restart?: number;
   };
   onSubmit: (data: FormData & { steps: FollowUpStep[] }) => void;
   onCancel: () => void;
   isLoading?: boolean;
 }
 
-function convertToPipelineStages(leadStatus?: string[], negotiationStatus?: string[]): string[] {
-  const stages: string[] = [];
-  if (leadStatus?.includes('novo')) stages.push('lead_novo');
-  if (leadStatus?.includes('contato_inicial')) stages.push('lead_contato_inicial');
-  if (leadStatus?.includes('qualificado')) stages.push('lead_qualificado');
-  if (negotiationStatus?.includes('em_andamento')) stages.push('negociacao_andamento');
-  if (negotiationStatus?.includes('proposta_enviada')) stages.push('negociacao_proposta');
-  if (negotiationStatus?.includes('negociando')) stages.push('negociacao_fechamento');
-  if (negotiationStatus?.includes('pausado')) stages.push('negociacao_pausada');
-  return stages;
-}
-
-export function convertFromPipelineStages(pipelineStages: string[]): {
-  target_lead_status: string[];
-  target_negotiation_status: string[];
-} {
-  const leadStatus: string[] = [];
-  const negotiationStatus: string[] = [];
-  
-  pipelineStages.forEach(stage => {
-    if (stage === 'lead_novo') leadStatus.push('novo');
-    if (stage === 'lead_contato_inicial') leadStatus.push('contato_inicial');
-    if (stage === 'lead_qualificado') leadStatus.push('qualificado');
-    if (stage === 'negociacao_andamento') negotiationStatus.push('em_andamento');
-    if (stage === 'negociacao_proposta') negotiationStatus.push('proposta_enviada');
-    if (stage === 'negociacao_fechamento') negotiationStatus.push('negociando');
-    if (stage === 'negociacao_pausada') negotiationStatus.push('pausado');
-  });
-  
-  return { target_lead_status: leadStatus, target_negotiation_status: negotiationStatus };
-}
-
 const defaultStep: FollowUpStep = {
   step_order: 1,
-  delay_minutes: 5,
+  delay_minutes: 1440, // 24h padrão
   message_template: '',
   stop_if_qualified: true,
-  stop_if_assigned_to_salesperson: true,
-  stop_if_responded: false,
+  stop_if_assigned_to_salesperson: false,
+  stop_if_responded: true,
 };
 
 export function FollowUpFlowFormNew({
@@ -145,9 +168,6 @@ export function FollowUpFlowFormNew({
   isLoading,
 }: FollowUpFlowFormNewProps) {
   const { data: whatsappInstances } = useWhatsAppInstances();
-  
-  const initialPipelineStages = initialData?.pipeline_stages || 
-    convertToPipelineStages(initialData?.target_lead_status, initialData?.target_negotiation_status);
 
   const [steps, setSteps] = useState<FollowUpStep[]>(
     initialData?.steps && initialData.steps.length > 0
@@ -161,20 +181,22 @@ export function FollowUpFlowFormNew({
       name: initialData?.name || '',
       description: initialData?.description || '',
       is_active: initialData?.is_active ?? true,
-      pipeline_stages: initialPipelineStages,
+      target_negotiation_status: initialData?.target_negotiation_status || ['follow_up'],
       target_lead_sources: initialData?.target_lead_sources || [],
       trigger_type: initialData?.trigger_type || 'no_response_to_bot',
       priority: initialData?.priority || 0,
       whatsapp_instance_id: initialData?.whatsapp_instance_id || null,
+      end_cycle_action: initialData?.end_cycle_action || 'none',
+      end_cycle_days_before_restart: initialData?.end_cycle_days_before_restart || 7,
     },
   });
 
   const watchLeadSources = form.watch('target_lead_sources');
-  const watchPipelineStages = form.watch('pipeline_stages');
-  const watchTriggerType = form.watch('trigger_type');
+  const watchNegotiationStatus = form.watch('target_negotiation_status');
+  const watchEndCycleAction = form.watch('end_cycle_action');
 
   const toggleArrayValue = (
-    field: 'pipeline_stages' | 'target_lead_sources',
+    field: 'target_negotiation_status' | 'target_lead_sources',
     value: string
   ) => {
     const currentValue = form.getValues(field) as string[];
@@ -190,7 +212,7 @@ export function FollowUpFlowFormNew({
       {
         ...defaultStep,
         step_order: prev.length + 1,
-        delay_minutes: prev.length === 0 ? 5 : prev[prev.length - 1].delay_minutes * 2,
+        delay_minutes: prev.length === 0 ? 1440 : prev[prev.length - 1].delay_minutes * 2,
       },
     ]);
   };
@@ -204,16 +226,10 @@ export function FollowUpFlowFormNew({
   };
 
   const handleFormSubmit = (data: FormData) => {
-    const converted = convertFromPipelineStages(data.pipeline_stages);
-    
-    // Remove pipeline_stages pois não existe na tabela - apenas target_lead_status/target_negotiation_status
-    const { pipeline_stages, ...restData } = data;
-    
     onSubmit({
-      ...restData,
-      ...converted,
+      ...data,
       steps,
-    } as never);
+    } as FormData & { steps: FollowUpStep[] });
   };
 
   // Helper para formatar tempo
@@ -226,6 +242,21 @@ export function FollowUpFlowFormNew({
     }
     const days = Math.floor(minutes / 1440);
     return `${days}d`;
+  };
+
+  const getStageColor = (color: string, isSelected: boolean) => {
+    if (!isSelected) return 'border-border hover:bg-muted/50';
+    
+    switch (color) {
+      case 'blue':
+        return 'bg-blue-100 dark:bg-blue-950 border-blue-500 text-blue-700 dark:text-blue-300';
+      case 'amber':
+        return 'bg-amber-100 dark:bg-amber-950 border-amber-500 text-amber-700 dark:text-amber-300';
+      case 'orange':
+        return 'bg-orange-100 dark:bg-orange-950 border-orange-500 text-orange-700 dark:text-orange-300';
+      default:
+        return 'bg-primary text-primary-foreground';
+    }
   };
 
   return (
@@ -262,7 +293,7 @@ export function FollowUpFlowFormNew({
                         <FormItem>
                           <FormLabel>Nome</FormLabel>
                           <FormControl>
-                            <Input placeholder="Ex: Reengajamento Gabi" {...field} />
+                            <Input placeholder="Ex: Reengajamento 72h" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -323,18 +354,15 @@ export function FollowUpFlowFormNew({
                           <SelectContent>
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Sem Resposta</div>
                             <SelectItem value="no_response_to_bot">Sem resposta à Gabi (bot)</SelectItem>
-                            <SelectItem value="no_response_to_followup">Sem resposta ao follow-up</SelectItem>
+                            <SelectItem value="no_response_to_followup">Sem resposta ao follow-up anterior</SelectItem>
                             <SelectItem value="no_response_to_salesperson">Sem resposta ao vendedor</SelectItem>
                             
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Baseado em Eventos</div>
-                            <SelectItem value="after_lead_creation">Após criar lead</SelectItem>
-                            <SelectItem value="after_status_change">Após mudança de status</SelectItem>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Baseado em Tempo</div>
+                            <SelectItem value="after_inactivity">Após X tempo sem atividade</SelectItem>
                             <SelectItem value="lead_stalled_in_stage">Lead parado no estágio</SelectItem>
-                            <SelectItem value="after_inactivity">Após inatividade geral</SelectItem>
                             
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Outros</div>
                             <SelectItem value="manual">Manual</SelectItem>
-                            <SelectItem value="scheduled">Agendado</SelectItem>
                           </SelectContent>
                         </Select>
                         {field.value && triggerTypeDescriptions[field.value as TriggerType] && (
@@ -381,7 +409,7 @@ export function FollowUpFlowFormNew({
                           </SelectContent>
                         </Select>
                         <FormDescription className="text-xs">
-                          Escolha qual instância será usada para enviar as mensagens deste fluxo
+                          Escolha qual instância será usada para enviar as mensagens
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -394,83 +422,65 @@ export function FollowUpFlowFormNew({
             <TabsContent value="segmentation" className="space-y-4 m-0">
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Quem vai receber?</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Quem vai receber?
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Estágio do Pipeline */}
                   <div>
-                    <Label className="text-sm font-medium mb-3 block">Etapa do Pipeline</Label>
-                    
-                    {/* Gabi */}
-                    <div className="mb-3">
-                      <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                        <span className="inline-block w-2 h-2 rounded-full bg-violet-500"></span>
-                        Atendimento Gabi
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {pipelineStages.filter(s => s.group === 'gabi').map((stage) => (
-                          <Tooltip key={stage.value}>
-                            <TooltipTrigger asChild>
-                              <Badge
-                                variant={watchPipelineStages.includes(stage.value) ? 'default' : 'outline'}
-                                className={`cursor-pointer ${watchPipelineStages.includes(stage.value) ? 'bg-violet-600 hover:bg-violet-700' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}`}
-                                onClick={() => toggleArrayValue('pipeline_stages', stage.value)}
-                              >
-                                {stage.label.replace('Gabi: ', '')}
-                                {watchPipelineStages.includes(stage.value) && <X className="h-3 w-3 ml-1" />}
+                    <Label className="text-sm font-medium mb-3 block">Estágio da Negociação</Label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Selecione em quais estágios do pipeline este fluxo deve atuar
+                    </p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {negotiationStages.map((stage) => {
+                        const Icon = stage.icon;
+                        const isSelected = watchNegotiationStatus.includes(stage.value);
+                        return (
+                          <div
+                            key={stage.value}
+                            onClick={() => toggleArrayValue('target_negotiation_status', stage.value)}
+                            className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${getStageColor(stage.color, isSelected)}`}
+                          >
+                            <Icon className="h-5 w-5 shrink-0" />
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{stage.label}</p>
+                              <p className="text-xs opacity-75">{stage.description}</p>
+                            </div>
+                            {isSelected && (
+                              <Badge variant="secondary" className="shrink-0">
+                                Selecionado
                               </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent><p>{stage.description}</p></TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    {/* Leads */}
-                    <div className="mb-3">
-                      <p className="text-xs text-muted-foreground mb-2">Leads Manuais</p>
-                      <div className="flex flex-wrap gap-2">
-                        {pipelineStages.filter(s => s.group === 'lead').map((stage) => (
-                          <Badge
-                            key={stage.value}
-                            variant={watchPipelineStages.includes(stage.value) ? 'default' : 'outline'}
-                            className="cursor-pointer"
-                            onClick={() => toggleArrayValue('pipeline_stages', stage.value)}
-                          >
-                            {stage.label}
-                            {watchPipelineStages.includes(stage.value) && <X className="h-3 w-3 ml-1" />}
-                          </Badge>
-                        ))}
+                    
+                    {watchNegotiationStatus.length === 0 && (
+                      <div className="flex items-center gap-2 mt-3 p-2 bg-amber-50 dark:bg-amber-950/50 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          Selecione ao menos um estágio para o fluxo funcionar
+                        </p>
                       </div>
-                    </div>
-
-                    {/* Negociação */}
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-2">Em Negociação</p>
-                      <div className="flex flex-wrap gap-2">
-                        {pipelineStages.filter(s => s.group === 'negotiation').map((stage) => (
-                          <Badge
-                            key={stage.value}
-                            variant={watchPipelineStages.includes(stage.value) ? 'default' : 'outline'}
-                            className="cursor-pointer"
-                            onClick={() => toggleArrayValue('pipeline_stages', stage.value)}
-                          >
-                            {stage.label}
-                            {watchPipelineStages.includes(stage.value) && <X className="h-3 w-3 ml-1" />}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
+                    )}
                   </div>
 
+                  {/* Origem do Lead */}
                   <div>
                     <Label className="text-sm font-medium mb-2 block">Origem do Lead</Label>
-                    <p className="text-xs text-muted-foreground mb-2">Deixe vazio para todos</p>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Deixe vazio para aplicar a todas as origens
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(leadSourceLabels).map(([value, label]) => (
                         <Badge
                           key={value}
                           variant={watchLeadSources.includes(value) ? 'default' : 'outline'}
-                          className="cursor-pointer"
+                          className="cursor-pointer transition-all hover:scale-105"
                           onClick={() => toggleArrayValue('target_lead_sources', value)}
                         >
                           {label}
@@ -487,7 +497,10 @@ export function FollowUpFlowFormNew({
               {/* Visualização da sequência */}
               {steps.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap p-3 bg-muted/50 rounded-lg">
-                  <span className="text-xs text-muted-foreground">Gatilho</span>
+                  <span className="text-xs text-muted-foreground font-medium">Sequência:</span>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    Gatilho
+                  </Badge>
                   {steps.map((step, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -496,6 +509,10 @@ export function FollowUpFlowFormNew({
                       </Badge>
                     </div>
                   ))}
+                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  <Badge variant="outline" className="font-mono text-xs bg-orange-100 dark:bg-orange-950 border-orange-300">
+                    Fim
+                  </Badge>
                 </div>
               )}
 
@@ -522,6 +539,93 @@ export function FollowUpFlowFormNew({
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Passo
               </Button>
+
+              {/* Ação de fim de ciclo */}
+              <Card className="border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-orange-600" />
+                    Ação ao Finalizar Ciclo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    O que fazer quando todos os passos forem executados e o lead ainda não respondeu?
+                  </p>
+                  
+                  <FormField
+                    control={form.control}
+                    name="end_cycle_action"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <RadioGroup
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                            className="space-y-2"
+                          >
+                            {endCycleActions.map((action) => {
+                              const Icon = action.icon;
+                              return (
+                                <div
+                                  key={action.value}
+                                  className={`flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                                    field.value === action.value 
+                                      ? 'border-primary bg-primary/5' 
+                                      : 'border-border hover:bg-muted/50'
+                                  }`}
+                                  onClick={() => field.onChange(action.value)}
+                                >
+                                  <RadioGroupItem value={action.value} id={action.value} />
+                                  <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                  <div className="flex-1">
+                                    <Label 
+                                      htmlFor={action.value}
+                                      className="font-medium text-sm cursor-pointer"
+                                    >
+                                      {action.label}
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      {action.description}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {watchEndCycleAction === 'restart_cycle' && (
+                    <FormField
+                      control={form.control}
+                      name="end_cycle_days_before_restart"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Dias antes de reiniciar</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={30}
+                              {...field}
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 7)}
+                              className="w-24"
+                            />
+                          </FormControl>
+                          <FormDescription className="text-xs">
+                            O fluxo reiniciará no máximo 3 vezes antes de parar definitivamente
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </div>
         </Tabs>
@@ -538,4 +642,18 @@ export function FollowUpFlowFormNew({
       </form>
     </Form>
   );
+}
+
+// Export for backwards compatibility
+export function convertFromPipelineStages(pipelineStages: string[]): {
+  target_lead_status: string[];
+  target_negotiation_status: string[];
+} {
+  // Legacy conversion - just pass through negotiation status
+  return { 
+    target_lead_status: [], 
+    target_negotiation_status: pipelineStages.filter(s => 
+      ['atendimento_ia', 'negociando', 'follow_up'].includes(s)
+    )
+  };
 }

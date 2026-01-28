@@ -2195,16 +2195,11 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       // 2. Check and progress negotiation status based on message count
       await checkAndProgressNegotiation(supabase, conversation.id, leadId);
       
-      // 3. If newly qualified, add handoff message
-      if (qualResult.newlyQualified && qualResult.salespersonName) {
-        console.log('[Qualification] Lead newly qualified! Adding handoff message');
-        const handoffMessage = `\n\n🎉 Excelente! Consegui todas as informações!
-
-O ${qualResult.salespersonName} vai entrar em contato com você em breve para dar continuidade ao seu atendimento.
-
-Ele já está com todo o histórico da nossa conversa! 👍`;
-        
-        finalResponse = finalResponse + handoffMessage;
+      // HANDOFF is now sent directly in extractAndSaveQualificationData when Q2 is reached
+      // We do NOT append handoff message to finalResponse anymore to avoid duplication
+      // The handoff message is sent as a separate WhatsApp message in the Q2 flow
+      if (qualResult.newlyQualified) {
+        console.log('[Qualification] Lead newly qualified (Q2) - handoff message sent separately by Q2 flow');
       }
     }
 
@@ -3162,7 +3157,8 @@ async function extractAndSaveQualificationData(
   // ===== Q2 CHECK: Q1 + Vehicle Interest + MINIMUM MESSAGES =====
   // Q2 requires: 
   // 1. vehicle_interest detected in THIS conversation (updates), not just historical data
-  // 2. MINIMUM of 4 messages exchanged (2 from each side) to prevent premature handoff
+  // 2. MINIMUM of 6 messages exchanged (3 from each side) to prevent premature handoff
+  // 3. At least 2 distinct user messages mentioning vehicle interest
   const currentLevelAfterQ1 = currentLevel === 'q0' ? 'q1' : currentLevel;
   
   if (currentLevelAfterQ1 === 'q1') {
@@ -3172,7 +3168,7 @@ async function extractAndSaveQualificationData(
     
     // Get message count to ensure we have enough conversation before handoff
     const messageCount = qualData.message_count || 0;
-    const MINIMUM_MESSAGES_FOR_Q2 = 4; // At least 4 messages (2 exchanges) before handoff
+    const MINIMUM_MESSAGES_FOR_Q2 = 6; // At least 6 messages (3 exchanges) before handoff
     
     console.log('[Q2 Check] Has NEW vehicle interest in this message:', hasNewVehicleInterest);
     console.log('[Q2 Check] Historical vehicle_interest:', qualData.vehicle_interest || 'none');
@@ -3374,10 +3370,21 @@ async function extractDataWithAI(
   // Reverse to get chronological order for analysis
   const messages = recentMessages?.reverse() || [];
   
-  // CRITICAL: Need at least 3 messages (real conversation) before extracting vehicle_interest
+  // CRITICAL: Need at least 4 messages (real conversation) before extracting vehicle_interest
   // This prevents false positives from single-message greetings
-  if (!messages || messages.length < 3) {
-    console.log('[Qualification] Skipping AI extraction - only', messages?.length || 0, 'messages (need at least 3)');
+  // 4 messages = at least 2 exchanges (user -> bot -> user -> bot)
+  const MINIMUM_MESSAGES_FOR_EXTRACTION = 4;
+  
+  if (!messages || messages.length < MINIMUM_MESSAGES_FOR_EXTRACTION) {
+    console.log('[Qualification] Skipping AI extraction - only', messages?.length || 0, 'messages (need at least', MINIMUM_MESSAGES_FOR_EXTRACTION, ')');
+    return {};
+  }
+  
+  // CRITICAL: Count how many USER messages there are
+  // We need at least 2 user messages (not just bot responses) to detect real intent
+  const userMessageCount = messages.filter((m: any) => m.role === 'user').length;
+  if (userMessageCount < 2) {
+    console.log('[Qualification] Skipping AI extraction - only', userMessageCount, 'USER messages (need at least 2)');
     return {};
   }
   
@@ -3386,7 +3393,7 @@ async function extractDataWithAI(
     .map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Vendedor'}: ${m.content}`)
     .join('\n\n');
   
-  console.log('[Qualification] Running AI extraction on', messages.length, 'messages');
+  console.log('[Qualification] Running AI extraction on', messages.length, 'messages (', userMessageCount, 'from user)');
   
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -3400,52 +3407,49 @@ async function extractDataWithAI(
         messages: [
           {
             role: 'system',
-            content: `Você é um extrator RIGOROSO de dados de conversas de vendas de veículos.
+            content: `Você é um extrator ULTRA RIGOROSO de dados de conversas de vendas de veículos.
 
-⚠️ REGRAS CRÍTICAS - SIGA À RISCA:
+⛔ REGRA CRÍTICA #1 - VEHICLE_INTEREST:
+O campo vehicle_interest deve ser preenchido SOMENTE se:
+1. O cliente MENCIONOU um modelo ESPECÍFICO de veículo (Polo, Civic, Gol, etc.)
+2. E demonstrou INTENÇÃO DE COMPRA (não apenas pergunta casual)
 
-1. EXTRAIA APENAS informações que o CLIENTE disse EXPLICITAMENTE nas mensagens
-2. NÃO INVENTE DADOS sob nenhuma circunstância
-3. Se o cliente disse apenas "oi", "olá", "boa tarde" = retorne {}
-4. Se o cliente fez uma pergunta genérica como "vocês tem carro?" sem especificar modelo = NÃO extraia vehicle_interest
-5. vehicle_interest SÓ deve ser preenchido se o cliente MENCIONOU um modelo específico (ex: "quero um Polo", "tem Civic 2020?")
+❌ NÃO extraia vehicle_interest se:
+- Cliente perguntou "tem carro bom?" → {}
+- Cliente perguntou "vocês tem sedan?" → {} (categoria genérica não conta!)
+- Cliente perguntou "tem algo até 50 mil?" → {} (apenas preço não conta!)
+- Cliente disse apenas "oi", "olá" → {}
+- Cliente fez perguntas sobre a loja → {}
+
+✅ EXTRAIA vehicle_interest SOMENTE se:
+- Cliente disse "quero ver o Polo" → {"vehicle_interest": "Polo"}
+- Cliente disse "interessado no Civic 2020" → {"vehicle_interest": "Civic 2020"}
+- Cliente disse "tem HB20 ou Onix?" → {"vehicle_interest": "HB20, Onix"}
+- Cliente demonstrou interesse REAL em modelo específico em pelo menos 2 mensagens
+
+⚠️ REGRA CRÍTICA #2 - INTENÇÃO DE COMPRA:
+Diferencie PERGUNTAS CASUAIS de INTENÇÃO REAL:
+- "Vocês tem carro?" = casual, retorne {}
+- "Quanto custa o Polo?" = casual, retorne {}  
+- "Quero comprar um Polo" = intenção real!
+- "Gostei do Polo, pode me mandar mais fotos?" = intenção real!
 
 ⚠️ CUIDADO COM FALSOS POSITIVOS DE TROCA:
 - "Já vendeu a Doblo?" = pergunta sobre ESTOQUE, NÃO é dado de troca!
 - "Vocês já venderam?" = pergunta sobre estoque, NÃO indica troca
-- "Vendeu aquele carro?" = pergunta sobre estoque
-- "Já vendi MEU carro" = pode indicar que TEM troca
 - "Tenho um Gol para trocar" = tem troca confirmado
 
-has_trade_in = true APENAS SE:
-- Cliente disse "tenho um carro para trocar"
-- Cliente disse "dou meu carro na troca"
-- Cliente disse "quero entregar meu [modelo]"
-- Cliente disse "já vendi meu carro" (tinha troca, vendeu fora)
+Retorne um JSON com APENAS os campos que o CLIENTE demonstrou INTENÇÃO REAL:
+- vehicle_interest: string (APENAS com modelo específico + intenção de compra)
+- budget: number (APENAS se disse valor concreto que TEM para gastar)
+- down_payment: number (APENAS se disse valor de entrada)
+- desired_installment: number (APENAS se disse valor de parcela)
+- has_trade_in: boolean (APENAS se confirmou que tem ou não tem troca)
+- trade_in_vehicle: string (APENAS se disse qual carro dele tem para trocar)
+- clean_credit: boolean (APENAS se confirmou nome limpo/sujo)
+- cpf: string (APENAS se informou o CPF)
 
-has_trade_in = false APENAS SE:
-- Cliente disse "não tenho carro para trocar"
-- Cliente disse "vou comprar à vista, sem troca"
-
-Retorne um JSON com APENAS os campos que o CLIENTE DISSE EXPLICITAMENTE:
-- vehicle_interest: string (APENAS se o cliente MENCIONOU um modelo/marca específica)
-- budget: number (APENAS se o cliente disse "tenho X para gastar")
-- down_payment: number (APENAS se o cliente disse valor de entrada)
-- desired_installment: number (APENAS se o cliente disse valor de parcela)
-- has_trade_in: boolean (APENAS se o cliente confirmou que tem ou não tem carro na troca - NÃO CONFUNDA com perguntas sobre estoque!)
-- trade_in_vehicle: string (APENAS se o cliente disse qual carro dele tem para trocar)
-- clean_credit: boolean (APENAS se o cliente confirmou nome limpo/sujo)
-- cpf: string (APENAS se o cliente informou o CPF)
-
-Se não encontrar NENHUMA informação concreta, retorne: {}
-
-EXEMPLOS:
-- Cliente: "oi" → {}
-- Cliente: "tem carro bom?" → {}
-- Cliente: "quero um Polo" → {"vehicle_interest": "Polo"}
-- Cliente: "tem Civic 2020 por até 80 mil?" → {"vehicle_interest": "Civic 2020", "budget": 80000}
-- Cliente: "já vendeu a Doblo?" → {} (é pergunta sobre ESTOQUE, não sobre troca!)
-- Cliente: "tenho um Gol 2018 pra dar na troca" → {"has_trade_in": true, "trade_in_vehicle": "Gol 2018"}
+🎯 IMPORTANTE: Na dúvida, retorne {}. É melhor não extrair do que extrair errado!
 
 Retorne APENAS o JSON, sem explicações.`
           },

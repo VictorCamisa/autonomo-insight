@@ -9,7 +9,9 @@ import {
   X, 
   Loader2,
   Trash2,
-  GripVertical
+  GripVertical,
+  Tag,
+  Filter
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -22,6 +24,42 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+// Categorias disponíveis para fotos
+const PHOTO_CATEGORIES = [
+  { value: 'geral', label: 'Geral', color: 'bg-gray-500' },
+  { value: 'exterior_frontal', label: 'Exterior - Frontal', color: 'bg-blue-500' },
+  { value: 'exterior_traseira', label: 'Exterior - Traseira', color: 'bg-blue-600' },
+  { value: 'exterior_lateral_esq', label: 'Exterior - Lateral Esquerda', color: 'bg-blue-400' },
+  { value: 'exterior_lateral_dir', label: 'Exterior - Lateral Direita', color: 'bg-blue-300' },
+  { value: 'interior_painel', label: 'Interior - Painel', color: 'bg-green-500' },
+  { value: 'interior_bancos', label: 'Interior - Bancos', color: 'bg-green-600' },
+  { value: 'interior_traseiro', label: 'Interior - Banco Traseiro', color: 'bg-green-400' },
+  { value: 'interior_porta_malas', label: 'Interior - Porta-malas', color: 'bg-green-300' },
+  { value: 'motor', label: 'Motor', color: 'bg-orange-500' },
+  { value: 'rodas', label: 'Rodas/Pneus', color: 'bg-purple-500' },
+  { value: 'documentos', label: 'Documentos', color: 'bg-yellow-500' },
+  { value: 'detalhes', label: 'Detalhes', color: 'bg-pink-500' },
+];
+
+interface VehicleImage {
+  id: string;
+  vehicle_id: string;
+  image_url: string;
+  is_cover: boolean | null;
+  display_order: number | null;
+  category: string | null;
+  created_at: string;
+}
 
 interface VehiclePhotosUploadProps {
   vehicleId: string;
@@ -33,7 +71,28 @@ interface VehiclePhotosUploadProps {
 export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManager }: VehiclePhotosUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState('geral');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
+  // Buscar imagens da tabela vehicle_images com categoria
+  const { data: vehicleImages = [], refetch: refetchImages } = useQuery({
+    queryKey: ['vehicle-images-with-category', vehicleId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vehicle_images')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .order('display_order', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching vehicle images:', error);
+        return [];
+      }
+      return (data || []) as VehicleImage[];
+    },
+  });
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -42,7 +101,6 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
     setIsUploading(true);
     setUploadProgress(0);
 
-    const uploadedUrls: string[] = [...(images || [])];
     const totalFiles = files.length;
     let uploaded = 0;
 
@@ -83,25 +141,53 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
           .from('vehicle-images')
           .getPublicUrl(fileName);
 
-        uploadedUrls.push(urlData.publicUrl);
+        // Inserir na tabela vehicle_images com categoria
+        const maxOrder = vehicleImages.length > 0 
+          ? Math.max(...vehicleImages.map(img => img.display_order || 0)) 
+          : -1;
+
+        const { error: insertError } = await supabase
+          .from('vehicle_images')
+          .insert({
+            vehicle_id: vehicleId,
+            image_url: urlData.publicUrl,
+            category: selectedCategory,
+            display_order: maxOrder + 1 + i,
+            is_cover: vehicleImages.length === 0 && i === 0
+          });
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          toast.error(`Erro ao salvar ${file.name}`);
+          continue;
+        }
+
         uploaded++;
         setUploadProgress(Math.round((uploaded / totalFiles) * 100));
       }
 
-      // Update vehicle with new images
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
-        .from('vehicles')
-        .update({ images: uploadedUrls })
-        .eq('id', vehicleId);
-
-      if (updateError) {
-        console.error('Update error:', updateError);
-        toast.error('Erro ao atualizar veículo');
-      } else {
-        onImagesUpdate(uploadedUrls);
-        toast.success(`${uploaded} foto(s) enviada(s) com sucesso`);
+      // Atualizar também a coluna images do veículo (fallback)
+      const allImages = [...(images || [])];
+      const newImages = await supabase
+        .from('vehicle_images')
+        .select('image_url')
+        .eq('vehicle_id', vehicleId)
+        .order('display_order', { ascending: true });
+      
+      if (newImages.data) {
+        const imageUrls = newImages.data.map(img => img.image_url);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('vehicles')
+          .update({ images: imageUrls })
+          .eq('id', vehicleId);
+        
+        onImagesUpdate(imageUrls);
       }
+
+      await refetchImages();
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      toast.success(`${uploaded} foto(s) enviada(s) com sucesso na categoria "${PHOTO_CATEGORIES.find(c => c.value === selectedCategory)?.label}"`);
     } catch (error) {
       console.error('Upload error:', error);
       toast.error('Erro ao enviar fotos');
@@ -114,17 +200,13 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
     }
   };
 
-  const handleDeleteImage = async (imageUrl: string, index: number) => {
+  const handleDeleteImage = async (image: VehicleImage) => {
     try {
-      // Filtrar a imagem do array
-      const newImages = (images || []).filter((_, i) => i !== index);
-
-      // Atualizar no banco
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from('vehicles')
-        .update({ images: newImages })
-        .eq('id', vehicleId);
+      // Deletar da tabela vehicle_images
+      const { error } = await supabase
+        .from('vehicle_images')
+        .delete()
+        .eq('id', image.id);
 
       if (error) {
         console.error('Delete error:', error);
@@ -132,7 +214,20 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
         return;
       }
 
-      onImagesUpdate(newImages);
+      // Atualizar coluna images do veículo
+      const remainingImages = vehicleImages
+        .filter(img => img.id !== image.id)
+        .map(img => img.image_url);
+      
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('vehicles')
+        .update({ images: remainingImages })
+        .eq('id', vehicleId);
+
+      onImagesUpdate(remainingImages);
+      await refetchImages();
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       toast.success('Foto removida com sucesso');
     } catch (error) {
       console.error('Delete error:', error);
@@ -140,33 +235,76 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
     }
   };
 
-  const setMainImage = async (index: number) => {
-    if (index === 0 || !images) return;
-    
+  const setMainImage = async (image: VehicleImage) => {
     try {
-      // Reordenar array - mover imagem selecionada para primeira posição
-      const newImages = [...images];
-      const [selected] = newImages.splice(index, 1);
-      newImages.unshift(selected);
+      // Remover is_cover de todas as outras imagens
+      await supabase
+        .from('vehicle_images')
+        .update({ is_cover: false })
+        .eq('vehicle_id', vehicleId);
 
-      // Atualizar no banco
+      // Definir a nova imagem como cover
+      await supabase
+        .from('vehicle_images')
+        .update({ is_cover: true, display_order: 0 })
+        .eq('id', image.id);
+
+      // Reordenar para que a imagem principal seja a primeira
+      const reorderedImages = [
+        image.image_url,
+        ...vehicleImages.filter(img => img.id !== image.id).map(img => img.image_url)
+      ];
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      await (supabase as any)
         .from('vehicles')
-        .update({ images: newImages })
+        .update({ images: reorderedImages })
         .eq('id', vehicleId);
 
-      if (error) {
-        console.error('Set main image error:', error);
-        toast.error('Erro ao definir foto principal');
-      } else {
-        onImagesUpdate(newImages);
-        toast.success('Foto principal atualizada');
-      }
+      onImagesUpdate(reorderedImages);
+      await refetchImages();
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      toast.success('Foto principal atualizada');
     } catch (error) {
       console.error('Set main image error:', error);
       toast.error('Erro ao definir foto principal');
     }
+  };
+
+  const updateImageCategory = async (image: VehicleImage, newCategory: string) => {
+    try {
+      const { error } = await supabase
+        .from('vehicle_images')
+        .update({ category: newCategory })
+        .eq('id', image.id);
+
+      if (error) {
+        console.error('Update category error:', error);
+        toast.error('Erro ao atualizar categoria');
+        return;
+      }
+
+      await refetchImages();
+      toast.success('Categoria atualizada');
+    } catch (error) {
+      console.error('Update category error:', error);
+      toast.error('Erro ao atualizar categoria');
+    }
+  };
+
+  // Filtrar imagens por categoria
+  const filteredImages = filterCategory === 'all' 
+    ? vehicleImages 
+    : vehicleImages.filter(img => img.category === filterCategory);
+
+  // Contagem por categoria
+  const categoryCounts = PHOTO_CATEGORIES.map(cat => ({
+    ...cat,
+    count: vehicleImages.filter(img => img.category === cat.value).length
+  }));
+
+  const getCategoryInfo = (categoryValue: string | null) => {
+    return PHOTO_CATEGORIES.find(c => c.value === categoryValue) || PHOTO_CATEGORIES[0];
   };
 
   return (
@@ -177,114 +315,198 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
           Fotos do Veículo
         </CardTitle>
         <CardDescription>
-          {images?.length || 0} foto(s) • A primeira foto será a principal
+          {vehicleImages.length} foto(s) • A primeira foto será a principal
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Upload Area */}
         {isManager && (
-          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-              id="photo-upload"
-              disabled={isUploading}
-            />
-            <label 
-              htmlFor="photo-upload" 
-              className={`cursor-pointer flex flex-col items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                  <span className="text-sm font-medium">Enviando... {uploadProgress}%</span>
-                </>
-              ) : (
-                <>
-                  <Upload className="h-10 w-10 text-muted-foreground" />
-                  <span className="text-sm font-medium">Clique para adicionar fotos</span>
-                  <span className="text-xs text-muted-foreground">
-                    JPG, PNG, WEBP (máx. 5MB cada)
-                  </span>
-                </>
-              )}
-            </label>
+          <div className="space-y-3">
+            {/* Seletor de Categoria para Upload */}
+            <div className="flex items-center gap-2">
+              <Tag className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Categoria para upload:</span>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PHOTO_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${cat.color}`} />
+                        {cat.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+                id="photo-upload"
+                disabled={isUploading}
+              />
+              <label 
+                htmlFor="photo-upload" 
+                className={`cursor-pointer flex flex-col items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                    <span className="text-sm font-medium">Enviando... {uploadProgress}%</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-10 w-10 text-muted-foreground" />
+                    <span className="text-sm font-medium">Clique para adicionar fotos</span>
+                    <span className="text-xs text-muted-foreground">
+                      JPG, PNG, WEBP (máx. 5MB cada) • Categoria: <strong>{getCategoryInfo(selectedCategory).label}</strong>
+                    </span>
+                  </>
+                )}
+              </label>
+            </div>
+          </div>
+        )}
+
+        {/* Filtro por Categoria */}
+        {vehicleImages.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Filtrar por categoria:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge 
+                variant={filterCategory === 'all' ? 'default' : 'outline'}
+                className="cursor-pointer"
+                onClick={() => setFilterCategory('all')}
+              >
+                Todas ({vehicleImages.length})
+              </Badge>
+              {categoryCounts.filter(c => c.count > 0).map((cat) => (
+                <Badge 
+                  key={cat.value}
+                  variant={filterCategory === cat.value ? 'default' : 'outline'}
+                  className="cursor-pointer"
+                  onClick={() => setFilterCategory(cat.value)}
+                >
+                  <div className={`w-2 h-2 rounded-full ${cat.color} mr-1`} />
+                  {cat.label} ({cat.count})
+                </Badge>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Images Grid */}
-        {images && images.length > 0 ? (
+        {filteredImages.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {images.map((imageUrl, index) => (
-              <div 
-                key={index} 
-                className={`relative group aspect-video rounded-lg overflow-hidden border ${index === 0 ? 'ring-2 ring-primary' : ''}`}
-              >
-                <img
-                  src={imageUrl}
-                  alt={`Foto ${index + 1}`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/placeholder.svg';
-                  }}
-                />
-                
-                {/* Badge for main image */}
-                {index === 0 && (
-                  <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded">
-                    Principal
-                  </div>
-                )}
+            {filteredImages.map((image) => {
+              const categoryInfo = getCategoryInfo(image.category);
+              return (
+                <div 
+                  key={image.id} 
+                  className={`relative group aspect-video rounded-lg overflow-hidden border ${image.is_cover ? 'ring-2 ring-primary' : ''}`}
+                >
+                  <img
+                    src={image.image_url}
+                    alt={categoryInfo.label}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/placeholder.svg';
+                    }}
+                  />
+                  
+                  {/* Badge for main image */}
+                  {image.is_cover && (
+                    <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded">
+                      Principal
+                    </div>
+                  )}
 
-                {/* Actions overlay */}
-                {isManager && (
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    {index !== 0 && (
-                      <Button 
-                        size="sm" 
-                        variant="secondary"
-                        onClick={() => setMainImage(index)}
-                      >
-                        <GripVertical className="h-4 w-4 mr-1" />
-                        Principal
-                      </Button>
-                    )}
-                    
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button size="sm" variant="destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Remover foto?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteImage(imageUrl, index)}>
-                            Remover
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                  {/* Category Badge */}
+                  <div className={`absolute bottom-2 left-2 text-white text-xs px-2 py-1 rounded ${categoryInfo.color}`}>
+                    {categoryInfo.label}
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Actions overlay */}
+                  {isManager && (
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
+                      {/* Category Selector */}
+                      <Select 
+                        value={image.category || 'geral'} 
+                        onValueChange={(val) => updateImageCategory(image, val)}
+                      >
+                        <SelectTrigger className="w-full h-8 text-xs bg-white/90">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHOTO_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${cat.color}`} />
+                                {cat.label}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <div className="flex gap-2">
+                        {!image.is_cover && (
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            className="h-8 text-xs"
+                            onClick={() => setMainImage(image)}
+                          >
+                            <GripVertical className="h-3 w-3 mr-1" />
+                            Principal
+                          </Button>
+                        )}
+                        
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="destructive" className="h-8">
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Remover foto?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta ação não pode ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteImage(image)}>
+                                Remover
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
             <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>Nenhuma foto cadastrada</p>
-            {isManager && (
+            <p>{filterCategory === 'all' ? 'Nenhuma foto cadastrada' : 'Nenhuma foto nesta categoria'}</p>
+            {isManager && filterCategory === 'all' && (
               <p className="text-sm">Clique acima para adicionar fotos</p>
             )}
           </div>

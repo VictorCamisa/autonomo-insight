@@ -1203,17 +1203,30 @@ ${specialInstructions.year_matching_instructions}
     const vehicleBrands: Record<string, number> = {};
     for (const v of relevantVehicles) {
       // Categorizar por tipo (baseado em modelos conhecidos)
-      const modelLower = (v.model || '').toLowerCase();
-      let category = 'sedan';
-      if (/tracker|creta|compass|renegade|captur|kicks|hr-v|hrv|t-cross|tcross|ecosport|duster|tucson|sportage|rav4|cx-5|cx5|tiguan|trailblazer|sw4/.test(modelLower)) {
+      // IMPORTANTE: Usar versão normalizada (lowercase) e regex mais abrangente
+      const modelLower = (v.model || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const versionLower = (v.version || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const fullName = `${modelLower} ${versionLower}`;
+      
+      let category = 'Outros';
+      
+      // SUV / Crossover - lista expandida com variações
+      if (/tracker|creta|compass|renegade|captur|kicks|hrv|hr-v|tcross|t-cross|ecosport|duster|tucson|sportage|rav4|cx5|cx-5|tiguan|trailblazer|sw4|jimny|vitara|tiggo|caoa|chery|haval|jac|cherry|ix35|santa\s*fe|sorento|outlander|asx|xtrail|x-trail|equinox|spin|edge|territory|bronco|defender|discovery|evoque|velar|q3|q5|q7|x1|x3|x5|glb|glc|gle|xc40|xc60|xc90|2008|3008|5008|cx3|cx30|cx50|seltos|soul|niro|stonic|nivus|taos|atlas/.test(fullName)) {
         category = 'SUV';
-      } else if (/onix|gol|polo|hb20|sandero|ka|fiesta|up!|etios|fit|march|mobi|kwid|argo|cronos/.test(modelLower)) {
-        category = 'Hatch/Compacto';
-      } else if (/hilux|ranger|s10|frontier|amarok|toro|oroch|montana|saveiro|strada/.test(modelLower)) {
+      }
+      // Hatch / Compacto
+      else if (/onix|gol|polo|hb20|sandero|ka|fiesta|up|etios|fit|march|mobi|kwid|argo|cronos|fox|golf|i30|a3|serie1|118|120|a1|yaris|swift|rio|clio|c3|208|punto|bravo|stilo|palio|uno|celta|corsa|astra|focus/.test(fullName)) {
+        category = 'Hatch';
+      }
+      // Picape / Utilitário
+      else if (/hilux|ranger|s10|s-10|frontier|amarok|toro|oroch|montana|saveiro|strada|l200|triton|tacoma|ram|f250|f-250|silverado|maverick/.test(fullName)) {
         category = 'Picape';
-      } else if (/civic|corolla|cruze|jetta|sentra|city|fluence|virtus|voyage|prisma/.test(modelLower)) {
+      }
+      // Sedan
+      else if (/civic|corolla|cruze|jetta|sentra|city|fluence|virtus|voyage|prisma|versa|cobalt|onix\s*plus|hb20s|logan|siena|linea|cerato|elantra|fusion|passat|a4|serie3|320|c180|c200|c250/.test(fullName)) {
         category = 'Sedan';
       }
+      
       vehicleCategories[category] = (vehicleCategories[category] || 0) + 1;
       
       const brand = v.brand || 'Outro';
@@ -3530,26 +3543,33 @@ ${conversationSummary}`;
 ${aiInsights}`;
     }
 
+    // Build PERSONALIZED ficha - only show what was actually collected
+    const financialLines: string[] = [];
+    if (qualData?.budget) financialLines.push(`• Orçamento: ${formatCurrency(qualData.budget)}`);
+    if (qualData?.down_payment) financialLines.push(`• Entrada: ${formatCurrency(qualData.down_payment)}`);
+    if (qualData?.desired_installment) financialLines.push(`• Parcela: ${formatCurrency(qualData.desired_installment)}/mês`);
+    if (qualData?.clean_credit !== undefined) {
+      financialLines.push(`• Crédito: ${qualData.clean_credit === true ? '✅ Nome limpo' : '❌ Com restrição'}`);
+    }
+    if (qualData?.cpf) financialLines.push(`• CPF: ${qualData.cpf}`);
+    
+    const financialSection = financialLines.length > 0 
+      ? `\n💰 *PERFIL FINANCEIRO*\n${financialLines.join('\n')}`
+      : '';
+    
+    const interestSection = qualData?.vehicle_interest 
+      ? `\n\n🚗 *INTERESSE*\n${qualData.vehicle_interest}`
+      : '';
+
     const fichaMensagem = `🔥 *LEAD QUENTE - AÇÃO IMEDIATA*
 
 ━━━━━━━━━━━━━━━━━━━━━
 👤 *${lead?.name || 'Cliente'}*
 📱 ${whatsappLink}
-━━━━━━━━━━━━━━━━━━━━━
-
-💰 *PERFIL FINANCEIRO*
-• Orçamento: ${formatCurrency(qualData?.budget)}
-• Entrada: ${formatCurrency(qualData?.down_payment)}
-• Parcela: ${formatCurrency(qualData?.desired_installment)}/mês
-• Crédito: ${qualData?.clean_credit === true ? '✅ Aprovado' : qualData?.clean_credit === false ? '❌ Restrição' : '⏳ Verificar'}
-
-🚗 *INTERESSE*
-${qualData?.vehicle_interest || 'Não especificado'}
-
-📋 CPF: ${qualData?.cpf || 'Não informado'}${summarySection}${insightsSection}${suggestionsSection}
+━━━━━━━━━━━━━━━━━━━━━${financialSection}${interestSection}${summarySection}${insightsSection}${suggestionsSection}
 
 ━━━━━━━━━━━━━━━━━━━━━
-⚡ *Qualificado agora - Seja o primeiro!*`;
+⚡ *Entre em contato agora!*`;
 
     // Send via Evolution API
     const evolutionUrl = Deno.env.get('EVOLUTION_API_URL')?.replace(/\/$/, '');

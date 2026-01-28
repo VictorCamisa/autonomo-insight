@@ -1318,19 +1318,96 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
     systemPrompt += `\n\n⚠️ ATENÇÃO: O cliente pediu ano ${ragQueryInfo.extracted_year}, mas NÃO TEMOS exatamente esse ano. Os veículos abaixo são os mais SIMILARES.\n`;
   }
 
-  // ===== VEÍCULO ATIVO: Destacar no prompt para a IA =====
-  // Isso resolve o problema de "foto do painel" sem especificar o carro
+  // ===== VEÍCULO ATIVO: Buscar TODAS as fotos categorizadas e incluir no prompt =====
+  // Isso resolve o problema de "foto do painel" / "tem interna?" sem especificar o carro
   if (activeVehicle) {
+    // Buscar TODAS as fotos categorizadas do veículo ativo DIRETAMENTE
+    const { data: activeVehiclePhotos } = await supabase
+      .from('vehicle_images')
+      .select('image_url, category, is_cover')
+      .eq('vehicle_id', activeVehicle.id)
+      .order('display_order', { ascending: true });
+    
+    console.log('[Active Vehicle Photos] Found', activeVehiclePhotos?.length || 0, 'photos for', activeVehicle.brand, activeVehicle.model);
+    
+    // Organizar fotos por categoria
+    const activePhotosByCategory: Record<string, string[]> = {};
+    let activeFotoPrincipal = '';
+    
+    if (activeVehiclePhotos && activeVehiclePhotos.length > 0) {
+      for (const photo of activeVehiclePhotos) {
+        if (photo.is_cover && !activeFotoPrincipal) {
+          activeFotoPrincipal = photo.image_url;
+        }
+        const cat = photo.category || 'geral';
+        if (!activePhotosByCategory[cat]) {
+          activePhotosByCategory[cat] = [];
+        }
+        activePhotosByCategory[cat].push(photo.image_url);
+      }
+      if (!activeFotoPrincipal && activeVehiclePhotos.length > 0) {
+        activeFotoPrincipal = activeVehiclePhotos[0].image_url;
+      }
+    }
+    
+    // Mapear categorias do banco para labels amigáveis
+    const categoryLabelsActive: Record<string, string> = {
+      'geral': 'foto_geral',
+      'exterior_frontal': 'foto_frente',
+      'exterior_traseira': 'foto_traseira',
+      'exterior_lateral_esq': 'foto_lateral_esq',
+      'exterior_lateral_dir': 'foto_lateral_dir',
+      'interior_painel': 'foto_painel',
+      'interior_bancos': 'foto_bancos',
+      'interior_traseiro': 'foto_banco_traseiro',
+      'motor': 'foto_motor',
+      'porta_malas': 'foto_porta_malas',
+      'documentos': 'foto_documentos',
+      'detalhes': 'foto_detalhes',
+    };
+    
     systemPrompt += `\n
 ===== ⭐ VEÍCULO ATIVO DA CONVERSA =====
 O cliente está conversando sobre este veículo ESPECÍFICO:
 🚗 ${activeVehicle.brand} ${activeVehicle.model} ${activeVehicle.year_model || activeVehicle.year_fabrication || ''}
 
-⚠️ REGRA: Quando o cliente perguntar "foto do painel", "foto dos bancos", "foto do motor", etc. SEM especificar o carro:
+⚠️ REGRA CRÍTICA: Quando o cliente perguntar "foto do painel", "foto dos bancos", "tem interna?", "foto do motor", etc. SEM especificar o carro:
    → Assuma que ele quer do ${activeVehicle.brand} ${activeVehicle.model}
-   → Use as fotos DESTE veículo (listadas abaixo)
+   → Use as fotos DESTE veículo listadas AQUI
    → NÃO pergunte "de qual carro?" - você já sabe!
 
+📸 FOTOS DISPONÍVEIS DESTE VEÍCULO:`;
+
+    if (activeFotoPrincipal) {
+      systemPrompt += `\n   - foto_principal: ${activeFotoPrincipal}`;
+    }
+    
+    // Listar TODAS as categorias com fotos
+    for (const [cat, urls] of Object.entries(activePhotosByCategory)) {
+      const label = categoryLabelsActive[cat] || `foto_${cat}`;
+      // Mostrar primeira foto de cada categoria
+      systemPrompt += `\n   - ${label}: ${urls[0]}`;
+    }
+    
+    // Mostrar categorias disponíveis de forma clara
+    const availableCategories = Object.keys(activePhotosByCategory).map(cat => categoryLabelsActive[cat] || cat);
+    systemPrompt += `\n\n📋 RESUMO: Temos fotos de: ${availableCategories.join(', ')}`;
+    
+    // Se tem fotos de interior, destacar
+    const interiorPhotos = ['interior_painel', 'interior_bancos', 'interior_traseiro'].filter(cat => activePhotosByCategory[cat]);
+    if (interiorPhotos.length > 0) {
+      systemPrompt += `\n✅ TEM FOTOS DE INTERIOR! (painel, bancos, banco traseiro)`;
+    }
+
+    if (Object.keys(activePhotosByCategory).length === 0) {
+      systemPrompt += `\n   ⚠️ Nenhuma foto cadastrada para este veículo`;
+    }
+
+    systemPrompt += `
+
+⚠️ REGRA: Se o cliente pedir "foto interna", "tem interna?", "foto por dentro":
+   → Use foto_painel OU foto_bancos OU foto_banco_traseiro (qualquer uma que exista)
+   
 ⚠️ REGRA: Se NÃO houver a foto específica pedida:
    → Diga: "Não temos foto [do painel/dos bancos/etc] do ${activeVehicle.model} no sistema ainda"
    → NÃO use foto de outro veículo!

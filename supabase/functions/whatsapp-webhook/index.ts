@@ -970,14 +970,22 @@ ${specialInstructions.photo_instructions}
     systemPrompt += `
 
 ===== REGRA CRÍTICA DE FOTOS =====
-⚠️ ATENÇÃO: NUNCA envie foto de um veículo diferente do que o cliente pediu!
+⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA: NUNCA envie foto de um veículo diferente do pedido! ⚠️⚠️⚠️
 
-📸 COMO ENCONTRAR E ENVIAR FOTOS:
-1. Localize o veículo EXATO no estoque pelo NOME
-2. Veja a seção "📸 FOTOS DISPONÍVEIS:" logo abaixo do veículo
-3. As fotos estão organizadas por categoria:
+🚨 ERRO GRAVÍSSIMO A EVITAR:
+   Cliente pergunta sobre: Chevrolet Tracker 2015
+   ❌ NUNCA use fotos de: Jeep Renegade, Onix, ou QUALQUER outro carro
+   ✅ APENAS use fotos que estejam ABAIXO da linha "Chevrolet Tracker 2015"
+
+📸 COMO ENCONTRAR E ENVIAR FOTOS CORRETAMENTE:
+1. Identifique o veículo EXATO que o cliente está perguntando (marca + modelo + ano)
+2. Na lista de veículos, encontre a linha correspondente: "• Chevrolet Tracker 2015 | R$ XX.XXX | XX km"
+3. As fotos disponíveis aparecem LOGO ABAIXO dessa linha, na seção "📸 FOTOS DISPONÍVEIS:"
+4. Se aparecer "⚠️ SEM FOTO", significa que NÃO temos fotos deste veículo
+
+📸 CATEGORIAS DE FOTOS (procure pelo nome exato):
    - foto_principal: foto de capa/destaque
-   - foto_painel: painel/instrumentos
+   - foto_painel: painel/instrumentos  
    - foto_bancos: bancos dianteiros/interior
    - foto_banco_traseiro: banco traseiro
    - foto_motor: motor do veículo
@@ -985,20 +993,28 @@ ${specialInstructions.photo_instructions}
    - foto_traseira: vista traseira externa
    - foto_lateral_esq/foto_lateral_dir: vistas laterais
 
-4. Se o cliente pedir uma foto específica (ex: "foto do painel"):
-   - Procure "foto_painel" na lista de fotos do veículo
-   - Se EXISTIR: Use [ENVIAR_FOTO: URL] com a URL exata
-   - Se NÃO EXISTIR: Diga que não temos essa foto específica
+📸 PROCEDIMENTO PARA ENVIAR FOTO:
+   1. Cliente pede: "tem foto do painel?"
+   2. Você identifica: cliente está falando sobre qual veículo? (veja contexto da conversa)
+   3. Localize esse veículo ESPECÍFICO na lista
+   4. Veja se existe "foto_painel" nas fotos DAQUELE veículo
+   5. Se EXISTIR: Use [ENVIAR_FOTO: URL] copiando a URL EXATA daquela foto
+   6. Se NÃO EXISTIR: Diga "Não temos foto do painel deste [marca modelo] no momento"
 
-Exemplo quando TEM a foto pedida:
-Cliente: "tem foto do painel?"
-Você: "Claro! Aqui está o painel do Tracker! 👇
-[ENVIAR_FOTO: https://url-da-foto-painel.jpg]"
+⚠️ VERIFICAÇÃO OBRIGATÓRIA:
+   - A URL que você está usando PERTENCE ao veículo correto?
+   - Verifique se a URL está na seção "📸 FOTOS DISPONÍVEIS" do veículo certo!
 
-Exemplo quando NÃO TEM a foto pedida:
-Cliente: "tem foto do motor?"
-(Se não houver foto_motor na lista)
-Você: "Ainda não temos foto do motor desse veículo no sistema, mas posso te mostrar pessoalmente!"
+Exemplo CORRETO:
+Cliente: "Pode mandar foto dos bancos do Tracker?"
+(Você localiza na lista: "• Chevrolet Tracker 2015 | R$ 72.990 | 87.000 km")
+(Abaixo vê: "📸 FOTOS DISPONÍVEIS:" e encontra "foto_bancos: https://...")
+Você: "Claro! Aqui estão os bancos do Tracker 2015! 👇
+[ENVIAR_FOTO: https://url-dos-bancos-do-tracker.jpg]"
+
+Exemplo quando NÃO TEM:
+(Você localiza o veículo mas NÃO vê "foto_bancos" listada)
+Você: "Infelizmente ainda não temos foto dos bancos do Tracker 2015 no sistema. Posso te mostrar pessoalmente na loja!"
 `;
   }
 
@@ -2720,19 +2736,19 @@ ${qualData?.vehicle_interest || 'Não especificado'}
 async function searchVehiclesWithRAG(query: string): Promise<{ vehicles: any[]; query_info: any }> {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
   
-  if (!LOVABLE_API_KEY) {
-    console.log('[RAG] No LOVABLE_API_KEY, skipping RAG search');
+  if (!OPENAI_API_KEY) {
+    console.log('[RAG] No OPENAI_API_KEY, skipping RAG search');
     return { vehicles: [], query_info: null };
   }
   
   try {
-    // Generate embedding for the query
-    const embeddingResponse = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+    // Generate embedding for the query using OpenAI directly
+    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -2742,7 +2758,8 @@ async function searchVehiclesWithRAG(query: string): Promise<{ vehicles: any[]; 
     });
 
     if (!embeddingResponse.ok) {
-      console.error('[RAG] Embedding error:', await embeddingResponse.text());
+      const errorText = await embeddingResponse.text();
+      console.error('[RAG] Embedding error:', errorText);
       return { vehicles: [], query_info: null };
     }
 
@@ -2750,8 +2767,11 @@ async function searchVehiclesWithRAG(query: string): Promise<{ vehicles: any[]; 
     const queryEmbedding = embeddingData.data?.[0]?.embedding;
     
     if (!queryEmbedding) {
+      console.log('[RAG] No embedding returned');
       return { vehicles: [], query_info: null };
     }
+    
+    console.log('[RAG] Embedding generated successfully, dimensions:', queryEmbedding.length);
 
     // Extract year from query
     const yearMatch = query.match(/\b(19|20)\d{2}\b/);

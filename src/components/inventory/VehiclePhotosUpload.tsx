@@ -97,21 +97,28 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
 
   // Sincronizar imagens antigas (da coluna vehicles.images) para vehicle_images
   const syncLegacyImages = async () => {
-    if (!images || images.length === 0 || vehicleImages.length > 0) return;
+    if (!images || images.length === 0) return;
     
     setIsSyncing(true);
     try {
-      // Verificar quais imagens já existem na tabela vehicle_images
-      const existingUrls = vehicleImages.map(img => img.image_url);
-      const newImages = images.filter(url => !existingUrls.includes(url));
+      // IMPORTANTE: Buscar do banco de dados diretamente para evitar problemas de cache
+      const { data: existingImages } = await supabase
+        .from('vehicle_images')
+        .select('image_url')
+        .eq('vehicle_id', vehicleId);
+      
+      const existingUrls = new Set((existingImages || []).map(img => img.image_url));
+      
+      // Filtrar apenas URLs que realmente não existem
+      const newImages = images.filter(url => url && !existingUrls.has(url));
       
       if (newImages.length > 0) {
         const insertData = newImages.map((url, index) => ({
           vehicle_id: vehicleId,
           image_url: url,
           category: 'geral',
-          display_order: index,
-          is_cover: index === 0
+          display_order: existingUrls.size + index,
+          is_cover: existingUrls.size === 0 && index === 0
         }));
 
         const { error } = await supabase

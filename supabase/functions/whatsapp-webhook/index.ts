@@ -1065,6 +1065,29 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
   }
 
   if (relevantVehicles.length > 0) {
+    // Buscar fotos da tabela vehicle_images para cada veículo
+    const vehicleIds = relevantVehicles.map((v: any) => v.id);
+    const { data: vehiclePhotos } = await supabase
+      .from('vehicle_images')
+      .select('vehicle_id, image_url, category, is_cover')
+      .in('vehicle_id', vehicleIds)
+      .order('display_order', { ascending: true });
+    
+    // Agrupar fotos por veículo
+    const photosByVehicle: Record<string, { url: string; category: string | null; is_cover: boolean | null }[]> = {};
+    if (vehiclePhotos) {
+      vehiclePhotos.forEach((p: any) => {
+        if (!photosByVehicle[p.vehicle_id]) {
+          photosByVehicle[p.vehicle_id] = [];
+        }
+        photosByVehicle[p.vehicle_id].push({
+          url: p.image_url,
+          category: p.category,
+          is_cover: p.is_cover
+        });
+      });
+    }
+    
     systemPrompt += '\n\n=== VEÍCULOS DISPONÍVEIS ===\n';
     
     relevantVehicles.forEach((v: any) => {
@@ -1072,12 +1095,24 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
       const km = v.km ? `${Number(v.km).toLocaleString('pt-BR')} km` : 'N/A';
       const ano = v.year_model || v.year_fabrication || 'N/A';
       const versao = v.version ? ` ${v.version}` : '';
-      const fotos = v.images && v.images.length > 0 ? v.images : [];
       const similaridade = v.similarity ? ` (relevância: ${Math.round(v.similarity * 100)}%)` : '';
       
+      // Pegar fotos da tabela vehicle_images OU do campo images (fallback)
+      const dbPhotos = photosByVehicle[v.id] || [];
+      const legacyPhotos = v.images && v.images.length > 0 ? v.images : [];
+      
+      // Priorizar foto da tabela vehicle_images (com is_cover primeiro)
+      let fotoPrincipal = '';
+      if (dbPhotos.length > 0) {
+        const coverPhoto = dbPhotos.find((p) => p.is_cover);
+        fotoPrincipal = coverPhoto ? coverPhoto.url : dbPhotos[0].url;
+      } else if (legacyPhotos.length > 0) {
+        fotoPrincipal = legacyPhotos[0];
+      }
+      
       systemPrompt += `• ${v.brand} ${v.model}${versao} ${ano} | ${preco} | ${km}`;
-      if (fotos.length > 0) {
-        systemPrompt += ` | foto: ${fotos[0]}`;
+      if (fotoPrincipal) {
+        systemPrompt += ` | foto: ${fotoPrincipal}`;
       } else {
         systemPrompt += ` | ⚠️ SEM FOTO`;
       }

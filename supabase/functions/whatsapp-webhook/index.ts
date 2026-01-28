@@ -1442,6 +1442,32 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
     const extractedPhotos: string[] = [];
     const blockedPhotos: string[] = [];
     let match;
+    
+    // Helper function: Encontrar URL completa que começa com o prefixo truncado
+    function findMatchingUrl(truncatedUrl: string, validUrls: Set<string>): string | null {
+      // 1. Match exato
+      if (validUrls.has(truncatedUrl)) {
+        return truncatedUrl;
+      }
+      // 2. Match por prefixo (IA às vezes trunca a URL)
+      for (const fullUrl of validUrls) {
+        if (fullUrl.startsWith(truncatedUrl) || truncatedUrl.startsWith(fullUrl)) {
+          return fullUrl;
+        }
+      }
+      // 3. Match por ID do veículo na URL (ex: /fada1afb-d745-4f79-93f0-070ffe86c4e2/)
+      const uuidMatch = truncatedUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
+      if (uuidMatch) {
+        const vehicleUuid = uuidMatch[1].toLowerCase();
+        for (const fullUrl of validUrls) {
+          if (fullUrl.toLowerCase().includes(vehicleUuid)) {
+            return fullUrl; // Retorna a primeira foto válida desse veículo
+          }
+        }
+      }
+      return null;
+    }
+    
     while ((match = photoRegex.exec(aiResponse)) !== null) {
       const photoUrl = match[1].trim();
       
@@ -1449,11 +1475,14 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       // Esta é a última linha de defesa contra envio de fotos erradas
       let isPhotoValid = false;
       let photoVehicleInfo = '';
+      let resolvedUrl = photoUrl; // URL final a ser enviada (pode ser a completa)
       
       // Se temos veículo ativo, verificar se a foto pertence a ele
       if (activeVehicle && validPhotoUrls[activeVehicle.id]) {
-        if (validPhotoUrls[activeVehicle.id].has(photoUrl)) {
+        const matchedUrl = findMatchingUrl(photoUrl, validPhotoUrls[activeVehicle.id]);
+        if (matchedUrl) {
           isPhotoValid = true;
+          resolvedUrl = matchedUrl;
           photoVehicleInfo = `${activeVehicle.brand} ${activeVehicle.model}`;
           console.log('[Photo Validation] ✅ VALID - Photo belongs to active vehicle:', photoVehicleInfo);
         }
@@ -1462,11 +1491,13 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       // Se não tem veículo ativo ou foto não é dele, verificar se pertence a algum veículo do contexto
       if (!isPhotoValid) {
         for (const vehicleId of Object.keys(validPhotoUrls)) {
-          if (validPhotoUrls[vehicleId].has(photoUrl)) {
+          const matchedUrl = findMatchingUrl(photoUrl, validPhotoUrls[vehicleId]);
+          if (matchedUrl) {
             // Encontrou o veículo dono da foto
             const vehicleOwner = relevantVehicles.find((v: any) => v.id === vehicleId);
             if (vehicleOwner) {
               isPhotoValid = true;
+              resolvedUrl = matchedUrl;
               photoVehicleInfo = `${vehicleOwner.brand} ${vehicleOwner.model}`;
               console.log('[Photo Validation] ✅ VALID - Photo belongs to:', photoVehicleInfo);
             }
@@ -1475,13 +1506,13 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
         }
       }
       
-      // Se a foto é válida (pertence a algum veículo do contexto), adicionar
+      // Se a foto é válida (pertence a algum veículo do contexto), adicionar a URL COMPLETA
       if (isPhotoValid) {
-        extractedPhotos.push(photoUrl);
+        extractedPhotos.push(resolvedUrl);
       } else {
         // BLOQUEAR foto que não pertence a nenhum veículo do contexto
         blockedPhotos.push(photoUrl);
-        console.warn('[Photo Validation] ❌ BLOCKED - Photo URL not from any vehicle in context:', photoUrl.substring(0, 80));
+        console.warn('[Photo Validation] ❌ BLOCKED - Photo URL not from any vehicle in context:', photoUrl.substring(0, 100));
       }
     }
 

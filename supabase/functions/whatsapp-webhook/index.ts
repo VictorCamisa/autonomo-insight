@@ -1091,10 +1091,11 @@ ${specialInstructions.year_matching_instructions}
 ${specialInstructions.photo_instructions}
 `;
   } else {
-    // Default photo instructions - UPDATED for categorized photos
+    // Default photo instructions - UPDATED for natural conversation flow
     systemPrompt += `
 
-===== REGRA CRÍTICA DE FOTOS =====
+===== 📸 REGRA CRÍTICA DE FOTOS =====
+
 ⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA: NUNCA envie foto de um veículo diferente do pedido! ⚠️⚠️⚠️
 
 🚨 ERRO GRAVÍSSIMO A EVITAR:
@@ -1102,13 +1103,13 @@ ${specialInstructions.photo_instructions}
    ❌ NUNCA use fotos de: Jeep Renegade, Onix, ou QUALQUER outro carro
    ✅ APENAS use fotos que estejam ABAIXO da linha "Chevrolet Tracker 2015"
 
-📸 COMO ENCONTRAR E ENVIAR FOTOS CORRETAMENTE:
+📸 COMO ENCONTRAR FOTOS:
 1. Identifique o veículo EXATO que o cliente está perguntando (marca + modelo + ano)
-2. Na lista de veículos, encontre a linha correspondente: "• Chevrolet Tracker 2015 | R$ XX.XXX | XX km"
-3. As fotos disponíveis aparecem LOGO ABAIXO dessa linha, na seção "📸 FOTOS DISPONÍVEIS:"
+2. Na lista de veículos, encontre a linha correspondente
+3. As fotos disponíveis aparecem LOGO ABAIXO, na seção "📸 FOTOS DISPONÍVEIS:"
 4. Se aparecer "⚠️ SEM FOTO", significa que NÃO temos fotos deste veículo
 
-📸 CATEGORIAS DE FOTOS (procure pelo nome exato):
+📸 CATEGORIAS DE FOTOS:
    - foto_principal: foto de capa/destaque
    - foto_painel: painel/instrumentos  
    - foto_bancos: bancos dianteiros/interior
@@ -1118,31 +1119,46 @@ ${specialInstructions.photo_instructions}
    - foto_traseira: vista traseira externa
    - foto_lateral_esq/foto_lateral_dir: vistas laterais
 
-📸 PROCEDIMENTO PARA ENVIAR FOTO:
-   1. Cliente pede: "tem foto do painel?"
-   2. Você identifica: cliente está falando sobre qual veículo? (veja contexto da conversa)
-   3. Localize esse veículo ESPECÍFICO na lista
-   4. Veja se existe "foto_painel" nas fotos DAQUELE veículo
-   5. Se EXISTIR: Use [ENVIAR_FOTO: URL] copiando a URL EXATA daquela foto
-   6. Se NÃO EXISTIR: Diga "Não temos foto do painel deste [marca modelo] no momento"
+===== ⚠️⚠️⚠️ REGRA ABSOLUTAMENTE CRÍTICA DE ENVIO DE FOTOS ⚠️⚠️⚠️ =====
 
-⚠️ VERIFICAÇÃO OBRIGATÓRIA:
-   - A URL que você está usando PERTENCE ao veículo correto?
-   - Verifique se a URL está na seção "📸 FOTOS DISPONÍVEIS" do veículo certo!
+🚫🚫🚫 NUNCA, JAMAIS, EM HIPÓTESE ALGUMA escreva:
+   ❌ "Sim! Aqui estão as fotos:"
+   ❌ "Vou te mandar as fotos"
+   ❌ "Segue a foto do..."
+   ❌ "[ENVIAR_FOTO: URL]" (a tag NÃO pode aparecer como texto!)
 
-Exemplo CORRETO:
-Cliente: "Pode mandar foto dos bancos do Tracker?"
-(Você localiza na lista: "• Chevrolet Tracker 2015 | R$ 72.990 | 87.000 km")
-(Abaixo vê: "📸 FOTOS DISPONÍVEIS:" e encontra "foto_bancos: https://...")
-Você: "[ENVIAR_FOTO: https://url-dos-bancos-do-tracker.jpg]"
+✅✅✅ FORMATO OBRIGATÓRIO:
+   - Escreva uma frase NATURAL e CURTA
+   - Depois pule linha e coloque APENAS a(s) tag(s)
+   - SEM texto antes/depois/junto da tag!
 
-⚠️ IMPORTANTE: Ao enviar fotos, NÃO adicione texto descritivo como "Aqui estão as fotos" ou "Segue a foto".
-Apenas envie a tag [ENVIAR_FOTO: URL] diretamente, sem texto adicional explicando qual foto está enviando.
-Se o cliente pediu múltiplas fotos, envie todas as tags [ENVIAR_FOTO] em sequência sem descrições entre elas.
+📝 EXEMPLOS CORRETOS:
 
-Exemplo quando NÃO TEM:
-(Você localiza o veículo mas NÃO vê "foto_bancos" listada)
-Você: "Infelizmente ainda não temos foto dos bancos do Tracker 2015 no sistema. Posso te mostrar pessoalmente na loja!"
+Cliente: "Tem foto do carro?"
+✅ CORRETO:
+Claro, deixa eu te mostrar!
+
+[ENVIAR_FOTO: https://url-da-foto.jpg]
+
+Cliente: "Me manda umas fotos por favor"
+✅ CORRETO:
+Com certeza! Olha só como ele está lindo 😍
+
+[ENVIAR_FOTO: https://url1.jpg]
+[ENVIAR_FOTO: https://url2.jpg]
+[ENVIAR_FOTO: https://url3.jpg]
+
+📝 EXEMPLOS ERRADOS (NUNCA FAÇA):
+
+❌ ERRADO: "Sim! Aqui estão as fotos da BMW X1 2022: [ENVIAR_FOTO: url]"
+❌ ERRADO: "Vou te enviar as fotos agora [ENVIAR_FOTO: url]"
+❌ ERRADO: "[ENVIAR_FOTO: url] Essa é a foto do painel"
+
+⚠️ A tag [ENVIAR_FOTO:] será REMOVIDA e a foto enviada SEPARADAMENTE.
+   Se você colocar texto junto, o cliente verá o texto SEM a foto junto!
+
+Quando NÃO TEM foto:
+"Infelizmente ainda não temos foto dos bancos do Tracker 2015 no sistema. Posso te mostrar pessoalmente na loja!"
 `;
   }
 

@@ -3873,6 +3873,7 @@ export type Database = {
       }
       vehicle_images: {
         Row: {
+          category: string | null
           created_at: string
           display_order: number | null
           id: string
@@ -3881,6 +3882,7 @@ export type Database = {
           vehicle_id: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           display_order?: number | null
           id?: string
@@ -3889,6 +3891,7 @@ export type Database = {
           vehicle_id: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           display_order?: number | null
           id?: string

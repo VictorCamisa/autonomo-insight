@@ -17,7 +17,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
     const body = await req.json();
     const { 
@@ -69,10 +69,25 @@ serve(async (req) => {
 
     console.log('[RAG Search] Extracted - Year:', effectiveTargetYear, 'Max Price:', effectiveMaxPrice);
 
-    // Use text-based search since Lovable AI doesn't support embeddings
+    // If OpenAI API key is available, use semantic search with embeddings
+    if (OPENAI_API_KEY) {
+      console.log('[RAG Search] Using OpenAI embeddings for semantic search');
+      return await semanticSearchWithOpenAI(
+        supabase,
+        OPENAI_API_KEY,
+        query,
+        max_results,
+        effectiveTargetYear,
+        year_tolerance,
+        effectiveMaxPrice,
+        price_tolerance_percent
+      );
+    }
+
+    // Fallback to text-based search if no API key
+    console.log('[RAG Search] No OpenAI API key, falling back to text search');
     return await smartTextSearch(
       supabase, 
-      LOVABLE_API_KEY,
       query, 
       max_results, 
       effectiveTargetYear, 
@@ -93,10 +108,10 @@ serve(async (req) => {
   }
 });
 
-// Smart text search with keyword extraction and scoring
-async function smartTextSearch(
+// Semantic search using OpenAI embeddings and pgvector
+async function semanticSearchWithOpenAI(
   supabase: any,
-  apiKey: string | undefined,
+  apiKey: string,
   query: string,
   maxResults: number,
   targetYear: number | null,
@@ -104,7 +119,143 @@ async function smartTextSearch(
   maxPrice: number | null,
   priceTolerance: number
 ): Promise<Response> {
-  console.log('[RAG Search] Using smart text search');
+  try {
+    // Generate embedding for the query using OpenAI
+    console.log('[RAG Search] Generating embedding with OpenAI text-embedding-3-small...');
+    
+    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: query,
+      }),
+    });
+
+    if (!embeddingResponse.ok) {
+      const errorText = await embeddingResponse.text();
+      console.error('[RAG Search] OpenAI embedding error:', embeddingResponse.status, errorText);
+      // Fallback to text search if embedding fails
+      return await smartTextSearch(supabase, query, maxResults, targetYear, yearTolerance, maxPrice, priceTolerance);
+    }
+
+    const embeddingData = await embeddingResponse.json();
+    const queryEmbedding = embeddingData.data?.[0]?.embedding;
+
+    if (!queryEmbedding) {
+      console.error('[RAG Search] No embedding returned from OpenAI');
+      return await smartTextSearch(supabase, query, maxResults, targetYear, yearTolerance, maxPrice, priceTolerance);
+    }
+
+    console.log('[RAG Search] Embedding generated successfully, dimensions:', queryEmbedding.length);
+
+    // Use pgvector RPC function for similarity search
+    const { data: searchResults, error: searchError } = await supabase
+      .rpc('search_similar_vehicles', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.4, // Lower threshold for more results
+        match_count: maxResults * 2, // Get more results for filtering
+        year_tolerance: yearTolerance,
+        target_year: targetYear
+      });
+
+    if (searchError) {
+      console.error('[RAG Search] Vector search error:', searchError);
+      return await smartTextSearch(supabase, query, maxResults, targetYear, yearTolerance, maxPrice, priceTolerance);
+    }
+
+    console.log('[RAG Search] Vector search returned', searchResults?.length || 0, 'results');
+
+    if (!searchResults || searchResults.length === 0) {
+      console.log('[RAG Search] No vector results, falling back to text search');
+      return await smartTextSearch(supabase, query, maxResults, targetYear, yearTolerance, maxPrice, priceTolerance);
+    }
+
+    // Get full vehicle details for matched IDs
+    const vehicleIds = searchResults.map((r: any) => r.vehicle_id);
+    const { data: vehicles, error: vehiclesError } = await supabase
+      .from('vehicles')
+      .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, images, status')
+      .in('id', vehicleIds)
+      .eq('status', 'disponivel');
+
+    if (vehiclesError) {
+      console.error('[RAG Search] Error fetching vehicle details:', vehiclesError);
+      return await smartTextSearch(supabase, query, maxResults, targetYear, yearTolerance, maxPrice, priceTolerance);
+    }
+
+    // Merge with similarity scores and filter by price if needed
+    let vehiclesWithScores = (vehicles || []).map((v: any) => {
+      const searchResult = searchResults.find((r: any) => r.vehicle_id === v.id);
+      return { 
+        ...v, 
+        similarity: searchResult?.similarity || 0,
+        search_text: searchResult?.search_text || ''
+      };
+    });
+
+    // Apply price filter if specified
+    if (maxPrice) {
+      const maxWithTolerance = maxPrice * (1 + priceTolerance / 100);
+      vehiclesWithScores = vehiclesWithScores.filter((v: any) => 
+        !v.sale_price || v.sale_price <= maxWithTolerance
+      );
+    }
+
+    // Sort by similarity and limit results
+    vehiclesWithScores = vehiclesWithScores
+      .sort((a: any, b: any) => b.similarity - a.similarity)
+      .slice(0, maxResults);
+
+    // Extract photo URL from first image
+    vehiclesWithScores = vehiclesWithScores.map((v: any) => ({
+      ...v,
+      photo_url: v.images?.[0] || null
+    }));
+
+    const hasExactYearMatch = targetYear && vehiclesWithScores.some((v: any) => 
+      v.year_model === targetYear || v.year_fabrication === targetYear
+    );
+
+    console.log('[RAG Search] Returning', vehiclesWithScores.length, 'vehicles via semantic search');
+
+    return new Response(JSON.stringify({ 
+      success: true,
+      vehicles: vehiclesWithScores,
+      query_info: {
+        original_query: query,
+        extracted_year: targetYear,
+        extracted_max_price: maxPrice,
+        has_exact_year_match: hasExactYearMatch,
+        year_tolerance_applied: !hasExactYearMatch && targetYear ? yearTolerance : 0,
+        search_method: 'openai_embedding',
+        embedding_model: 'text-embedding-3-small'
+      }
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+  } catch (error) {
+    console.error('[RAG Search] Semantic search error:', error);
+    // Fallback to text search on any error
+    return await smartTextSearch(supabase, query, maxResults, targetYear, yearTolerance, maxPrice, priceTolerance);
+  }
+}
+
+// Smart text search with keyword extraction and scoring (fallback)
+async function smartTextSearch(
+  supabase: any,
+  query: string,
+  maxResults: number,
+  targetYear: number | null,
+  yearTolerance: number,
+  maxPrice: number | null,
+  priceTolerance: number
+): Promise<Response> {
+  console.log('[RAG Search] Using smart text search (fallback)');
 
   // Get all search texts from vehicle_embeddings
   const { data: embeddings, error: embError } = await supabase
@@ -154,7 +305,7 @@ async function smartTextSearch(
     });
   }
 
-  // EXPANDED: Stop words + normalize keywords more aggressively
+  // Stop words + normalize keywords
   const stopWords = ['que', 'para', 'com', 'sem', 'até', 'ate', 'mil', 'carro', 'veículo', 'veiculo', 
     'procuro', 'quero', 'busco', 'tem', 'tenho', 'interesse', 'um', 'uma', 'dos', 'das', 'de', 'do', 'da',
     'isso', 'esse', 'essa', 'este', 'esta', 'voces', 'vocês', 'ainda', 'vendeu', 'sobre', 'qual', 'quais',
@@ -211,7 +362,7 @@ async function smartTextSearch(
       }
     }
 
-    // Extract photo URL from search text
+    // Extract photo URL
     let photoUrl = null;
     const photoMatch = searchText.match(/foto:(https?:\/\/[^\s]+)/);
     if (photoMatch) {
@@ -239,13 +390,11 @@ async function smartTextSearch(
     console.log('[RAG Search] No keyword matches, returning top vehicles by filters');
     const fallbackResults = scoredVehicles
       .sort((a: any, b: any) => {
-        // Sort by year match if target year specified
         if (targetYear) {
           const yearDiffA = Math.abs((a.year_model || a.year_fabrication || 0) - targetYear);
           const yearDiffB = Math.abs((b.year_model || b.year_fabrication || 0) - targetYear);
           if (yearDiffA !== yearDiffB) return yearDiffA - yearDiffB;
         }
-        // Then by price (lower first) if max price specified
         if (maxPrice) {
           return (a.sale_price || 0) - (b.sale_price || 0);
         }
@@ -254,7 +403,7 @@ async function smartTextSearch(
       .slice(0, maxResults)
       .map((v: any) => ({
         ...v,
-        similarity: 0.3, // Base similarity for filter-only matches
+        similarity: 0.3,
         photo_url: v.images?.[0] || null
       }));
 

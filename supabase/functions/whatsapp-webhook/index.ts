@@ -633,10 +633,29 @@ async function processWithAIAgent(
   let ragQueryInfo: any = null;
   
   // Check if message mentions a vehicle (use RAG for semantic search)
-  const vehicleKeywords = ['carro', 'veículo', 'veiculo', 'modelo', 'marca', 'ano', 'preço', 'preco', 
-    'polo', 'gol', 'onix', 'civic', 'corolla', 'hb20', 'hilux', 'toro', 'compass', 'tracker', 'kicks',
+  // EXPANDED LIST: All models in the regex fallback PLUS common terms
+  const vehicleKeywords = [
+    // Generic terms
+    'carro', 'veículo', 'veiculo', 'modelo', 'marca', 'ano', 'preço', 'preco', 'estoque', 'disponível', 'disponivel',
+    'sedan', 'hatch', 'suv', 'pickup', 'caminhonete', 'crossover', 'minivan', 'utilitário',
+    // Brands
     'toyota', 'volkswagen', 'vw', 'chevrolet', 'gm', 'honda', 'hyundai', 'fiat', 'jeep', 'nissan', 'ford',
-    'sedan', 'hatch', 'suv', 'pickup', 'caminhonete', 'creta', 'tcross', 't-cross', 'ka', 'fiesta'];
+    'renault', 'mitsubishi', 'suzuki', 'cherry', 'peugeot', 'citroen', 'kia', 'bmw', 'mercedes', 'audi',
+    // Popular models - MUST match the regex search fallback
+    'polo', 'gol', 'onix', 'civic', 'corolla', 'hb20', 'hilux', 'toro', 'compass', 'tracker', 'kicks',
+    'creta', 'tcross', 't-cross', 'ka', 'fiesta', 'uno', 'palio', 'argo', 'strada', 'mobi', 'bravo', 'doblo',
+    'fit', 'city', 'hr-v', 'hrv', 'cruze', 'spin', 'cobalt', 'prisma', 'voyage', 'fox', 'saveiro', 'amarok',
+    'ranger', 's10', 'frontier', 'l200', 'pajero', 'outlander', 'asx', 'jimny', 'vitara',
+    'duster', 'captur', 'logan', 'sandero', 'kwid', 'oroch', // RENAULT MODELS
+    'nivus', 'taos', 'tiguan', 'jetta', 'virtus', 'spacefox', 'golf', // VW
+    'renegade', 'freemont', 'commander', 'wrangler', // JEEP
+    'cronos', 'pulse', 'fastback', 'fiorino', 'ducato', 'toro', // FIAT
+    'versa', 'sentra', 'march', 'livina', // NISSAN
+    'ecosport', 'territory', 'bronco', 'maverick', // FORD
+    'etios', 'yaris', 'sw4', 'rav4', 'prius', // TOYOTA
+    'tucson', 'santa fe', 'santafe', 'ix35', 'azera', // HYUNDAI
+    'hr-v', 'wr-v', 'wrv', 'accord', // HONDA
+  ];
   
   const messageHasVehicleIntent = vehicleKeywords.some(k => actualMessage.toLowerCase().includes(k));
   

@@ -17,6 +17,7 @@ export function useNegotiations() {
           salesperson:profiles!negotiations_salesperson_id_fkey(full_name),
           customer:customers(id, name, phone, email)
         `)
+        .eq('show_in_pipeline', true) // Only show main negotiations in pipeline
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
@@ -25,6 +26,35 @@ export function useNegotiations() {
         objections: n.objections || [],
       })) as Negotiation[];
     },
+  });
+}
+
+// Hook for fetching ALL negotiations for a specific lead (including hidden ones)
+export function useLeadNegotiations(leadId: string) {
+  return useQuery({
+    queryKey: ['negotiations', 'lead', leadId],
+    queryFn: async (): Promise<Negotiation[]> => {
+      if (!leadId) return [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('negotiations')
+        .select(`
+          *,
+          lead:leads(id, name, phone, email, source),
+          vehicle:vehicles(id, brand, model, year_model, plate, sale_price),
+          salesperson:profiles!negotiations_salesperson_id_fkey(full_name),
+          customer:customers(id, name, phone, email)
+        `)
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return (data || []).map((n: any) => ({
+        ...n,
+        objections: n.objections || [],
+      })) as Negotiation[];
+    },
+    enabled: !!leadId,
   });
 }
 

@@ -2932,7 +2932,17 @@ async function extractAndSaveQualificationData(
         .eq('id', leadId)
         .single();
       
+      // Get conversation ID for this lead to fetch history
+      const { data: conversation } = await supabase
+        .from('ai_agent_conversations')
+        .select('id')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
       let salespersonName: string | undefined;
+      let salespersonPhone: string | undefined;
       
       if (lead?.assigned_to) {
         const { data: salesperson } = await supabase
@@ -2942,6 +2952,7 @@ async function extractAndSaveQualificationData(
           .single();
         
         salespersonName = salesperson?.full_name || undefined;
+        salespersonPhone = salesperson?.phone || undefined;
         
         // Get qualification data for notification
         const updatedQualData = { ...qualData, ...updates };
@@ -2957,9 +2968,46 @@ async function extractAndSaveQualificationData(
         
         console.log('[Q2] Notification created for salesperson:', lead.assigned_to);
         
-        // Send WhatsApp notification to salesperson
-        if (salesperson?.phone) {
-          await sendWhatsAppToSalesperson(supabase, salesperson.phone, lead, updatedQualData);
+        // ===== SEND HANDOFF MESSAGE TO LEAD =====
+        // Get WhatsApp contact for the lead to send transition message
+        const { data: whatsappContact } = await supabase
+          .from('whatsapp_contacts')
+          .select('phone, instance_id')
+          .eq('lead_id', leadId)
+          .limit(1)
+          .single();
+        
+        if (whatsappContact) {
+          // Get instance name
+          const { data: waInstance } = await supabase
+            .from('whatsapp_instances')
+            .select('instance_name')
+            .eq('id', whatsappContact.instance_id)
+            .single();
+          
+          if (waInstance) {
+            // Format phone for WhatsApp
+            let leadPhone = whatsappContact.phone.replace(/\D/g, '');
+            if (!leadPhone.startsWith('55')) {
+              leadPhone = '55' + leadPhone;
+            }
+            const targetJid = `${leadPhone}@s.whatsapp.net`;
+            
+            // Send handoff message to lead
+            const handoffMessage = `Perfeito! Já registrei todas as suas informações aqui. ✅
+
+O *${salespersonName || 'nosso vendedor'}* vai entrar em contato com você em instantes para dar sequência no seu atendimento e tirar todas as suas dúvidas! 🚗
+
+Fique tranquilo(a), você está em ótimas mãos! 😊`;
+            
+            await sendWhatsAppMessage(waInstance.instance_name, targetJid, handoffMessage);
+            console.log('[Q2] Handoff message sent to lead');
+          }
+        }
+        
+        // Send WhatsApp notification to salesperson with full context
+        if (salespersonPhone) {
+          await sendWhatsAppToSalesperson(supabase, salespersonPhone, lead, updatedQualData, conversation?.id);
         }
       }
       
@@ -3301,7 +3349,7 @@ async function assignSalespersonOnQualification(
 
   // Send WhatsApp notification to salesperson if they have a phone registered
   if (salesperson?.phone) {
-    await sendWhatsAppToSalesperson(supabase, salesperson.phone, lead, qualData);
+    await sendWhatsAppToSalesperson(supabase, salesperson.phone, lead, qualData, undefined);
   } else {
     console.log('[Qualification] Salesperson has no phone registered, skipping WhatsApp notification');
   }
@@ -3321,7 +3369,8 @@ async function sendWhatsAppToSalesperson(
     desired_installment?: number;
     clean_credit?: boolean;
     cpf?: string;
-  } | null
+  } | null,
+  conversationId?: string
 ): Promise<void> {
   try {
     console.log('[Notification] Sending WhatsApp to salesperson:', salespersonPhone);
@@ -3376,6 +3425,111 @@ ${vehicleSuggestions.map((v, i) => `${i + 1}. *${v.brand} ${v.model}* ${v.year_m
 _Use essas opções para negociar!_`;
     }
 
+    // ===== FETCH CONVERSATION HISTORY FOR SUMMARY =====
+    let conversationSummary = '';
+    let aiInsights = '';
+    
+    if (conversationId) {
+      console.log('[Notification] Fetching conversation history for summary, conversationId:', conversationId);
+      
+      // Get last 20 messages from conversation
+      const { data: messages } = await supabase
+        .from('ai_agent_messages')
+        .select('role, content, created_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+        .limit(20);
+      
+      if (messages && messages.length > 0) {
+        // Build conversation text for AI analysis
+        const conversationText = messages
+          .filter((m: any) => m.content)
+          .map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.content}`)
+          .join('\n');
+        
+        // Generate summary and insights with AI
+        const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+        
+        if (OPENAI_API_KEY && conversationText.length > 50) {
+          try {
+            const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                  {
+                    role: 'system',
+                    content: `Você é um assistente de vendas automotivas. Analise a conversa entre um cliente e a atendente virtual Gabi.
+
+Gere uma resposta em DUAS partes:
+
+1. **RESUMO** (máx 3 linhas): O que o cliente quer, principais pontos da conversa
+2. **DICAS PARA O VENDEDOR** (máx 4 bullet points): Insights estratégicos baseados na conversa que ajudem o vendedor a fechar a venda
+
+Foque em:
+- Objeções ou preocupações do cliente
+- Preferências específicas mencionadas
+- Urgência ou timing para compra
+- Pontos de sensibilidade (preço, condição, etc)
+
+Seja direto e prático. Use emojis com moderação.`
+                  },
+                  {
+                    role: 'user',
+                    content: `Conversa:\n${conversationText}`
+                  }
+                ],
+                max_tokens: 400,
+                temperature: 0.7,
+              }),
+            });
+            
+            if (aiResponse.ok) {
+              const aiData = await aiResponse.json();
+              const analysisContent = aiData.choices?.[0]?.message?.content || '';
+              
+              if (analysisContent) {
+                // Parse the AI response into summary and insights
+                const parts = analysisContent.split(/\*\*DICAS|DICAS PARA O VENDEDOR|💡/i);
+                
+                if (parts.length >= 2) {
+                  conversationSummary = parts[0].replace(/\*\*RESUMO\*\*|RESUMO:/gi, '').trim();
+                  aiInsights = parts[1].trim();
+                } else {
+                  conversationSummary = analysisContent;
+                }
+              }
+            }
+          } catch (aiError) {
+            console.error('[Notification] Error generating AI insights:', aiError);
+          }
+        }
+      }
+    }
+
+    // Build the full message with summary and insights
+    let summarySection = '';
+    if (conversationSummary) {
+      summarySection = `
+
+━━━━━━━━━━━━━━━━━━━━━
+📝 *RESUMO DA CONVERSA*
+${conversationSummary}`;
+    }
+
+    let insightsSection = '';
+    if (aiInsights) {
+      insightsSection = `
+
+━━━━━━━━━━━━━━━━━━━━━
+🎯 *DICAS PARA FECHAR*
+${aiInsights}`;
+    }
+
     const fichaMensagem = `🔥 *LEAD QUENTE - AÇÃO IMEDIATA*
 
 ━━━━━━━━━━━━━━━━━━━━━
@@ -3392,7 +3546,7 @@ _Use essas opções para negociar!_`;
 🚗 *INTERESSE*
 ${qualData?.vehicle_interest || 'Não especificado'}
 
-📋 CPF: ${qualData?.cpf || 'Não informado'}${suggestionsSection}
+📋 CPF: ${qualData?.cpf || 'Não informado'}${summarySection}${insightsSection}${suggestionsSection}
 
 ━━━━━━━━━━━━━━━━━━━━━
 ⚡ *Qualificado agora - Seja o primeiro!*`;

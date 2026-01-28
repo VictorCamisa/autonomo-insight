@@ -686,6 +686,50 @@ async function processWithAIAgent(
   
   console.log('[RAG] Vehicle intent detected:', messageHasVehicleIntent);
   
+  // Criar listas de modelos e marcas únicas do estoque (usado em múltiplos lugares)
+  const modelList: string[] = stockModels?.map((v: any) => v.model?.toLowerCase().trim()).filter(Boolean) || [];
+  const brandList: string[] = stockModels?.map((v: any) => v.brand?.toLowerCase().trim()).filter(Boolean) || [];
+  const uniqueModels: string[] = [...new Set(modelList)].filter((m: string) => m && m.length > 1);
+  const uniqueBrands: string[] = [...new Set(brandList)].filter((b: string) => b && b.length > 1);
+
+  // ===== PASSO EXTRA: Buscar veículos mencionados no histórico da conversa =====
+  // Isso garante que quando o cliente pergunta "foto do painel", pegamos o veículo que estava discutindo
+  let vehiclesFromHistory: any[] = [];
+  if (history.length > 0) {
+    // Combinar histórico em um texto para buscar menções de veículos
+    const historyText = history.map((m: any) => m.content).join(' ').toLowerCase();
+    
+    // Procurar por modelos mencionados no histórico
+    for (const model of uniqueModels) {
+      const escapedModel = model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const modelRegex = new RegExp(escapedModel.replace(/\s+/g, '\\s*'), 'i');
+      if (modelRegex.test(historyText)) {
+        // Buscar esse veículo
+        const { data: histVehicles } = await supabase
+          .from('vehicles')
+          .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+          .eq('status', 'disponivel')
+          .ilike('model', `%${model}%`)
+          .limit(3);
+        
+        if (histVehicles && histVehicles.length > 0) {
+          vehiclesFromHistory.push(...histVehicles.map((v: any) => ({ ...v, similarity: 0.95, from_history: true })));
+          console.log('[RAG] Found vehicle from history:', model);
+        }
+      }
+    }
+    
+    // Remover duplicatas
+    const uniqueHistIds = new Set<string>();
+    vehiclesFromHistory = vehiclesFromHistory.filter((v: any) => {
+      if (uniqueHistIds.has(v.id)) return false;
+      uniqueHistIds.add(v.id);
+      return true;
+    });
+    
+    console.log('[RAG] Vehicles from conversation history:', vehiclesFromHistory.length);
+  }
+
   if (messageHasVehicleIntent) {
     console.log('[RAG] Vehicle intent detected, starting universal search...');
     
@@ -702,15 +746,24 @@ async function processWithAIAgent(
     }
     
     // PASSO 3: BUSCA DIRETA - Extrair termos e buscar no banco
-    // Criar regex dinâmico baseado nos modelos do estoque
-    const modelList: string[] = stockModels?.map((v: any) => v.model?.toLowerCase().trim()).filter(Boolean) || [];
-    const brandList: string[] = stockModels?.map((v: any) => v.brand?.toLowerCase().trim()).filter(Boolean) || [];
-    const uniqueModels: string[] = [...new Set(modelList)].filter((m: string) => m && m.length > 1);
-    const uniqueBrands: string[] = [...new Set(brandList)].filter((b: string) => b && b.length > 1);
-    
     // Procurar por modelos na mensagem
     const foundModelTerms: string[] = [];
     const foundBrandTerms: string[] = [];
+    
+    for (const model of uniqueModels) {
+      // Escape regex special chars
+      const escapedModel = model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const modelRegex = new RegExp(escapedModel.replace(/\s+/g, '\\s*'), 'i');
+      if (modelRegex.test(messageLower)) {
+        foundModelTerms.push(model);
+      }
+    }
+    
+    for (const brand of uniqueBrands) {
+      if (messageLower.includes(brand)) {
+        foundBrandTerms.push(brand);
+      }
+    }
     
     for (const model of uniqueModels) {
       // Escape regex special chars
@@ -793,6 +846,15 @@ async function processWithAIAgent(
         relevantVehicles = sampleVehicles.map((v: any) => ({ ...v, similarity: 0.3 }));
       }
     }
+  }
+  
+  // ===== PASSO 6: Mesclar veículos do histórico (prioridade máxima) =====
+  // Adicionar veículos do histórico no INÍCIO para que a IA os veja primeiro
+  if (vehiclesFromHistory.length > 0) {
+    const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
+    const newFromHistory = vehiclesFromHistory.filter((v: any) => !existingIds.has(v.id));
+    relevantVehicles = [...newFromHistory, ...relevantVehicles];
+    console.log('[RAG] Added', newFromHistory.length, 'vehicles from history to context');
   }
   
   // Log final

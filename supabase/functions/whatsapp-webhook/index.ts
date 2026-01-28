@@ -1556,46 +1556,59 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
     console.log('[AI Agent] Response:', aiResponse.substring(0, 200));
 
     // ===== EXTRACT AND VALIDATE PHOTOS =====
-    const photoRegex = /\[ENVIAR_FOTO:\s*(https?:\/\/[^\]\s]+)\]/gi;
+    // Regex mais robusto para capturar variações da tag de foto
+    // Captura: [ENVIAR_FOTO: URL], [ENVIAR FOTO: URL], [FOTO: URL], etc.
+    const photoRegex = /\[\s*ENVIAR[_\s]*FOTO\s*:\s*(https?:\/\/[^\]\s\n]+)\s*\]/gi;
+    // Regex de fallback para URLs soltas no formato do storage
+    const rawUrlRegex = /(https:\/\/ahfoixzdnpswuqavbmgf\.supabase\.co\/storage\/v1\/object\/public\/vehicle-images\/[^\s\n\]]+)/gi;
+    
     const extractedPhotos: string[] = [];
     const blockedPhotos: string[] = [];
     let match;
     
     // Helper function: Encontrar URL completa que começa com o prefixo truncado
     function findMatchingUrl(truncatedUrl: string, validUrls: Set<string>): string | null {
+      // Limpar URL de caracteres extras
+      const cleanUrl = truncatedUrl.replace(/[\]\)\s]+$/, '').trim();
+      
       // 1. Match exato
-      if (validUrls.has(truncatedUrl)) {
-        return truncatedUrl;
+      if (validUrls.has(cleanUrl)) {
+        return cleanUrl;
       }
       // 2. Match por prefixo (IA às vezes trunca a URL)
       for (const fullUrl of validUrls) {
-        if (fullUrl.startsWith(truncatedUrl) || truncatedUrl.startsWith(fullUrl)) {
+        if (fullUrl.startsWith(cleanUrl) || cleanUrl.startsWith(fullUrl)) {
+          return fullUrl;
+        }
+        // 3. Comparar ignorando parâmetros de query string
+        const baseClean = cleanUrl.split('?')[0];
+        const baseFull = fullUrl.split('?')[0];
+        if (baseClean === baseFull) {
           return fullUrl;
         }
       }
-      // 3. Match por ID do veículo na URL (ex: /fada1afb-d745-4f79-93f0-070ffe86c4e2/)
-      const uuidMatch = truncatedUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
+      // 4. Match por ID do veículo na URL (ex: /fada1afb-d745-4f79-93f0-070ffe86c4e2/)
+      const uuidMatch = cleanUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
       if (uuidMatch) {
         const vehicleUuid = uuidMatch[1].toLowerCase();
         for (const fullUrl of validUrls) {
           if (fullUrl.toLowerCase().includes(vehicleUuid)) {
-            return fullUrl; // Retorna a primeira foto válida desse veículo
+            return fullUrl;
           }
         }
       }
       return null;
     }
     
+    // PASSO 1: Extrair fotos da tag principal
     while ((match = photoRegex.exec(aiResponse)) !== null) {
-      const photoUrl = match[1].trim();
+      const photoUrl = match[1].trim().replace(/[\]\)\s]+$/, '');
       
-      // ===== VALIDAÇÃO DE FOTO: Verificar se URL pertence ao veículo correto =====
-      // Esta é a última linha de defesa contra envio de fotos erradas
       let isPhotoValid = false;
       let photoVehicleInfo = '';
-      let resolvedUrl = photoUrl; // URL final a ser enviada (pode ser a completa)
+      let resolvedUrl = photoUrl;
       
-      // Se temos veículo ativo, verificar se a foto pertence a ele
+      // Verificar se foto pertence ao veículo ativo
       if (activeVehicle && validPhotoUrls[activeVehicle.id]) {
         const matchedUrl = findMatchingUrl(photoUrl, validPhotoUrls[activeVehicle.id]);
         if (matchedUrl) {
@@ -1606,12 +1619,11 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
         }
       }
       
-      // Se não tem veículo ativo ou foto não é dele, verificar se pertence a algum veículo do contexto
+      // Verificar se pertence a algum veículo do contexto
       if (!isPhotoValid) {
         for (const vehicleId of Object.keys(validPhotoUrls)) {
           const matchedUrl = findMatchingUrl(photoUrl, validPhotoUrls[vehicleId]);
           if (matchedUrl) {
-            // Encontrou o veículo dono da foto
             const vehicleOwner = relevantVehicles.find((v: any) => v.id === vehicleId);
             if (vehicleOwner) {
               isPhotoValid = true;
@@ -1624,21 +1636,35 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
         }
       }
       
-      // Se a foto é válida (pertence a algum veículo do contexto), adicionar a URL COMPLETA
       if (isPhotoValid) {
         extractedPhotos.push(resolvedUrl);
       } else {
-        // BLOQUEAR foto que não pertence a nenhum veículo do contexto
         blockedPhotos.push(photoUrl);
         console.warn('[Photo Validation] ❌ BLOCKED - Photo URL not from any vehicle in context:', photoUrl.substring(0, 100));
       }
     }
 
-    // Remove photo tags AND data tags from text
-    let cleanResponse = aiResponse.replace(photoRegex, '');
-    cleanResponse = cleanResponse.replace(/\[DADO:[^\]]+\]/g, '').trim();
+    // PASSO 2: Remover TODAS as variações de tags de foto do texto
+    // Regex ultra-agressivo para garantir que nenhuma tag apareça no texto final
+    let cleanResponse = aiResponse
+      // Remove tag formatada corretamente
+      .replace(/\[\s*ENVIAR[_\s]*FOTO\s*:\s*https?:\/\/[^\]\n]+\s*\]/gi, '')
+      // Remove variações com underscore
+      .replace(/\[\s*ENVIAR_FOTO\s*:\s*https?:\/\/[^\]\n]+\s*\]/gi, '')
+      // Remove variações sem underscore
+      .replace(/\[\s*ENVIAR\s+FOTO\s*:\s*https?:\/\/[^\]\n]+\s*\]/gi, '')
+      // Remove qualquer [algo_FOTO: url]
+      .replace(/\[[^\]]*FOTO\s*:\s*https?:\/\/[^\]\n]+\]/gi, '')
+      // Remove URLs soltas do Supabase storage que ficaram órfãs
+      .replace(/https:\/\/ahfoixzdnpswuqavbmgf\.supabase\.co\/storage\/v1\/object\/public\/vehicle-images\/[^\s\n\]]+/gi, '')
+      // Remove tags de dados
+      .replace(/\[DADO:[^\]]+\]/g, '')
+      // Limpar múltiplas quebras de linha
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
 
     console.log('[AI Agent] Extracted photos:', extractedPhotos.length, '| Blocked:', blockedPhotos.length);
+    console.log('[AI Agent] Clean response length:', cleanResponse.length);
 
     // ===== QUALIFICATION FLOW =====
     let finalResponse = cleanResponse;

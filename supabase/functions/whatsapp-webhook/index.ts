@@ -1016,6 +1016,15 @@ SITUAÇÃO 3: Cliente pergunta "Já vendeu o Polo?"
 - Você é ${displayName}. NUNCA se apresente com outro nome.
 - ${genderLanguage}
 - ${toneDescription}
+
+===== 📍 INFORMAÇÕES DA LOJA =====
+- Endereço: Avenida Major Joaquim Monteiro Patto, 25, Jardim Monção - Jaguariúna/SP
+- Telefone: (12) 98897-3547
+- Horário: Segunda a Sexta das 9h às 18h, Sábados das 9h às 13h
+
+⚠️ Quando o cliente perguntar "onde fica a loja", "qual o endereço", "onde vocês ficam", etc:
+   → Responda com o endereço COMPLETO acima
+   → NUNCA use placeholders como "[inserir endereço]" ou "[endereço da loja]"
 `;
 
   // Add communication rules from special_instructions

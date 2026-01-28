@@ -648,7 +648,9 @@ async function processWithAIAgent(
     'estoque', 'disponível', 'disponivel', 'foto', 'fotos', 'imagem', 'ver',
     'sedan', 'hatch', 'suv', 'pickup', 'caminhonete', 'crossover', 'minivan',
     'barato', 'econômico', 'popular', 'automático', 'manual', 'flex', 'diesel',
-    'quanto', 'valor', 'tem', 'têm', 'vendeu', 'ainda', 'sobrou'
+    'quanto', 'valor', 'tem', 'têm', 'vendeu', 'ainda', 'sobrou',
+    // ===== NOVO: Keywords para busca por PREÇO =====
+    'mil', 'reais', 'orçamento', 'orcamento', 'budget', 'faixa', 'entre', 'partir'
   ];
   genericKeywords.forEach(k => dynamicKeywords.add(k));
   
@@ -682,6 +684,32 @@ async function processWithAIAgent(
   
   // Verificar se a mensagem contém qualquer termo do estoque
   const messageLower = actualMessage.toLowerCase();
+  
+  // ===== NOVO: Detectar busca por FAIXA DE PREÇO =====
+  const pricePatterns = [
+    /(?:até|ate|max|máximo|maximo)\s*(?:R\$\s*)?(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)\s*(?:mil|k)?/i,
+    /(?:R\$\s*)?(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)\s*(?:mil|k)/i,
+    /(?:carro|veículo|veiculo).{0,20}(\d+)\s*(?:mil|k)/i,
+    /(\d+)\s*(?:mil|k).{0,10}(?:carro|veículo|veiculo)/i,
+  ];
+  
+  let extractedMaxPrice: number | null = null;
+  for (const pattern of pricePatterns) {
+    const priceMatch = messageLower.match(pattern);
+    if (priceMatch) {
+      let priceStr = priceMatch[1].replace(/\./g, '').replace(',', '.');
+      let price = parseFloat(priceStr);
+      if (messageLower.includes('mil') || messageLower.includes('k')) {
+        price *= 1000;
+      }
+      extractedMaxPrice = price;
+      console.log('[RAG] Extracted price from message:', extractedMaxPrice);
+      break;
+    }
+  }
+  
+  // Se detectou preço, forçar busca por veículos
+  const hasPriceIntent = extractedMaxPrice !== null;
   const messageHasVehicleIntent = Array.from(dynamicKeywords).some(k => messageLower.includes(k));
   
   console.log('[RAG] Vehicle intent detected:', messageHasVehicleIntent);
@@ -730,8 +758,10 @@ async function processWithAIAgent(
     console.log('[RAG] Vehicles from conversation history:', vehiclesFromHistory.length);
   }
 
-  if (messageHasVehicleIntent) {
-    console.log('[RAG] Vehicle intent detected, starting universal search...');
+  // ===== BUSCA DE VEÍCULOS: Por keyword OU por preço =====
+  if (messageHasVehicleIntent || hasPriceIntent) {
+    console.log('[RAG] Vehicle/Price intent detected, starting universal search...');
+    console.log('[RAG] Intent type:', messageHasVehicleIntent ? 'keyword' : 'price-only', '| Extracted price:', extractedMaxPrice);
     
     // PASSO 2: Tentar RAG semântico primeiro
     try {
@@ -743,6 +773,51 @@ async function processWithAIAgent(
       }
     } catch (ragError) {
       console.error('[RAG] Search error:', ragError);
+    }
+    
+    // ===== PASSO 2.5: BUSCA DIRETA POR PREÇO (quando detectado) =====
+    if (hasPriceIntent && extractedMaxPrice && relevantVehicles.length < 5) {
+      console.log('[RAG] Searching by price range: até R$', extractedMaxPrice);
+      
+      // Buscar veículos dentro da faixa de preço
+      const { data: vehiclesByPrice } = await supabase
+        .from('vehicles')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+        .eq('status', 'disponivel')
+        .lte('sale_price', extractedMaxPrice)
+        .order('sale_price', { ascending: false }) // Mais caros primeiro (perto do budget)
+        .limit(5);
+      
+      if (vehiclesByPrice && vehiclesByPrice.length > 0) {
+        const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
+        vehiclesByPrice.forEach((v: any) => {
+          if (!existingIds.has(v.id)) {
+            relevantVehicles.push({ ...v, similarity: 0.95, from_price_search: true });
+            existingIds.add(v.id);
+          }
+        });
+        console.log('[RAG] Price search added', vehiclesByPrice.length, 'vehicles within budget');
+      } else {
+        // Se não encontrou dentro do orçamento, buscar os mais baratos do estoque
+        console.log('[RAG] No vehicles within R$', extractedMaxPrice, '- finding cheapest options');
+        const { data: cheapestVehicles } = await supabase
+          .from('vehicles')
+          .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+          .eq('status', 'disponivel')
+          .order('sale_price', { ascending: true }) // Mais baratos primeiro
+          .limit(5);
+        
+        if (cheapestVehicles && cheapestVehicles.length > 0) {
+          const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
+          cheapestVehicles.forEach((v: any) => {
+            if (!existingIds.has(v.id)) {
+              relevantVehicles.push({ ...v, similarity: 0.7, cheapest_option: true });
+              existingIds.add(v.id);
+            }
+          });
+          console.log('[RAG] Added cheapest vehicles as alternatives');
+        }
+      }
     }
     
     // PASSO 3: BUSCA DIRETA - Extrair termos e buscar no banco
@@ -765,26 +840,11 @@ async function processWithAIAgent(
       }
     }
     
-    for (const model of uniqueModels) {
-      // Escape regex special chars
-      const escapedModel = model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const modelRegex = new RegExp(escapedModel.replace(/\s+/g, '\\s*'), 'i');
-      if (modelRegex.test(messageLower)) {
-        foundModelTerms.push(model);
-      }
-    }
-    
-    for (const brand of uniqueBrands) {
-      if (messageLower.includes(brand)) {
-        foundBrandTerms.push(brand);
-      }
-    }
-    
     console.log('[RAG] Found terms - Models:', foundModelTerms, 'Brands:', foundBrandTerms);
     
     // PASSO 4: Se RAG não achou ou achou poucos, busca DIRETA complementar
     // OTIMIZAÇÃO: Reduzir limites para evitar sobrecarga de contexto
-    if (relevantVehicles.length < 3) {
+    if (relevantVehicles.length < 3 && foundModelTerms.length > 0) {
       // Buscar por modelo - LIMITE REDUZIDO
       for (const term of foundModelTerms) {
         if (relevantVehicles.length >= 5) break; // MAX 5 veículos total
@@ -794,7 +854,7 @@ async function processWithAIAgent(
           .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
           .eq('status', 'disponivel')
           .ilike('model', `%${term}%`)
-          .limit(3); // Reduzido de 10 para 3
+          .limit(3);
         
         if (vehiclesByModel && vehiclesByModel.length > 0) {
           // Adicionar sem duplicar
@@ -808,8 +868,10 @@ async function processWithAIAgent(
           console.log('[RAG] Direct model search added vehicles for:', term);
         }
       }
-      
-      // Buscar por marca - LIMITE REDUZIDO
+    }
+    
+    // Buscar por marca - LIMITE REDUZIDO
+    if (relevantVehicles.length < 3 && foundBrandTerms.length > 0) {
       for (const term of foundBrandTerms) {
         if (relevantVehicles.length >= 5) break; // MAX 5 veículos total
         
@@ -818,7 +880,7 @@ async function processWithAIAgent(
           .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
           .eq('status', 'disponivel')
           .ilike('brand', `%${term}%`)
-          .limit(3); // Reduzido de 5 para 3
+          .limit(3);
         
         if (vehiclesByBrand && vehiclesByBrand.length > 0) {
           const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
@@ -834,7 +896,6 @@ async function processWithAIAgent(
     }
     
     // PASSO 5: Se ainda não encontrou nada E tem intent, buscar amostra do estoque
-    // OTIMIZAÇÃO: Amostra MENOR para evitar diluição de contexto
     if (relevantVehicles.length === 0) {
       console.log('[RAG] No specific matches - fetching inventory sample (limited)');
       const { data: sampleVehicles } = await supabase
@@ -842,7 +903,7 @@ async function processWithAIAgent(
         .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
         .eq('status', 'disponivel')
         .order('created_at', { ascending: false })
-        .limit(5); // Reduzido de 15 para 5 - evita diluição
+        .limit(5);
       
       if (sampleVehicles) {
         relevantVehicles = sampleVehicles.map((v: any) => ({ ...v, similarity: 0.3 }));
@@ -953,7 +1014,7 @@ async function processWithAIAgent(
 
 🧠 ANTES DE RESPONDER SOBRE QUALQUER VEÍCULO, FAÇA ISSO:
 
-1. LEIA a seção "VEÍCULOS DISPONÍVEIS" que aparece mais abaixo neste prompt
+1. LEIA a seção "VEÍCULOS SUGERIDOS" que aparece mais abaixo neste prompt
 2. PROCURE o modelo E o ano que o cliente mencionou
 3. RESPONDA baseado SOMENTE no que está na lista
 
@@ -967,7 +1028,25 @@ async function processWithAIAgent(
    - Dizer "não está disponível" para um carro que ESTÁ na lista
    - Inventar preços, anos ou características
 
-📌 EXEMPLOS DE RESPOSTAS:
+===== 💰 REGRAS DE BUSCA POR PREÇO (CRÍTICO!) =====
+
+Quando o cliente perguntar por FAIXA DE PREÇO (ex: "até 40 mil", "carro de 30 mil"):
+
+1. OLHE a lista de veículos fornecida - eles JÁ ESTÃO filtrados por preço!
+2. SE TEM veículos na lista dentro do orçamento:
+   ✅ "Temos sim opções nessa faixa! Por exemplo: [citar 2-3 veículos com preço]"
+   
+3. SE NÃO TEM veículos no orçamento mas tem opções próximas:
+   ✅ "Nessa faixa exata não temos no momento, mas temos opções a partir de R$ [preço do mais barato]. Posso te mostrar?"
+
+4. NUNCA diga "não temos nessa faixa" se a lista mostra veículos dentro do orçamento!
+
+📌 EXEMPLO CORRETO:
+Cliente: "Tem algum carro até 40 mil?"
+Lista mostra: Cielo R$ 22.990, Picanto R$ 25.990, C3 R$ 29.990
+✅ CORRETO: "Temos sim! Temos o Cielo por R$ 22.990, Picanto por R$ 25.990, C3 por R$ 29.990... Quer saber mais de algum?"
+
+===== EXEMPLOS DE RESPOSTAS =====
 
 SITUAÇÃO 1: Cliente pede "Gol 2015" e na lista tem "Volkswagen Gol 2015 | R$ 45.990"
 ✅ CORRETO: "Temos sim o Gol 2015! Está por R$ 45.990. Quer saber mais?"

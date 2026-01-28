@@ -156,8 +156,8 @@ async function semanticSearchWithOpenAI(
     const { data: searchResults, error: searchError } = await supabase
       .rpc('search_similar_vehicles', {
         query_embedding: queryEmbedding,
-        match_threshold: 0.4, // Lower threshold for more results
-        match_count: maxResults * 2, // Get more results for filtering
+        match_threshold: 0.35, // Lowered for better recall
+        match_count: Math.min(maxResults * 2, 10), // Cap at 10 results max
         year_tolerance: yearTolerance,
         target_year: targetYear
       });
@@ -169,8 +169,21 @@ async function semanticSearchWithOpenAI(
 
     console.log('[RAG Search] Vector search returned', searchResults?.length || 0, 'results');
 
+    // Check if embeddings are actually populated
     if (!searchResults || searchResults.length === 0) {
-      console.log('[RAG Search] No vector results, falling back to text search');
+      console.log('[RAG Search] No vector results - checking if embeddings exist...');
+      
+      // Quick check: are there any embeddings in the database?
+      const { data: embeddingCheck } = await supabase
+        .from('vehicle_embeddings')
+        .select('embedding')
+        .not('embedding', 'is', null)
+        .limit(1);
+      
+      if (!embeddingCheck || embeddingCheck.length === 0) {
+        console.warn('[RAG Search] ⚠️ NO EMBEDDINGS IN DATABASE! Falling back to text search. Run sync-vehicle-embeddings to populate.');
+      }
+      
       return await smartTextSearch(supabase, query, maxResults, targetYear, yearTolerance, maxPrice, priceTolerance);
     }
 
@@ -386,42 +399,63 @@ async function smartTextSearch(
     .slice(0, maxResults);
 
   // If no results with keywords, return top vehicles by other criteria
-  if (results.length === 0 && (targetYear || maxPrice)) {
-    console.log('[RAG Search] No keyword matches, returning top vehicles by filters');
-    const fallbackResults = scoredVehicles
-      .sort((a: any, b: any) => {
-        if (targetYear) {
-          const yearDiffA = Math.abs((a.year_model || a.year_fabrication || 0) - targetYear);
-          const yearDiffB = Math.abs((b.year_model || b.year_fabrication || 0) - targetYear);
-          if (yearDiffA !== yearDiffB) return yearDiffA - yearDiffB;
-        }
-        if (maxPrice) {
-          return (a.sale_price || 0) - (b.sale_price || 0);
-        }
-        return 0;
-      })
-      .slice(0, maxResults)
-      .map((v: any) => ({
-        ...v,
-        similarity: 0.3,
-        photo_url: v.images?.[0] || null
-      }));
+  // IMPORTANT: Only if we have meaningful filters, otherwise return empty
+  if (results.length === 0) {
+    if (targetYear || maxPrice) {
+      console.log('[RAG Search] No keyword matches, returning filtered results');
+      const fallbackResults = scoredVehicles
+        .sort((a: any, b: any) => {
+          if (targetYear) {
+            const yearDiffA = Math.abs((a.year_model || a.year_fabrication || 0) - targetYear);
+            const yearDiffB = Math.abs((b.year_model || b.year_fabrication || 0) - targetYear);
+            if (yearDiffA !== yearDiffB) return yearDiffA - yearDiffB;
+          }
+          if (maxPrice) {
+            return (a.sale_price || 0) - (b.sale_price || 0);
+          }
+          return 0;
+        })
+        .slice(0, Math.min(maxResults, 5)) // Limit fallback to 5 max
+        .map((v: any) => ({
+          ...v,
+          similarity: 0.3,
+          photo_url: v.images?.[0] || null
+        }));
 
-    return new Response(JSON.stringify({ 
-      success: true,
-      vehicles: fallbackResults,
-      query_info: {
-        original_query: query,
-        extracted_year: targetYear,
-        extracted_max_price: maxPrice,
-        has_exact_year_match: fallbackResults.some((v: any) => v.year_model === targetYear || v.year_fabrication === targetYear),
-        year_tolerance_applied: yearTolerance,
-        search_method: 'filter_fallback',
-        keywords_searched: keywords
-      }
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+      return new Response(JSON.stringify({ 
+        success: true,
+        vehicles: fallbackResults,
+        query_info: {
+          original_query: query,
+          extracted_year: targetYear,
+          extracted_max_price: maxPrice,
+          has_exact_year_match: fallbackResults.some((v: any) => v.year_model === targetYear || v.year_fabrication === targetYear),
+          year_tolerance_applied: yearTolerance,
+          search_method: 'filter_fallback',
+          keywords_searched: keywords,
+          note: 'No keyword matches found, used filter fallback'
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } else {
+      // No filters and no matches - return empty with explanation
+      console.log('[RAG Search] No matches and no filters - returning empty');
+      return new Response(JSON.stringify({ 
+        success: true,
+        vehicles: [],
+        query_info: {
+          original_query: query,
+          extracted_year: null,
+          extracted_max_price: null,
+          search_method: 'text_search',
+          keywords_searched: keywords,
+          note: 'No matches found for query'
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
   }
 
   return new Response(JSON.stringify({ 

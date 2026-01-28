@@ -2375,6 +2375,44 @@ async function extractAndSaveQualificationData(
       .from('leads')
       .update(leadsUpdate)
       .eq('id', leadId);
+    
+    // ===== NEW: Also update negotiation vehicle_id when vehicle interest changes =====
+    if (updates.vehicle_interest) {
+      // Try to find the vehicle in inventory by model/brand match
+      const interestLower = updates.vehicle_interest.toLowerCase();
+      
+      // Search for matching vehicle in inventory
+      const { data: matchingVehicles } = await supabase
+        .from('vehicles')
+        .select('id, brand, model, status')
+        .or(`model.ilike.%${interestLower}%,brand.ilike.%${interestLower}%`)
+        .eq('status', 'Disponível')
+        .limit(5);
+      
+      if (matchingVehicles && matchingVehicles.length > 0) {
+        // Find best match (prioritize exact model match)
+        let bestMatch = matchingVehicles[0];
+        for (const v of matchingVehicles) {
+          if (v.model.toLowerCase().includes(interestLower) || 
+              interestLower.includes(v.model.toLowerCase())) {
+            bestMatch = v;
+            break;
+          }
+        }
+        
+        console.log('[Qualification] Updating negotiation vehicle_id to:', bestMatch.brand, bestMatch.model, bestMatch.id);
+        
+        // Update the active negotiation with the new vehicle
+        await supabase
+          .from('negotiations')
+          .update({ 
+            vehicle_id: bestMatch.id,
+            // Also clear any stale vehicle_interest text since we now have a linked vehicle
+          })
+          .eq('lead_id', leadId)
+          .in('status', ['atendimento_ia', 'negociando', 'follow_up']); // Only update active negotiations
+      }
+    }
   }
 
   // Check current qualification data
@@ -2604,13 +2642,16 @@ async function extractDataWithAI(
   // Run AI extraction on every message to ensure real-time updates
   console.log('[Qualification] Starting AI extraction for lead:', leadId);
   
-  // Get last 10 messages from conversation
-  const { data: messages } = await supabase
+  // Get last 10 messages from conversation (most recent)
+  const { data: recentMessages } = await supabase
     .from('ai_agent_messages')
     .select('role, content, created_at')
     .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(10);
+  
+  // Reverse to get chronological order for analysis
+  const messages = recentMessages?.reverse() || [];
   
   if (!messages || messages.length < 2) {
     return {};

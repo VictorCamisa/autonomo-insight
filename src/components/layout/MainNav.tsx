@@ -11,6 +11,7 @@ import {
   Coins,
   FileText,
   UsersRound,
+  Bot,
 } from 'lucide-react';
 import type { ModuleName } from '@/types/users';
 
@@ -31,6 +32,7 @@ const allNavItems: NavItem[] = [
   { path: '/marketing', label: 'Marketing', icon: <Megaphone className="h-4 w-4" />, requiredModule: 'marketing' },
   { path: '/relatorios', label: 'Relatórios', icon: <FileText className="h-4 w-4" />, requiredModule: 'marketing' },
   { path: '/clientes', label: 'Clientes', icon: <UsersRound className="h-4 w-4" />, requiredModule: 'vendas' },
+  { path: '/ai-agents', label: 'Agente IA', icon: <Bot className="h-4 w-4" /> },
 ];
 
 interface MainNavProps {

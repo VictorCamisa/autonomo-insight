@@ -772,11 +772,15 @@ async function processWithAIAgent(
     }
   }
   
-  // Se detectou preço, forçar busca por veículos
+  // Se detectou preço OU categoria, forçar busca por veículos
   const hasPriceIntent = extractedMaxPrice !== null;
+  const hasCategoryIntent = requestedCategory !== null;
   const messageHasVehicleIntent = Array.from(dynamicKeywords).some(k => messageLower.includes(k));
   
-  console.log('[RAG] Vehicle intent detected:', messageHasVehicleIntent);
+  // IMPORTANTE: Se detectou categoria, também é um intent de veículo!
+  const shouldSearchVehicles = messageHasVehicleIntent || hasPriceIntent || hasCategoryIntent;
+  
+  console.log('[RAG] Vehicle intent detected:', messageHasVehicleIntent, '| Category intent:', hasCategoryIntent, '| Price intent:', hasPriceIntent);
   
   // Criar listas de modelos e marcas únicas do estoque (usado em múltiplos lugares)
   const modelList: string[] = stockModels?.map((v: any) => v.model?.toLowerCase().trim()).filter(Boolean) || [];
@@ -822,10 +826,10 @@ async function processWithAIAgent(
     console.log('[RAG] Vehicles from conversation history:', vehiclesFromHistory.length);
   }
 
-  // ===== BUSCA DE VEÍCULOS: Por keyword OU por preço =====
-  if (messageHasVehicleIntent || hasPriceIntent) {
-    console.log('[RAG] Vehicle/Price intent detected, starting universal search...');
-    console.log('[RAG] Intent type:', messageHasVehicleIntent ? 'keyword' : 'price-only', '| Extracted price:', extractedMaxPrice);
+  // ===== BUSCA DE VEÍCULOS: Por keyword, preço OU categoria =====
+  if (shouldSearchVehicles) {
+    console.log('[RAG] Search triggered. Keyword intent:', messageHasVehicleIntent, '| Price:', hasPriceIntent, '| Category:', hasCategoryIntent);
+    console.log('[RAG] Requested category:', requestedCategory, '| Extracted price:', extractedMaxPrice);
     
     // PASSO 2: Tentar RAG semântico primeiro
     try {
@@ -935,6 +939,110 @@ async function processWithAIAgent(
             max_price_requested: extractedMaxPrice,
             cheapest_shown: true
           };
+        }
+      }
+    }
+    
+    // ===== PASSO 2.6: BUSCA DIRETA POR CATEGORIA (quando categoria especificada sem preço) =====
+    // Se o cliente perguntou por uma categoria específica (ex: "tem sedan?", "quero um SUV")
+    // mas NÃO especificou preço, fazer busca dedicada por categoria
+    if (requestedCategory && !hasPriceIntent && relevantVehicles.length === 0) {
+      console.log('[RAG] Category-only search for:', requestedCategory);
+      
+      // Buscar TODOS os veículos disponíveis e filtrar por categoria
+      const { data: allAvailableVehicles } = await supabase
+        .from('vehicles')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+        .eq('status', 'disponivel')
+        .order('sale_price', { ascending: true })
+        .limit(100); // Buscar mais para filtrar
+      
+      if (allAvailableVehicles && allAvailableVehicles.length > 0) {
+        // Filtrar por categoria no servidor
+        const vehiclesInCategory = allAvailableVehicles.filter((v: any) => {
+          const vCategory = getVehicleCategory(v.model || '', v.version || '');
+          return vCategory === requestedCategory;
+        });
+        
+        console.log('[RAG] Found', vehiclesInCategory.length, 'vehicles in category', requestedCategory);
+        
+        if (vehiclesInCategory.length > 0) {
+          // Limitar a 15 para não sobrecarregar
+          const limitedVehicles = vehiclesInCategory.slice(0, 15);
+          limitedVehicles.forEach((v: any) => {
+            const category = getVehicleCategory(v.model || '', v.version || '');
+            relevantVehicles.push({ 
+              ...v, 
+              similarity: 0.95, 
+              from_category_search: true, 
+              vehicle_category: category 
+            });
+          });
+          
+          ragQueryInfo = {
+            ...ragQueryInfo,
+            category_search: true,
+            requested_category: requestedCategory,
+            total_in_category: vehiclesInCategory.length,
+            shown_vehicles: limitedVehicles.length
+          };
+        } else {
+          // Nenhum veículo da categoria - informar e mostrar alternativas
+          console.log('[RAG] No vehicles found in category', requestedCategory);
+          ragQueryInfo = {
+            ...ragQueryInfo,
+            no_vehicles_in_category: true,
+            requested_category: requestedCategory,
+            total_available: allAvailableVehicles.length
+          };
+          
+          // Mostrar alguns veículos disponíveis como alternativa
+          const alternativeVehicles = allAvailableVehicles.slice(0, 5);
+          alternativeVehicles.forEach((v: any) => {
+            const category = getVehicleCategory(v.model || '', v.version || '');
+            relevantVehicles.push({ 
+              ...v, 
+              similarity: 0.5, 
+              alternative_option: true, 
+              vehicle_category: category 
+            });
+          });
+        }
+      }
+    }
+    
+    // ===== PASSO 2.7: BUSCA COMBINADA CATEGORIA + PREÇO =====
+    // Quando tem categoria E preço, garantir que a busca considera ambos
+    if (requestedCategory && hasPriceIntent && extractedMaxPrice && relevantVehicles.length === 0) {
+      console.log('[RAG] Combined category + price search for:', requestedCategory, 'até R$', extractedMaxPrice);
+      
+      const { data: allInBudget } = await supabase
+        .from('vehicles')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+        .eq('status', 'disponivel')
+        .lte('sale_price', extractedMaxPrice)
+        .order('sale_price', { ascending: false })
+        .limit(100);
+      
+      if (allInBudget && allInBudget.length > 0) {
+        const vehiclesInCategoryAndBudget = allInBudget.filter((v: any) => {
+          const vCategory = getVehicleCategory(v.model || '', v.version || '');
+          return vCategory === requestedCategory;
+        });
+        
+        console.log('[RAG] Found', vehiclesInCategoryAndBudget.length, 'vehicles in category', requestedCategory, 'within budget');
+        
+        if (vehiclesInCategoryAndBudget.length > 0) {
+          const limitedVehicles = vehiclesInCategoryAndBudget.slice(0, 15);
+          limitedVehicles.forEach((v: any) => {
+            const category = getVehicleCategory(v.model || '', v.version || '');
+            relevantVehicles.push({ 
+              ...v, 
+              similarity: 0.95, 
+              from_combined_search: true, 
+              vehicle_category: category 
+            });
+          });
         }
       }
     }
@@ -3051,8 +3159,10 @@ async function extractAndSaveQualificationData(
     return { isQualified: true, newlyQualified: false, qualificationLevel: 'q2' };
   }
 
-  // ===== Q2 CHECK: Q1 + Vehicle Interest =====
-  // Q2 requires: vehicle_interest detected in THIS conversation (updates), not just historical data
+  // ===== Q2 CHECK: Q1 + Vehicle Interest + MINIMUM MESSAGES =====
+  // Q2 requires: 
+  // 1. vehicle_interest detected in THIS conversation (updates), not just historical data
+  // 2. MINIMUM of 4 messages exchanged (2 from each side) to prevent premature handoff
   const currentLevelAfterQ1 = currentLevel === 'q0' ? 'q1' : currentLevel;
   
   if (currentLevelAfterQ1 === 'q1') {
@@ -3060,11 +3170,17 @@ async function extractAndSaveQualificationData(
     // This prevents triggering handoff just because lead had interest in a previous conversation
     const hasNewVehicleInterest = !!updates.vehicle_interest;
     
+    // Get message count to ensure we have enough conversation before handoff
+    const messageCount = qualData.message_count || 0;
+    const MINIMUM_MESSAGES_FOR_Q2 = 4; // At least 4 messages (2 exchanges) before handoff
+    
     console.log('[Q2 Check] Has NEW vehicle interest in this message:', hasNewVehicleInterest);
     console.log('[Q2 Check] Historical vehicle_interest:', qualData.vehicle_interest || 'none');
+    console.log('[Q2 Check] Message count:', messageCount, '| Minimum required:', MINIMUM_MESSAGES_FOR_Q2);
     
-    if (hasNewVehicleInterest) {
-      console.log('[Q2] Vehicle interest confirmed, progressing to Q2');
+    // CRITICAL: Only progress to Q2 if we have BOTH vehicle interest AND enough messages
+    if (hasNewVehicleInterest && messageCount >= MINIMUM_MESSAGES_FOR_Q2) {
+      console.log('[Q2] Vehicle interest confirmed AND minimum messages reached, progressing to Q2');
       
       // Get assigned salesperson name for handoff message
       const { data: lead } = await supabase
@@ -3258,7 +3374,10 @@ async function extractDataWithAI(
   // Reverse to get chronological order for analysis
   const messages = recentMessages?.reverse() || [];
   
-  if (!messages || messages.length < 2) {
+  // CRITICAL: Need at least 3 messages (real conversation) before extracting vehicle_interest
+  // This prevents false positives from single-message greetings
+  if (!messages || messages.length < 3) {
+    console.log('[Qualification] Skipping AI extraction - only', messages?.length || 0, 'messages (need at least 3)');
     return {};
   }
   

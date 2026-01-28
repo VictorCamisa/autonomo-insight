@@ -751,31 +751,41 @@ async function processWithAIAgent(
   // ===== ANTI-HALLUCINATION GUARDRAILS (CRITICAL) =====
   const antiHallucinationRules = `
 
-===== ⚠️ REGRAS CRÍTICAS DE ESTOQUE - LEIA COM ATENÇÃO =====
-🚫 VOCÊ ESTÁ PROIBIDA DE INVENTAR INFORMAÇÕES!
+===== ⛔ REGRAS OBRIGATÓRIAS - FALHAR AQUI É INACEITÁVEL =====
 
-🔴 ANTES DE RESPONDER SOBRE QUALQUER VEÍCULO:
-1. LEIA a lista "VEÍCULOS DISPONÍVEIS" abaixo
-2. PROCURE o modelo que o cliente perguntou (ex: "Doblo", "Civic", "Polo")
-3. SE ENCONTRAR → Cite os detalhes EXATOS da lista (marca, modelo, ano, preço)
-4. SE NÃO ENCONTRAR → Diga "esse modelo não está no estoque no momento"
+🧠 ANTES DE RESPONDER SOBRE QUALQUER VEÍCULO, FAÇA ISSO:
 
-❌ PROIBIDO INVENTAR:
-- Não diga "foi vendido" se o carro simplesmente não está na lista
-- Não confirme disponibilidade sem verificar a lista
-- Não invente cores, anos, preços ou km
-- Não diga "não temos" sem antes procurar na lista
+1. LEIA a seção "VEÍCULOS DISPONÍVEIS" que aparece mais abaixo neste prompt
+2. PROCURE o modelo E o ano que o cliente mencionou
+3. RESPONDA baseado SOMENTE no que está na lista
 
-✅ RESPOSTAS CORRETAS:
-- Cliente: "Tem Doblo?" + Doblo NA lista → "Sim! Temos a Doblo [dados exatos da lista]!"
-- Cliente: "Tem Civic?" + Civic NÃO na lista → "O Civic não está no estoque agora. Temos outros modelos como [cite da lista]..."
-- Cliente: "Já vendeu a Doblo?" + Doblo NA lista → "Não, a Doblo ainda está disponível! [cite dados]"
-- Cliente: "Já vendeu a Doblo?" + Doblo NÃO na lista → "Esse modelo não está no estoque no momento. Posso te mostrar outros?"
+📋 REGRA DE OURO:
+   SE o veículo (modelo+ano) ESTÁ NA LISTA → "Sim! Temos!" + dados exatos
+   SE o veículo NÃO ESTÁ NA LISTA → "Esse modelo/ano não está no estoque"
 
-⚠️ SE NÃO SABE OU NÃO ENCONTROU → "Deixa eu verificar e já te retorno!"
-⚠️ "Já vendeu?" É PERGUNTA SOBRE ESTOQUE - verifique a lista antes de responder!
+❌ ERROS GRAVES (NUNCA FAÇA ISSO):
+   - Dizer "não temos" E depois sugerir O MESMO carro
+   - Dizer "foi vendido" sem ter essa informação
+   - Dizer "não está disponível" para um carro que ESTÁ na lista
+   - Inventar preços, anos ou características
 
-===== FIM DAS REGRAS CRÍTICAS =====
+📌 EXEMPLOS DE RESPOSTAS:
+
+SITUAÇÃO 1: Cliente pede "Gol 2015" e na lista tem "Volkswagen Gol 2015 | R$ 45.990"
+✅ CORRETO: "Temos sim o Gol 2015! Está por R$ 45.990. Quer saber mais?"
+❌ ERRADO: "O Gol 2015 não está disponível. Mas temos o Gol 2015 por R$ 45.990"
+
+SITUAÇÃO 2: Cliente pede "Civic 2020" e na lista NÃO tem Civic 2020
+✅ CORRETO: "O Civic 2020 não está no estoque no momento. Temos outros modelos como..."
+❌ ERRADO: "O Civic 2020 foi vendido" (você não sabe se foi vendido!)
+
+SITUAÇÃO 3: Cliente pergunta "Já vendeu o Polo?"
+- Primeiro PROCURE "Polo" na lista
+- SE ENCONTRAR: "Não, o Polo ainda está disponível!"
+- SE NÃO ENCONTRAR: "O Polo não está no estoque no momento"
+- ❌ NUNCA diga "sim, foi vendido" só porque não achou na lista!
+
+===== FIM DAS REGRAS =====
 `;
 
   systemPrompt = antiHallucinationRules + systemPrompt;
@@ -841,14 +851,29 @@ Se for a PRIMEIRA mensagem do cliente (ele disse apenas "oi", "olá", "bom dia",
 ${specialInstructions.year_matching_instructions}
 `;
   } else {
-    // Default year matching rule
+    // Default year matching rule - REWRITTEN TO PREVENT HALLUCINATIONS
     systemPrompt += `
 
-===== 🚗 REGRA DE ANO DO VEÍCULO =====
-Se o cliente pedir um veículo de um ANO ESPECÍFICO e NÃO TIVERMOS EXATAMENTE esse ano:
-1. NUNCA diga apenas "não temos"
-2. SEMPRE sugira anos PRÓXIMOS que temos (±2 anos)
-3. Seja proativo: "Não temos o Civic 2007, mas temos o Civic 2008 e 2015!"
+===== 🚗 REGRA DE ANO DO VEÍCULO (LEIA COM ATENÇÃO!) =====
+
+🔴 PASSO A PASSO OBRIGATÓRIO:
+
+1️⃣ PRIMEIRO: Procure na lista "VEÍCULOS DISPONÍVEIS" se existe EXATAMENTE o modelo+ano pedido
+   - Exemplo: Cliente pediu "Gol 2015" → Procure "Gol" com ano "2015" na lista
+
+2️⃣ SE ENCONTRAR o modelo+ano EXATO:
+   ✅ Responda: "Sim! Temos o [modelo] [ano] por [preço exato da lista]!"
+   ❌ NÃO diga "não temos" se o carro ESTÁ na lista!
+
+3️⃣ SOMENTE SE NÃO ENCONTRAR o ano exato:
+   - Procure o mesmo modelo em anos PRÓXIMOS (±2 anos)
+   - Responda: "O [modelo] [ano pedido] não está no estoque, mas temos o [modelo] [ano disponível]!"
+
+⚠️ ERRO GRAVE A EVITAR:
+   - Cliente: "Quero saber sobre o Gol 2015"
+   - Na lista: "Volkswagen Gol 2015 | R$ 45.990"
+   - ❌ ERRADO: "O Gol 2015 não está disponível. Mas temos o Gol 2015 por R$ 45.990"
+   - ✅ CORRETO: "Sim! Temos o Gol 2015 por R$ 45.990! Quer saber mais detalhes?"
 `;
   }
 

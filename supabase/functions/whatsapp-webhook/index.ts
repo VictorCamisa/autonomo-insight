@@ -1198,7 +1198,79 @@ ${specialInstructions.year_matching_instructions}
     const shownCount = ragQueryInfo.shown_vehicles || relevantVehicles.length;
     const maxPrice = ragQueryInfo.max_price || 0;
     
-    systemPrompt += `
+    // Analisar categorias de veículos disponíveis para sugerir refinamento
+    const vehicleCategories: Record<string, number> = {};
+    const vehicleBrands: Record<string, number> = {};
+    for (const v of relevantVehicles) {
+      // Categorizar por tipo (baseado em modelos conhecidos)
+      const modelLower = (v.model || '').toLowerCase();
+      let category = 'sedan';
+      if (/tracker|creta|compass|renegade|captur|kicks|hr-v|hrv|t-cross|tcross|ecosport|duster|tucson|sportage|rav4|cx-5|cx5|tiguan|trailblazer|sw4/.test(modelLower)) {
+        category = 'SUV';
+      } else if (/onix|gol|polo|hb20|sandero|ka|fiesta|up!|etios|fit|march|mobi|kwid|argo|cronos/.test(modelLower)) {
+        category = 'Hatch/Compacto';
+      } else if (/hilux|ranger|s10|frontier|amarok|toro|oroch|montana|saveiro|strada/.test(modelLower)) {
+        category = 'Picape';
+      } else if (/civic|corolla|cruze|jetta|sentra|city|fluence|virtus|voyage|prisma/.test(modelLower)) {
+        category = 'Sedan';
+      }
+      vehicleCategories[category] = (vehicleCategories[category] || 0) + 1;
+      
+      const brand = v.brand || 'Outro';
+      vehicleBrands[brand] = (vehicleBrands[brand] || 0) + 1;
+    }
+    
+    // Se tem MUITAS opções (> 15), sugerir refinamento inteligente
+    if (totalInBudget > 15) {
+      const categoriesAvailable = Object.entries(vehicleCategories)
+        .filter(([_, count]) => count >= 1)
+        .map(([cat, count]) => `${cat} (${count})`)
+        .join(', ');
+      
+      const topBrands = Object.entries(vehicleBrands)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([brand, count]) => `${brand} (${count})`)
+        .join(', ');
+      
+      systemPrompt += `
+
+===== 💰 BUSCA POR FAIXA DE PREÇO - MUITAS OPÇÕES! =====
+
+O cliente pediu veículos até R$ ${maxPrice.toLocaleString('pt-BR')}.
+
+📊 ESTATÍSTICAS:
+   - Total de veículos disponíveis nesta faixa: ${totalInBudget} (MUITOS!)
+   - Listamos os ${shownCount} principais abaixo
+
+🎯 ESTRATÉGIA DE REFINAMENTO:
+Como são MUITAS opções, faça uma pergunta para REFINAR a busca!
+
+📝 PERGUNTAS DE REFINAMENTO (escolha UMA):
+1. "Temos ${totalInBudget} opções até R$ ${maxPrice.toLocaleString('pt-BR')}! 🚗 Pra ajudar melhor, você prefere: SUV, Sedan, Hatch ou Picape?"
+2. "Opa, várias opções! Tá procurando carro pra família, trabalho ou uso no dia-a-dia?"
+3. "São várias opções boas! Me conta: automático ou manual? Isso ajuda a filtrar!"
+
+📋 CATEGORIAS DISPONÍVEIS:
+${categoriesAvailable}
+
+📋 MARCAS COM MAIS OPÇÕES:
+${topBrands}
+
+⚠️ REGRAS:
+1. Se o cliente pedir ESPECIFICAMENTE para ver todos, liste os ${shownCount} principais
+2. Se o cliente responder com uma categoria (ex: "SUV"), filtre e mostre apenas SUVs da lista
+3. Se o cliente responder com marca (ex: "Chevrolet"), filtre e mostre apenas dessa marca
+4. SEMPRE mencione que temos ${totalInBudget} opções no total
+
+📝 EXEMPLO DE RESPOSTA:
+"Temos ${totalInBudget} opções até R$ ${maxPrice.toLocaleString('pt-BR')}! 🚗
+
+Pra te ajudar melhor, me conta: você prefere um SUV, Sedan, Hatch ou Picape?"
+`;
+    } else {
+      // Menos de 15 opções - lista todos
+      systemPrompt += `
 
 ===== 💰 BUSCA POR FAIXA DE PREÇO =====
 
@@ -1209,35 +1281,34 @@ O cliente pediu veículos até R$ ${maxPrice.toLocaleString('pt-BR')}.
    - Veículos listados abaixo: ${shownCount}
 
 ⚠️ REGRA CRÍTICA PARA BUSCA POR PREÇO:
-1. Liste TODOS os veículos que estão na lista abaixo (até ${shownCount})
+1. Liste TODOS os veículos que estão na lista abaixo (são poucos, cabe listar!)
 2. NÃO resuma dizendo "temos X opções" - LISTE CADA UM com marca, modelo, ano e preço
 3. Use formato de LISTA NUMERADA:
    1. *Marca Modelo Ano* - R$ X.XXX
    2. *Marca Modelo Ano* - R$ X.XXX
    (continue para todos)
 
-4. Se existirem mais veículos além dos listados (${totalInBudget} > ${shownCount}):
-   → Mencione: "Esses são os principais! Temos mais ${totalInBudget - shownCount} opções nessa faixa. Quer ver mais?"
+4. Se existirem mais veículos além dos listados:
+   → Mencione: "Esses são os principais! Temos mais ${totalInBudget > shownCount ? totalInBudget - shownCount : 0} opções. Quer ver mais?"
 
 5. ORGANIZE por faixa de preço:
    → "Mais próximos do seu orçamento:" (os mais caros da lista)
    → "Opções mais econômicas:" (os mais baratos)
 
 📝 EXEMPLO DE RESPOSTA CORRETA:
-"Até R$ 80.000, temos várias opções! 🚗
+"Até R$ ${maxPrice.toLocaleString('pt-BR')}, temos essas opções! 🚗
 
 *Próximos do seu orçamento:*
 1. *Chevrolet Onix 2023* - R$ 77.990
 2. *Honda Civic 2015* - R$ 74.990
-3. *Renault Captur 2018* - R$ 74.990
 
 *Opções mais econômicas:*
-4. *Ford Ka 2021* - R$ 54.990
-5. *Volkswagen Gol 2021* - R$ 50.990
-...
+3. *Ford Ka 2021* - R$ 54.990
+4. *Volkswagen Gol 2021* - R$ 50.990
 
 Qual te interessa? Posso mandar mais detalhes!"
 `;
+    }
   }
 
   // Se não encontrou nada no orçamento solicitado

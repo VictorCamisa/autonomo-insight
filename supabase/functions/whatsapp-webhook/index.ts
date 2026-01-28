@@ -1860,17 +1860,26 @@ async function extractAndSaveQualificationData(
     }
   }
 
-  // ===== Q2 CHECK: Q1 + Lead Source + Vehicle Interest =====
-  // Q2 requires: vehicle_interest (filled)
-  // lead_source_confirmed is optional but helps
+  // ===== CRITICAL: Check if already Q2 BEFORE trying to progress =====
+  // If already Q2, do NOT re-trigger handoff
+  if (qualData.qualification_level === 'q2' || qualData.is_qualified) {
+    console.log('[Q2 Check] Lead already at Q2/qualified - skipping progression');
+    return { isQualified: true, newlyQualified: false, qualificationLevel: 'q2' };
+  }
+
+  // ===== Q2 CHECK: Q1 + Vehicle Interest =====
+  // Q2 requires: vehicle_interest detected in THIS conversation (updates), not just historical data
   const currentLevelAfterQ1 = currentLevel === 'q0' ? 'q1' : currentLevel;
   
   if (currentLevelAfterQ1 === 'q1') {
-    const hasVehicleInterest = !!(qualData.vehicle_interest || updates.vehicle_interest);
+    // CRITICAL: Only use NEW updates.vehicle_interest, NOT historical qualData.vehicle_interest
+    // This prevents triggering handoff just because lead had interest in a previous conversation
+    const hasNewVehicleInterest = !!updates.vehicle_interest;
     
-    console.log('[Q2 Check] Has vehicle interest:', hasVehicleInterest);
+    console.log('[Q2 Check] Has NEW vehicle interest in this message:', hasNewVehicleInterest);
+    console.log('[Q2 Check] Historical vehicle_interest:', qualData.vehicle_interest || 'none');
     
-    if (hasVehicleInterest) {
+    if (hasNewVehicleInterest) {
       console.log('[Q2] Vehicle interest confirmed, progressing to Q2');
       
       // Get assigned salesperson name for handoff message
@@ -1946,10 +1955,7 @@ async function extractAndSaveQualificationData(
     }
   }
 
-  // Already at Q2
-  if (qualData.qualification_level === 'q2' || qualData.is_qualified) {
-    return { isQualified: true, newlyQualified: false, qualificationLevel: 'q2' };
-  }
+  // Already at Q2 check was moved to beginning of function for early exit
 
   return { isQualified: false, newlyQualified: false, qualificationLevel: currentLevelAfterQ1 };
 }
@@ -2040,19 +2046,33 @@ async function extractDataWithAI(
         messages: [
           {
             role: 'system',
-            content: `Você é um extrator de dados de conversas de vendas de veículos.
-Analise a conversa e extraia APENAS informações que o CLIENTE confirmou explicitamente.
-NÃO invente dados. Se não tiver certeza, retorne null.
+            content: `Você é um extrator RIGOROSO de dados de conversas de vendas de veículos.
 
-Retorne um JSON com APENAS os campos que você encontrou na conversa:
-- vehicle_interest: string (carro que o cliente quer, modelo/ano se mencionou)
-- budget: number (orçamento total em reais, sem formatação)
-- down_payment: number (valor de entrada em reais)
-- desired_installment: number (valor da parcela em reais)
-- has_trade_in: boolean (se tem carro para dar na troca)
-- trade_in_vehicle: string (qual carro vai dar na troca)
-- clean_credit: boolean (se disse que nome está limpo)
-- cpf: string (apenas números)
+⚠️ REGRAS CRÍTICAS - SIGA À RISCA:
+
+1. EXTRAIA APENAS informações que o CLIENTE disse EXPLICITAMENTE nas mensagens
+2. NÃO INVENTE DADOS sob nenhuma circunstância
+3. Se o cliente disse apenas "oi", "olá", "boa tarde" = retorne {}
+4. Se o cliente fez uma pergunta genérica como "vocês tem carro?" sem especificar modelo = NÃO extraia vehicle_interest
+5. vehicle_interest SÓ deve ser preenchido se o cliente MENCIONOU um modelo específico (ex: "quero um Polo", "tem Civic 2020?")
+
+Retorne um JSON com APENAS os campos que o CLIENTE DISSE EXPLICITAMENTE:
+- vehicle_interest: string (APENAS se o cliente MENCIONOU um modelo/marca específica)
+- budget: number (APENAS se o cliente disse "tenho X para gastar")
+- down_payment: number (APENAS se o cliente disse valor de entrada)
+- desired_installment: number (APENAS se o cliente disse valor de parcela)
+- has_trade_in: boolean (APENAS se o cliente disse que tem ou não tem carro na troca)
+- trade_in_vehicle: string (APENAS se o cliente disse qual carro tem)
+- clean_credit: boolean (APENAS se o cliente confirmou nome limpo/sujo)
+- cpf: string (APENAS se o cliente informou o CPF)
+
+Se não encontrar NENHUMA informação concreta, retorne: {}
+
+EXEMPLOS:
+- Cliente: "oi" → {}
+- Cliente: "tem carro bom?" → {}
+- Cliente: "quero um Polo" → {"vehicle_interest": "Polo"}
+- Cliente: "tem Civic 2020 por até 80 mil?" → {"vehicle_interest": "Civic 2020", "budget": 80000}
 
 Retorne APENAS o JSON, sem explicações.`
           },

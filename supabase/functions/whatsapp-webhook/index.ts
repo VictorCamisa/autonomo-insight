@@ -1125,8 +1125,11 @@ Exemplo CORRETO:
 Cliente: "Pode mandar foto dos bancos do Tracker?"
 (Você localiza na lista: "• Chevrolet Tracker 2015 | R$ 72.990 | 87.000 km")
 (Abaixo vê: "📸 FOTOS DISPONÍVEIS:" e encontra "foto_bancos: https://...")
-Você: "Claro! Aqui estão os bancos do Tracker 2015! 👇
-[ENVIAR_FOTO: https://url-dos-bancos-do-tracker.jpg]"
+Você: "[ENVIAR_FOTO: https://url-dos-bancos-do-tracker.jpg]"
+
+⚠️ IMPORTANTE: Ao enviar fotos, NÃO adicione texto descritivo como "Aqui estão as fotos" ou "Segue a foto".
+Apenas envie a tag [ENVIAR_FOTO: URL] diretamente, sem texto adicional explicando qual foto está enviando.
+Se o cliente pediu múltiplas fotos, envie todas as tags [ENVIAR_FOTO] em sequência sem descrições entre elas.
 
 Exemplo quando NÃO TEM:
 (Você localiza o veículo mas NÃO vê "foto_bancos" listada)
@@ -2376,9 +2379,10 @@ async function extractAndSaveQualificationData(
       .update(leadsUpdate)
       .eq('id', leadId);
     
-    // ===== NEW: Also update negotiation vehicle_id when vehicle interest changes =====
+    // ===== NEW: Create NEW negotiation when vehicle interest changes =====
+    // Instead of updating, we CREATE a new negotiation (hidden from pipeline)
+    // that appears only on the lead's detail page
     if (updates.vehicle_interest) {
-      // Try to find the vehicle in inventory by model/brand match
       const interestLower = updates.vehicle_interest.toLowerCase();
       
       // Search for matching vehicle in inventory
@@ -2400,17 +2404,39 @@ async function extractAndSaveQualificationData(
           }
         }
         
-        console.log('[Qualification] Updating negotiation vehicle_id to:', bestMatch.brand, bestMatch.model, bestMatch.id);
-        
-        // Update the active negotiation with the new vehicle
-        await supabase
+        // Check if we already have a negotiation for this exact vehicle
+        const { data: existingNegotiation } = await supabase
           .from('negotiations')
-          .update({ 
-            vehicle_id: bestMatch.id,
-            // Also clear any stale vehicle_interest text since we now have a linked vehicle
-          })
+          .select('id')
           .eq('lead_id', leadId)
-          .in('status', ['atendimento_ia', 'negociando', 'follow_up']); // Only update active negotiations
+          .eq('vehicle_id', bestMatch.id)
+          .maybeSingle();
+        
+        if (!existingNegotiation) {
+          // Get the salesperson from the existing primary negotiation
+          const { data: primaryNegotiation } = await supabase
+            .from('negotiations')
+            .select('salesperson_id')
+            .eq('lead_id', leadId)
+            .eq('show_in_pipeline', true)
+            .single();
+          
+          console.log('[Qualification] Creating NEW negotiation for vehicle:', bestMatch.brand, bestMatch.model, bestMatch.id);
+          
+          // Create new negotiation, hidden from pipeline
+          await supabase
+            .from('negotiations')
+            .insert({
+              lead_id: leadId,
+              vehicle_id: bestMatch.id,
+              salesperson_id: primaryNegotiation?.salesperson_id || null,
+              status: 'atendimento_ia',
+              show_in_pipeline: false, // Hidden from main pipeline
+              notes: `Interesse em ${bestMatch.brand} ${bestMatch.model} identificado na conversa`,
+            });
+        } else {
+          console.log('[Qualification] Negotiation already exists for this vehicle, skipping creation');
+        }
       }
     }
   }

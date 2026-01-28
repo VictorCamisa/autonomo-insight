@@ -776,19 +776,34 @@ async function processWithAIAgent(
     }
     
     // ===== PASSO 2.5: BUSCA DIRETA POR PREÇO (quando detectado) =====
-    if (hasPriceIntent && extractedMaxPrice && relevantVehicles.length < 5) {
+    // IMPORTANTE: Para busca por preço, precisamos mostrar MAIS opções já que é uma busca aberta
+    if (hasPriceIntent && extractedMaxPrice) {
       console.log('[RAG] Searching by price range: até R$', extractedMaxPrice);
       
-      // Buscar veículos dentro da faixa de preço
+      // Contar quantos veículos existem nessa faixa
+      const { count: totalInBudget } = await supabase
+        .from('vehicles')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'disponivel')
+        .lte('sale_price', extractedMaxPrice);
+      
+      console.log('[RAG] Total vehicles within budget:', totalInBudget);
+      
+      // Buscar veículos dentro da faixa de preço - LIMITE AUMENTADO para 15
       const { data: vehiclesByPrice } = await supabase
         .from('vehicles')
         .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
         .eq('status', 'disponivel')
         .lte('sale_price', extractedMaxPrice)
         .order('sale_price', { ascending: false }) // Mais caros primeiro (perto do budget)
-        .limit(5);
+        .limit(15); // Aumentado de 5 para 15
       
       if (vehiclesByPrice && vehiclesByPrice.length > 0) {
+        // Para busca por preço PURO (sem modelo), substituir resultados existentes
+        if (!messageHasVehicleIntent) {
+          relevantVehicles = []; // Limpar resultados anteriores, priorizar preço
+        }
+        
         const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
         vehiclesByPrice.forEach((v: any) => {
           if (!existingIds.has(v.id)) {
@@ -796,7 +811,17 @@ async function processWithAIAgent(
             existingIds.add(v.id);
           }
         });
-        console.log('[RAG] Price search added', vehiclesByPrice.length, 'vehicles within budget');
+        console.log('[RAG] Price search found', vehiclesByPrice.length, 'vehicles within budget');
+        
+        // Adicionar informação de quantos veículos existem no total
+        if (totalInBudget && totalInBudget > vehiclesByPrice.length) {
+          ragQueryInfo = {
+            ...ragQueryInfo,
+            total_vehicles_in_budget: totalInBudget,
+            shown_vehicles: vehiclesByPrice.length,
+            max_price: extractedMaxPrice
+          };
+        }
       } else {
         // Se não encontrou dentro do orçamento, buscar os mais baratos do estoque
         console.log('[RAG] No vehicles within R$', extractedMaxPrice, '- finding cheapest options');
@@ -805,17 +830,21 @@ async function processWithAIAgent(
           .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
           .eq('status', 'disponivel')
           .order('sale_price', { ascending: true }) // Mais baratos primeiro
-          .limit(5);
+          .limit(10);
         
         if (cheapestVehicles && cheapestVehicles.length > 0) {
-          const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
+          relevantVehicles = []; // Limpar e usar apenas os mais baratos
           cheapestVehicles.forEach((v: any) => {
-            if (!existingIds.has(v.id)) {
-              relevantVehicles.push({ ...v, similarity: 0.7, cheapest_option: true });
-              existingIds.add(v.id);
-            }
+            relevantVehicles.push({ ...v, similarity: 0.7, cheapest_option: true });
           });
           console.log('[RAG] Added cheapest vehicles as alternatives');
+          
+          ragQueryInfo = {
+            ...ragQueryInfo,
+            no_vehicles_in_budget: true,
+            max_price_requested: extractedMaxPrice,
+            cheapest_shown: true
+          };
         }
       }
     }
@@ -1160,6 +1189,78 @@ ${specialInstructions.year_matching_instructions}
    - Na lista: "Volkswagen Gol 2015 | R$ 45.990"
    - ❌ ERRADO: "O Gol 2015 não está disponível. Mas temos o Gol 2015 por R$ 45.990"
    - ✅ CORRETO: "Sim! Temos o Gol 2015 por R$ 45.990! Quer saber mais detalhes?"
+`;
+  }
+
+  // ===== REGRA ESPECIAL PARA BUSCA POR PREÇO (pergunta aberta) =====
+  if (ragQueryInfo && (ragQueryInfo.max_price || ragQueryInfo.total_vehicles_in_budget)) {
+    const totalInBudget = ragQueryInfo.total_vehicles_in_budget || relevantVehicles.length;
+    const shownCount = ragQueryInfo.shown_vehicles || relevantVehicles.length;
+    const maxPrice = ragQueryInfo.max_price || 0;
+    
+    systemPrompt += `
+
+===== 💰 BUSCA POR FAIXA DE PREÇO =====
+
+O cliente pediu veículos até R$ ${maxPrice.toLocaleString('pt-BR')}.
+
+📊 ESTATÍSTICAS:
+   - Total de veículos disponíveis nesta faixa: ${totalInBudget}
+   - Veículos listados abaixo: ${shownCount}
+
+⚠️ REGRA CRÍTICA PARA BUSCA POR PREÇO:
+1. Liste TODOS os veículos que estão na lista abaixo (até ${shownCount})
+2. NÃO resuma dizendo "temos X opções" - LISTE CADA UM com marca, modelo, ano e preço
+3. Use formato de LISTA NUMERADA:
+   1. *Marca Modelo Ano* - R$ X.XXX
+   2. *Marca Modelo Ano* - R$ X.XXX
+   (continue para todos)
+
+4. Se existirem mais veículos além dos listados (${totalInBudget} > ${shownCount}):
+   → Mencione: "Esses são os principais! Temos mais ${totalInBudget - shownCount} opções nessa faixa. Quer ver mais?"
+
+5. ORGANIZE por faixa de preço:
+   → "Mais próximos do seu orçamento:" (os mais caros da lista)
+   → "Opções mais econômicas:" (os mais baratos)
+
+📝 EXEMPLO DE RESPOSTA CORRETA:
+"Até R$ 80.000, temos várias opções! 🚗
+
+*Próximos do seu orçamento:*
+1. *Chevrolet Onix 2023* - R$ 77.990
+2. *Honda Civic 2015* - R$ 74.990
+3. *Renault Captur 2018* - R$ 74.990
+
+*Opções mais econômicas:*
+4. *Ford Ka 2021* - R$ 54.990
+5. *Volkswagen Gol 2021* - R$ 50.990
+...
+
+Qual te interessa? Posso mandar mais detalhes!"
+`;
+  }
+
+  // Se não encontrou nada no orçamento solicitado
+  if (ragQueryInfo && ragQueryInfo.no_vehicles_in_budget) {
+    systemPrompt += `
+
+===== ⚠️ ORÇAMENTO FORA DO ESTOQUE =====
+O cliente pediu veículos até R$ ${ragQueryInfo.max_price_requested?.toLocaleString('pt-BR')}, mas nosso estoque começa em preços mais altos.
+
+⚠️ COMO RESPONDER:
+1. Explique com GENTILEZA que nessa faixa específica não temos opções no momento
+2. Mostre as opções MAIS BARATAS disponíveis como alternativa
+3. Pergunte se ele pode considerar um valor um pouco maior
+
+📝 EXEMPLO:
+"Nessa faixa até R$ ${ragQueryInfo.max_price_requested?.toLocaleString('pt-BR')} não temos opções no momento 😅
+
+Mas olha nossas opções mais acessíveis:
+1. *Cherry Cielo 2012* - R$ 22.990
+2. *Kia Picanto 2008* - R$ 25.990
+3. *Peugeot 307 2010* - R$ 27.990
+
+Dá pra considerar uma dessas?"
 `;
   }
 

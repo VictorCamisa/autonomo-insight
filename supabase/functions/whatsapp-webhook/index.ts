@@ -966,24 +966,39 @@ ${specialInstructions.year_matching_instructions}
 ${specialInstructions.photo_instructions}
 `;
   } else {
-    // Default photo instructions
+    // Default photo instructions - UPDATED for categorized photos
     systemPrompt += `
 
 ===== REGRA CRÍTICA DE FOTOS =====
 ⚠️ ATENÇÃO: NUNCA envie foto de um veículo diferente do que o cliente pediu!
 
-Se pedirem foto de um veículo:
+📸 COMO ENCONTRAR E ENVIAR FOTOS:
 1. Localize o veículo EXATO no estoque pelo NOME
-2. Verifique se esse veículo TEM "foto:" na linha dele
-3. Se TEM foto: Use [ENVIAR_FOTO: URL] copiando a URL EXATA
-4. Se NÃO TEM foto: DIGA que não tem foto disponível!
+2. Veja a seção "📸 FOTOS DISPONÍVEIS:" logo abaixo do veículo
+3. As fotos estão organizadas por categoria:
+   - foto_principal: foto de capa/destaque
+   - foto_painel: painel/instrumentos
+   - foto_bancos: bancos dianteiros/interior
+   - foto_banco_traseiro: banco traseiro
+   - foto_motor: motor do veículo
+   - foto_frente: vista frontal externa
+   - foto_traseira: vista traseira externa
+   - foto_lateral_esq/foto_lateral_dir: vistas laterais
 
-Exemplo CORRETO quando TEM foto:
-"Olha só o Polo! 👇
-[ENVIAR_FOTO: https://url-da-foto.jpg]"
+4. Se o cliente pedir uma foto específica (ex: "foto do painel"):
+   - Procure "foto_painel" na lista de fotos do veículo
+   - Se EXISTIR: Use [ENVIAR_FOTO: URL] com a URL exata
+   - Se NÃO EXISTIR: Diga que não temos essa foto específica
 
-Exemplo CORRETO quando NÃO TEM foto:
-"O Ford Ka 2021 ainda não tem foto no sistema, mas posso te mostrar pessoalmente!"
+Exemplo quando TEM a foto pedida:
+Cliente: "tem foto do painel?"
+Você: "Claro! Aqui está o painel do Tracker! 👇
+[ENVIAR_FOTO: https://url-da-foto-painel.jpg]"
+
+Exemplo quando NÃO TEM a foto pedida:
+Cliente: "tem foto do motor?"
+(Se não houver foto_motor na lista)
+Você: "Ainda não temos foto do motor desse veículo no sistema, mas posso te mostrar pessoalmente!"
 `;
   }
 
@@ -1101,18 +1116,58 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
       const dbPhotos = photosByVehicle[v.id] || [];
       const legacyPhotos = v.images && v.images.length > 0 ? v.images : [];
       
-      // Priorizar foto da tabela vehicle_images (com is_cover primeiro)
+      // Organizar fotos por categoria
+      const photosByCategory: Record<string, string> = {};
       let fotoPrincipal = '';
+      
       if (dbPhotos.length > 0) {
-        const coverPhoto = dbPhotos.find((p) => p.is_cover);
-        fotoPrincipal = coverPhoto ? coverPhoto.url : dbPhotos[0].url;
+        // Agrupar por categoria
+        for (const photo of dbPhotos) {
+          if (photo.is_cover && !fotoPrincipal) {
+            fotoPrincipal = photo.url;
+          }
+          const cat = photo.category || 'geral';
+          if (!photosByCategory[cat]) {
+            photosByCategory[cat] = photo.url;
+          }
+        }
+        // Se não achou foto de capa, usar a primeira
+        if (!fotoPrincipal && dbPhotos.length > 0) {
+          fotoPrincipal = dbPhotos[0].url;
+        }
       } else if (legacyPhotos.length > 0) {
         fotoPrincipal = legacyPhotos[0];
+        photosByCategory['geral'] = legacyPhotos[0];
       }
       
+      // Montar linha do veículo com TODAS as fotos categorizadas
       systemPrompt += `• ${v.brand} ${v.model}${versao} ${ano} | ${preco} | ${km}`;
-      if (fotoPrincipal) {
-        systemPrompt += ` | foto: ${fotoPrincipal}`;
+      
+      if (Object.keys(photosByCategory).length > 0 || fotoPrincipal) {
+        systemPrompt += `\n  📸 FOTOS DISPONÍVEIS:`;
+        if (fotoPrincipal) {
+          systemPrompt += `\n     - foto_principal: ${fotoPrincipal}`;
+        }
+        // Mapear categorias para nomes legíveis
+        const categoryLabels: Record<string, string> = {
+          'geral': 'foto_geral',
+          'exterior_frontal': 'foto_frente',
+          'exterior_traseira': 'foto_traseira',
+          'exterior_lateral_esq': 'foto_lateral_esq',
+          'exterior_lateral_dir': 'foto_lateral_dir',
+          'interior_painel': 'foto_painel',
+          'interior_bancos': 'foto_bancos',
+          'interior_traseiro': 'foto_banco_traseiro',
+          'motor': 'foto_motor',
+          'porta_malas': 'foto_porta_malas',
+          'documentos': 'foto_documentos',
+          'detalhes': 'foto_detalhes',
+        };
+        for (const [cat, url] of Object.entries(photosByCategory)) {
+          if (cat === 'geral' && url === fotoPrincipal) continue; // Já incluída
+          const label = categoryLabels[cat] || `foto_${cat}`;
+          systemPrompt += `\n     - ${label}: ${url}`;
+        }
       } else {
         systemPrompt += ` | ⚠️ SEM FOTO`;
       }

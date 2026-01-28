@@ -1762,13 +1762,39 @@ async function sendTextInChunks(instanceName: string, targetJid: string, text: s
   // Random delay between 2-4 seconds to feel more human
   const getHumanDelay = () => 2000 + Math.random() * 2000;
   
-  const paragraphs = text
+  // First, split by double line breaks
+  const rawParagraphs = text
     .split(/\n\n+/)
     .map((p: string) => p.trim())
     .filter((p: string) => p.length > 0);
   
+  // Merge short paragraphs (labels like "*Bancos:*") with the next one
+  const paragraphs: string[] = [];
+  let pendingLabel = '';
+  
+  for (let i = 0; i < rawParagraphs.length; i++) {
+    const p = rawParagraphs[i];
+    
+    // If paragraph is very short (label-like), merge with next
+    // e.g., "*Bancos:*" alone should be merged with what follows
+    if (p.length < 40 && (p.startsWith('*') || p.startsWith('•') || p.startsWith('-') || p.endsWith(':'))) {
+      pendingLabel += (pendingLabel ? '\n' : '') + p;
+    } else if (pendingLabel) {
+      // Merge pending label with current paragraph
+      paragraphs.push(pendingLabel + '\n' + p);
+      pendingLabel = '';
+    } else {
+      paragraphs.push(p);
+    }
+  }
+  
+  // If there's a trailing label without content, add it
+  if (pendingLabel) {
+    paragraphs.push(pendingLabel);
+  }
+  
   if (paragraphs.length > 1) {
-    console.log('[AI Agent] Sending', paragraphs.length, 'separate messages');
+    console.log('[AI Agent] Sending', paragraphs.length, 'separate messages (merged short labels)');
     for (let i = 0; i < paragraphs.length; i++) {
       await sendWhatsAppMessage(instanceName, targetJid, paragraphs[i]);
       if (i < paragraphs.length - 1) {
@@ -1777,13 +1803,14 @@ async function sendTextInChunks(instanceName: string, targetJid: string, text: s
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-  } else if (text.length > 300) {
+  } else if (text.length > 600) {
+    // Only split very long messages (increased threshold)
     const sentences = text.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim());
     const chunks: string[] = [];
     let currentChunk = '';
     
     for (const sentence of sentences) {
-      if (currentChunk.length + sentence.length > 250) {
+      if (currentChunk.length + sentence.length > 500) {
         if (currentChunk) chunks.push(currentChunk.trim());
         currentChunk = sentence;
       } else {
@@ -1802,6 +1829,7 @@ async function sendTextInChunks(instanceName: string, targetJid: string, text: s
       }
     }
   } else {
+    // Send as single message
     await sendWhatsAppMessage(instanceName, targetJid, text);
   }
 }

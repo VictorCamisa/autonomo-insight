@@ -6,6 +6,50 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ===== GENERATE REAL EMBEDDINGS WITH OPENAI =====
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+  
+  if (!OPENAI_API_KEY) {
+    console.error('[Embedding] No OPENAI_API_KEY configured');
+    return null;
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: text,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Embedding] OpenAI API error:', response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    const embedding = data.data?.[0]?.embedding;
+    
+    if (!embedding || !Array.isArray(embedding)) {
+      console.error('[Embedding] Invalid embedding response');
+      return null;
+    }
+
+    console.log('[Embedding] Generated successfully, dimensions:', embedding.length);
+    return embedding;
+  } catch (error) {
+    console.error('[Embedding] Error generating:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -57,47 +101,77 @@ serve(async (req) => {
     }
 
     let processed = 0;
+    let embeddingsGenerated = 0;
     let errors = 0;
 
-    for (const vehicle of vehiclesToProcess) {
-      try {
-        // Build search text with all relevant vehicle info
-        const searchText = buildSearchText(vehicle);
-        console.log('[RAG Sync] Processing vehicle:', vehicle.id, '-', searchText.substring(0, 100));
+    // Process vehicles in batches to avoid rate limiting
+    const batchSize = 20;
+    const delayBetweenBatches = 500; // 500ms between batches
+    const delayBetweenItems = 100; // 100ms between items
 
-        // Store in vehicle_embeddings table WITHOUT vector embedding
-        // We'll use text-based search instead since Lovable AI doesn't support embeddings
-        const { error: upsertError } = await supabase
-          .from('vehicle_embeddings')
-          .upsert({
-            vehicle_id: vehicle.id,
-            embedding: null, // No embedding since API doesn't support it
-            search_text: searchText,
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'vehicle_id'
-          });
+    for (let i = 0; i < vehiclesToProcess.length; i += batchSize) {
+      const batch = vehiclesToProcess.slice(i, i + batchSize);
+      console.log(`[RAG Sync] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(vehiclesToProcess.length / batchSize)}`);
 
-        if (upsertError) {
-          console.error('[RAG Sync] Error upserting:', upsertError);
+      for (const vehicle of batch) {
+        try {
+          // Build search text with all relevant vehicle info
+          const searchText = buildSearchText(vehicle);
+          console.log('[RAG Sync] Processing vehicle:', vehicle.id, '-', searchText.substring(0, 100));
+
+          // Generate REAL embedding using OpenAI
+          const embedding = await generateEmbedding(searchText);
+
+          if (embedding) {
+            embeddingsGenerated++;
+          } else {
+            console.warn('[RAG Sync] No embedding generated for vehicle:', vehicle.id);
+          }
+
+          // Store in vehicle_embeddings table WITH vector embedding
+          const { error: upsertError } = await supabase
+            .from('vehicle_embeddings')
+            .upsert({
+              vehicle_id: vehicle.id,
+              embedding: embedding, // Now a REAL 1536-dimensional vector!
+              search_text: searchText,
+              updated_at: new Date().toISOString(),
+            }, {
+              onConflict: 'vehicle_id'
+            });
+
+          if (upsertError) {
+            console.error('[RAG Sync] Error upserting:', upsertError);
+            errors++;
+            continue;
+          }
+
+          processed++;
+          console.log('[RAG Sync] Successfully processed vehicle:', vehicle.id, 'embedding:', embedding ? 'YES' : 'NO');
+
+          // Rate limiting delay between items
+          if (embedding) {
+            await new Promise(resolve => setTimeout(resolve, delayBetweenItems));
+          }
+
+        } catch (vehicleError) {
+          console.error('[RAG Sync] Error processing vehicle:', vehicle.id, vehicleError);
           errors++;
-          continue;
         }
+      }
 
-        processed++;
-        console.log('[RAG Sync] Successfully processed vehicle:', vehicle.id);
-
-      } catch (vehicleError) {
-        console.error('[RAG Sync] Error processing vehicle:', vehicle.id, vehicleError);
-        errors++;
+      // Delay between batches
+      if (i + batchSize < vehiclesToProcess.length) {
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
       }
     }
 
-    console.log('[RAG Sync] Complete. Processed:', processed, 'Errors:', errors);
+    console.log('[RAG Sync] Complete. Processed:', processed, 'Embeddings:', embeddingsGenerated, 'Errors:', errors);
 
     return new Response(JSON.stringify({ 
       success: true, 
       processed,
+      embeddings_generated: embeddingsGenerated,
       errors,
       total: vehiclesToProcess.length
     }), {

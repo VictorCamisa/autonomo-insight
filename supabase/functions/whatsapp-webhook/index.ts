@@ -783,17 +783,18 @@ async function processWithAIAgent(
     console.log('[RAG] Found terms - Models:', foundModelTerms, 'Brands:', foundBrandTerms);
     
     // PASSO 4: Se RAG não achou ou achou poucos, busca DIRETA complementar
+    // OTIMIZAÇÃO: Reduzir limites para evitar sobrecarga de contexto
     if (relevantVehicles.length < 3) {
-      // Buscar por modelo
+      // Buscar por modelo - LIMITE REDUZIDO
       for (const term of foundModelTerms) {
-        if (relevantVehicles.length >= 10) break;
+        if (relevantVehicles.length >= 5) break; // MAX 5 veículos total
         
         const { data: vehiclesByModel } = await supabase
           .from('vehicles')
           .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
           .eq('status', 'disponivel')
           .ilike('model', `%${term}%`)
-          .limit(10);
+          .limit(3); // Reduzido de 10 para 3
         
         if (vehiclesByModel && vehiclesByModel.length > 0) {
           // Adicionar sem duplicar
@@ -808,16 +809,16 @@ async function processWithAIAgent(
         }
       }
       
-      // Buscar por marca
+      // Buscar por marca - LIMITE REDUZIDO
       for (const term of foundBrandTerms) {
-        if (relevantVehicles.length >= 10) break;
+        if (relevantVehicles.length >= 5) break; // MAX 5 veículos total
         
         const { data: vehiclesByBrand } = await supabase
           .from('vehicles')
           .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
           .eq('status', 'disponivel')
           .ilike('brand', `%${term}%`)
-          .limit(5);
+          .limit(3); // Reduzido de 5 para 3
         
         if (vehiclesByBrand && vehiclesByBrand.length > 0) {
           const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
@@ -833,14 +834,15 @@ async function processWithAIAgent(
     }
     
     // PASSO 5: Se ainda não encontrou nada E tem intent, buscar amostra do estoque
+    // OTIMIZAÇÃO: Amostra MENOR para evitar diluição de contexto
     if (relevantVehicles.length === 0) {
-      console.log('[RAG] No specific matches - fetching inventory sample');
+      console.log('[RAG] No specific matches - fetching inventory sample (limited)');
       const { data: sampleVehicles } = await supabase
         .from('vehicles')
         .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
         .eq('status', 'disponivel')
         .order('created_at', { ascending: false })
-        .limit(15);
+        .limit(5); // Reduzido de 15 para 5 - evita diluição
       
       if (sampleVehicles) {
         relevantVehicles = sampleVehicles.map((v: any) => ({ ...v, similarity: 0.3 }));
@@ -857,9 +859,61 @@ async function processWithAIAgent(
     console.log('[RAG] Added', newFromHistory.length, 'vehicles from history to context');
   }
   
+  // ===== PASSO 7: IDENTIFICAR VEÍCULO ATIVO DA CONVERSA =====
+  // Esta é a chave para responder corretamente a "foto do painel" sem especificar o carro
+  let activeVehicle: any = null;
+  
+  if (history.length > 0 && relevantVehicles.length > 0) {
+    // Percorrer histórico do mais recente para o mais antigo
+    for (let i = history.length - 1; i >= 0 && !activeVehicle; i--) {
+      const msg = history[i];
+      const msgLower = msg.content?.toLowerCase() || '';
+      
+      // Procurar menção de veículo específico
+      for (const vehicle of relevantVehicles) {
+        const modelLower = vehicle.model?.toLowerCase() || '';
+        const brandLower = vehicle.brand?.toLowerCase() || '';
+        
+        // Verificar se modelo foi mencionado nesta mensagem
+        if (modelLower.length > 2 && msgLower.includes(modelLower)) {
+          activeVehicle = vehicle;
+          console.log('[Active Vehicle] Found from history:', vehicle.brand, vehicle.model, '(from message', i, ')');
+          break;
+        }
+        // Verificar marca + modelo junto
+        if (brandLower && modelLower && 
+            (msgLower.includes(brandLower) || msgLower.includes(modelLower))) {
+          activeVehicle = vehicle;
+          console.log('[Active Vehicle] Found brand/model match:', vehicle.brand, vehicle.model);
+          break;
+        }
+      }
+    }
+    
+    // Se não encontrou no histórico mas temos veículo do histórico com alta relevância, usar ele
+    if (!activeVehicle && vehiclesFromHistory.length > 0) {
+      activeVehicle = vehiclesFromHistory[0];
+      console.log('[Active Vehicle] Using first from history:', activeVehicle.brand, activeVehicle.model);
+    }
+  }
+  
+  // ===== PASSO 8: CORTAR VEÍCULOS PARA MÁXIMO 5 (evitar sobrecarga) =====
+  // Se temos veículo ativo, ele fica em primeiro + 4 outros
+  if (activeVehicle) {
+    const otherVehicles = relevantVehicles.filter((v: any) => v.id !== activeVehicle.id).slice(0, 4);
+    relevantVehicles = [activeVehicle, ...otherVehicles];
+    console.log('[Context] Active vehicle prioritized, total:', relevantVehicles.length);
+  } else {
+    // Ordenar por similaridade e cortar
+    relevantVehicles = relevantVehicles
+      .sort((a: any, b: any) => (b.similarity || 0) - (a.similarity || 0))
+      .slice(0, 5);
+    console.log('[Context] Top 5 by similarity selected');
+  }
+  
   // Log final
-  console.log('[AI Agent] Universal search complete:', relevantVehicles.length, 'vehicles found');
-
+  console.log('[AI Agent] Universal search complete:', relevantVehicles.length, 'vehicles (max 5)');
+  console.log('[AI Agent] Active vehicle:', activeVehicle ? `${activeVehicle.brand} ${activeVehicle.model}` : 'NONE');
   console.log('[AI Agent] Using', relevantVehicles.length, 'vehicles for context');
 
   // ===== BUILD DYNAMIC PROMPT FROM DATABASE =====
@@ -1157,6 +1211,29 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
     systemPrompt += `\n\n⚠️ ATENÇÃO: O cliente pediu ano ${ragQueryInfo.extracted_year}, mas NÃO TEMOS exatamente esse ano. Os veículos abaixo são os mais SIMILARES.\n`;
   }
 
+  // ===== VEÍCULO ATIVO: Destacar no prompt para a IA =====
+  // Isso resolve o problema de "foto do painel" sem especificar o carro
+  if (activeVehicle) {
+    systemPrompt += `\n
+===== ⭐ VEÍCULO ATIVO DA CONVERSA =====
+O cliente está conversando sobre este veículo ESPECÍFICO:
+🚗 ${activeVehicle.brand} ${activeVehicle.model} ${activeVehicle.year_model || activeVehicle.year_fabrication || ''}
+
+⚠️ REGRA: Quando o cliente perguntar "foto do painel", "foto dos bancos", "foto do motor", etc. SEM especificar o carro:
+   → Assuma que ele quer do ${activeVehicle.brand} ${activeVehicle.model}
+   → Use as fotos DESTE veículo (listadas abaixo)
+   → NÃO pergunte "de qual carro?" - você já sabe!
+
+⚠️ REGRA: Se NÃO houver a foto específica pedida:
+   → Diga: "Não temos foto [do painel/dos bancos/etc] do ${activeVehicle.model} no sistema ainda"
+   → NÃO use foto de outro veículo!
+===== FIM VEÍCULO ATIVO =====
+`;
+  }
+
+  // Variável para armazenar URLs válidas por veículo (usado na validação de fotos)
+  const validPhotoUrls: Record<string, Set<string>> = {};
+
   if (relevantVehicles.length > 0) {
     // Buscar fotos da tabela vehicle_images para cada veículo
     const vehicleIds = relevantVehicles.map((v: any) => v.id);
@@ -1166,7 +1243,7 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
       .in('vehicle_id', vehicleIds)
       .order('display_order', { ascending: true });
     
-    // Agrupar fotos por veículo
+    // Agrupar fotos por veículo E construir mapa de URLs válidas
     const photosByVehicle: Record<string, { url: string; category: string | null; is_cover: boolean | null }[]> = {};
     if (vehiclePhotos) {
       vehiclePhotos.forEach((p: any) => {
@@ -1178,6 +1255,12 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
           category: p.category,
           is_cover: p.is_cover
         });
+        
+        // Construir mapa de URLs válidas para validação posterior
+        if (!validPhotoUrls[p.vehicle_id]) {
+          validPhotoUrls[p.vehicle_id] = new Set();
+        }
+        validPhotoUrls[p.vehicle_id].add(p.image_url);
       });
     }
     
@@ -1354,19 +1437,59 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
 
     console.log('[AI Agent] Response:', aiResponse.substring(0, 200));
 
-    // ===== EXTRACT AND SEND PHOTOS =====
+    // ===== EXTRACT AND VALIDATE PHOTOS =====
     const photoRegex = /\[ENVIAR_FOTO:\s*(https?:\/\/[^\]\s]+)\]/gi;
     const extractedPhotos: string[] = [];
+    const blockedPhotos: string[] = [];
     let match;
     while ((match = photoRegex.exec(aiResponse)) !== null) {
-      extractedPhotos.push(match[1].trim());
+      const photoUrl = match[1].trim();
+      
+      // ===== VALIDAÇÃO DE FOTO: Verificar se URL pertence ao veículo correto =====
+      // Esta é a última linha de defesa contra envio de fotos erradas
+      let isPhotoValid = false;
+      let photoVehicleInfo = '';
+      
+      // Se temos veículo ativo, verificar se a foto pertence a ele
+      if (activeVehicle && validPhotoUrls[activeVehicle.id]) {
+        if (validPhotoUrls[activeVehicle.id].has(photoUrl)) {
+          isPhotoValid = true;
+          photoVehicleInfo = `${activeVehicle.brand} ${activeVehicle.model}`;
+          console.log('[Photo Validation] ✅ VALID - Photo belongs to active vehicle:', photoVehicleInfo);
+        }
+      }
+      
+      // Se não tem veículo ativo ou foto não é dele, verificar se pertence a algum veículo do contexto
+      if (!isPhotoValid) {
+        for (const vehicleId of Object.keys(validPhotoUrls)) {
+          if (validPhotoUrls[vehicleId].has(photoUrl)) {
+            // Encontrou o veículo dono da foto
+            const vehicleOwner = relevantVehicles.find((v: any) => v.id === vehicleId);
+            if (vehicleOwner) {
+              isPhotoValid = true;
+              photoVehicleInfo = `${vehicleOwner.brand} ${vehicleOwner.model}`;
+              console.log('[Photo Validation] ✅ VALID - Photo belongs to:', photoVehicleInfo);
+            }
+            break;
+          }
+        }
+      }
+      
+      // Se a foto é válida (pertence a algum veículo do contexto), adicionar
+      if (isPhotoValid) {
+        extractedPhotos.push(photoUrl);
+      } else {
+        // BLOQUEAR foto que não pertence a nenhum veículo do contexto
+        blockedPhotos.push(photoUrl);
+        console.warn('[Photo Validation] ❌ BLOCKED - Photo URL not from any vehicle in context:', photoUrl.substring(0, 80));
+      }
     }
 
     // Remove photo tags AND data tags from text
     let cleanResponse = aiResponse.replace(photoRegex, '');
     cleanResponse = cleanResponse.replace(/\[DADO:[^\]]+\]/g, '').trim();
 
-    console.log('[AI Agent] Extracted photos:', extractedPhotos.length, extractedPhotos);
+    console.log('[AI Agent] Extracted photos:', extractedPhotos.length, '| Blocked:', blockedPhotos.length);
 
     // ===== QUALIFICATION FLOW =====
     let finalResponse = cleanResponse;

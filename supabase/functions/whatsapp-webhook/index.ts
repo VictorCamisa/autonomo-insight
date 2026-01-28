@@ -708,6 +708,70 @@ async function processWithAIAgent(
     }
   }
   
+  // ===== FUNÇÃO DE CATEGORIZAÇÃO CENTRALIZADA =====
+  // Esta função é usada TANTO no filtro de banco quanto no prompt
+  function getVehicleCategory(model: string, version: string = ''): string {
+    const modelLower = (model || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const versionLower = (version || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const fullName = `${modelLower} ${versionLower}`;
+    
+    // PERUA / WAGON - DEVE VIR ANTES de Hatch para evitar falso positivo com "fox"
+    if (/spacefox|crossfox|parati|variant|weekend|fielder|airwave|fit\s*aria|accord\s*wagon|golf\s*variant|passat\s*variant|megane\s*grand\s*tour|scenic|livina|grand\s*livina|idea\s*adventure|doblo/.test(fullName)) {
+      return 'Perua';
+    }
+    
+    // MINIVAN / MPV
+    if (/spin|zafira|meriva|livina|grand\s*livina|picasso|xsara|c4\s*picasso|c3\s*picasso|scenic|kangoo|partner|berlingo|doblo|fiorino|strada\s*adventure/.test(fullName)) {
+      return 'Minivan';
+    }
+    
+    // SUV / Crossover
+    if (/tracker|creta|compass|renegade|captur|kicks|hrv|hr-v|tcross|t-cross|ecosport|duster|tucson|sportage|rav4|cx5|cx-5|tiguan|trailblazer|sw4|jimny|vitara|tiggo|caoa|chery|haval|jac|cherry|ix35|santa\s*fe|sorento|outlander|asx|xtrail|x-trail|equinox|edge|territory|bronco|defender|discovery|evoque|velar|q3|q5|q7|x1|x3|x5|glb|glc|gle|xc40|xc60|xc90|2008|3008|5008|cx3|cx30|cx50|seltos|soul|niro|stonic|nivus|taos|atlas/.test(fullName)) {
+      return 'SUV';
+    }
+    
+    // Hatch / Compacto - SEM "fox" genérico, usa padrões específicos
+    if (/^onix$|^gol$|^polo$|^hb20$|^sandero$|^ka$|^fiesta$|^up$|^etios$|^fit$|^march$|^mobi$|^kwid$|^argo$|^cronos$|^golf$|^i30$|^a3$|^serie1$|^118$|^120$|^a1$|^yaris$|^swift$|^rio$|^clio$|^c3$|^208$|^punto$|^bravo$|^stilo$|^palio$|^uno$|^celta$|^corsa$|^astra$|^focus$|^picanto$|^cielo$|^307$/.test(modelLower)) {
+      return 'Hatch';
+    }
+    
+    // Picape / Utilitário
+    if (/hilux|ranger|s10|s-10|frontier|amarok|toro|oroch|montana|saveiro|strada|l200|triton|tacoma|ram|f250|f-250|silverado|maverick/.test(fullName)) {
+      return 'Picape';
+    }
+    
+    // Sedan - lista explícita
+    if (/civic|corolla|cruze|jetta|sentra|city|fluence|virtus|voyage|prisma|versa|cobalt|onix\s*plus|hb20s|logan|siena|linea|cerato|elantra|fusion|passat|a4|serie3|320|c180|c200|c250/.test(fullName)) {
+      return 'Sedan';
+    }
+    
+    // Verificar na versão se menciona "sedan"
+    if (/sedan/i.test(version)) {
+      return 'Sedan';
+    }
+    
+    return 'Outros';
+  }
+  
+  // ===== DETECTAR CATEGORIA NA MENSAGEM =====
+  let requestedCategory: string | null = null;
+  const categoryPatterns: [RegExp, string][] = [
+    [/\bsed[aã]n?s?\b/i, 'Sedan'],
+    [/\bsuv[s]?\b/i, 'SUV'],
+    [/\bhatch[s]?(?:back)?\b/i, 'Hatch'],
+    [/\bpicape[s]?\b|\bpick\s*up[s]?\b|\bcaminhonete[s]?\b/i, 'Picape'],
+    [/\bperua[s]?\b|\bwagon[s]?\b|\bstation\s*wagon[s]?\b/i, 'Perua'],
+    [/\bminivan[s]?\b|\bmpv[s]?\b/i, 'Minivan'],
+  ];
+  
+  for (const [pattern, category] of categoryPatterns) {
+    if (pattern.test(messageLower)) {
+      requestedCategory = category;
+      console.log('[RAG] Detected category request:', requestedCategory);
+      break;
+    }
+  }
+  
   // Se detectou preço, forçar busca por veículos
   const hasPriceIntent = extractedMaxPrice !== null;
   const messageHasVehicleIntent = Array.from(dynamicKeywords).some(k => messageLower.includes(k));
@@ -777,28 +841,52 @@ async function processWithAIAgent(
     
     // ===== PASSO 2.5: BUSCA DIRETA POR PREÇO (quando detectado) =====
     // IMPORTANTE: Para busca por preço, precisamos mostrar MAIS opções já que é uma busca aberta
+    // NOVO: Se detectou categoria, filtrar os veículos no lado do servidor
     if (hasPriceIntent && extractedMaxPrice) {
-      console.log('[RAG] Searching by price range: até R$', extractedMaxPrice);
+      console.log('[RAG] Searching by price range: até R$', extractedMaxPrice, '| Category filter:', requestedCategory);
       
-      // Contar quantos veículos existem nessa faixa
-      const { count: totalInBudget } = await supabase
-        .from('vehicles')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'disponivel')
-        .lte('sale_price', extractedMaxPrice);
-      
-      console.log('[RAG] Total vehicles within budget:', totalInBudget);
-      
-      // Buscar veículos dentro da faixa de preço - LIMITE AUMENTADO para 15
-      const { data: vehiclesByPrice } = await supabase
+      // Buscar veículos dentro da faixa de preço - LIMITE AUMENTADO para 30 para poder filtrar depois
+      const { data: allVehiclesByPrice } = await supabase
         .from('vehicles')
         .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
         .eq('status', 'disponivel')
         .lte('sale_price', extractedMaxPrice)
         .order('sale_price', { ascending: false }) // Mais caros primeiro (perto do budget)
-        .limit(15); // Aumentado de 5 para 15
+        .limit(50); // Buscar mais para poder filtrar por categoria
       
-      if (vehiclesByPrice && vehiclesByPrice.length > 0) {
+      console.log('[RAG] Found', allVehiclesByPrice?.length || 0, 'vehicles within budget');
+      
+      // ===== APLICAR FILTRO DE CATEGORIA SE ESPECIFICADO =====
+      let vehiclesByPrice = allVehiclesByPrice || [];
+      let totalInCategory = 0;
+      let totalInBudget = allVehiclesByPrice?.length || 0;
+      
+      if (requestedCategory && vehiclesByPrice.length > 0) {
+        console.log('[RAG] Filtering by category:', requestedCategory);
+        vehiclesByPrice = vehiclesByPrice.filter((v: any) => {
+          const vCategory = getVehicleCategory(v.model || '', v.version || '');
+          console.log(`[RAG] Vehicle ${v.model} categorized as: ${vCategory}`);
+          return vCategory === requestedCategory;
+        });
+        totalInCategory = vehiclesByPrice.length;
+        console.log('[RAG] After category filter:', vehiclesByPrice.length, 'vehicles');
+        
+        // Se não encontrou nenhum da categoria, informar
+        if (vehiclesByPrice.length === 0) {
+          ragQueryInfo = {
+            ...ragQueryInfo,
+            no_vehicles_in_category: true,
+            requested_category: requestedCategory,
+            max_price: extractedMaxPrice,
+            total_in_budget_all_categories: totalInBudget
+          };
+        }
+      }
+      
+      // Limitar a 15 para não sobrecarregar o prompt
+      vehiclesByPrice = vehiclesByPrice.slice(0, 15);
+      
+      if (vehiclesByPrice.length > 0) {
         // Para busca por preço PURO (sem modelo), substituir resultados existentes
         if (!messageHasVehicleIntent) {
           relevantVehicles = []; // Limpar resultados anteriores, priorizar preço
@@ -807,23 +895,24 @@ async function processWithAIAgent(
         const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
         vehiclesByPrice.forEach((v: any) => {
           if (!existingIds.has(v.id)) {
-            relevantVehicles.push({ ...v, similarity: 0.95, from_price_search: true });
+            const category = getVehicleCategory(v.model || '', v.version || '');
+            relevantVehicles.push({ ...v, similarity: 0.95, from_price_search: true, vehicle_category: category });
             existingIds.add(v.id);
           }
         });
-        console.log('[RAG] Price search found', vehiclesByPrice.length, 'vehicles within budget');
+        console.log('[RAG] Price search added', vehiclesByPrice.length, 'vehicles');
         
         // Adicionar informação de quantos veículos existem no total
-        if (totalInBudget && totalInBudget > vehiclesByPrice.length) {
-          ragQueryInfo = {
-            ...ragQueryInfo,
-            total_vehicles_in_budget: totalInBudget,
-            shown_vehicles: vehiclesByPrice.length,
-            max_price: extractedMaxPrice
-          };
-        }
-      } else {
-        // Se não encontrou dentro do orçamento, buscar os mais baratos do estoque
+        ragQueryInfo = {
+          ...ragQueryInfo,
+          total_vehicles_in_budget: totalInBudget,
+          total_in_category: requestedCategory ? totalInCategory : undefined,
+          requested_category: requestedCategory,
+          shown_vehicles: vehiclesByPrice.length,
+          max_price: extractedMaxPrice
+        };
+      } else if (!requestedCategory) {
+        // Se não encontrou dentro do orçamento E não tinha filtro de categoria, buscar os mais baratos
         console.log('[RAG] No vehicles within R$', extractedMaxPrice, '- finding cheapest options');
         const { data: cheapestVehicles } = await supabase
           .from('vehicles')
@@ -835,7 +924,8 @@ async function processWithAIAgent(
         if (cheapestVehicles && cheapestVehicles.length > 0) {
           relevantVehicles = []; // Limpar e usar apenas os mais baratos
           cheapestVehicles.forEach((v: any) => {
-            relevantVehicles.push({ ...v, similarity: 0.7, cheapest_option: true });
+            const category = getVehicleCategory(v.model || '', v.version || '');
+            relevantVehicles.push({ ...v, similarity: 0.7, cheapest_option: true, vehicle_category: category });
           });
           console.log('[RAG] Added cheapest vehicles as alternatives');
           
@@ -1197,44 +1287,79 @@ ${specialInstructions.year_matching_instructions}
     const totalInBudget = ragQueryInfo.total_vehicles_in_budget || relevantVehicles.length;
     const shownCount = ragQueryInfo.shown_vehicles || relevantVehicles.length;
     const maxPrice = ragQueryInfo.max_price || 0;
+    const requestedCat = ragQueryInfo.requested_category;
+    const totalInCategory = ragQueryInfo.total_in_category;
     
     // Analisar categorias de veículos disponíveis para sugerir refinamento
+    // USAR a função getVehicleCategory centralizada
     const vehicleCategories: Record<string, number> = {};
     const vehicleBrands: Record<string, number> = {};
     for (const v of relevantVehicles) {
-      // Categorizar por tipo (baseado em modelos conhecidos)
-      // IMPORTANTE: Usar versão normalizada (lowercase) e regex mais abrangente
-      const modelLower = (v.model || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const versionLower = (v.version || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const fullName = `${modelLower} ${versionLower}`;
-      
-      let category = 'Outros';
-      
-      // SUV / Crossover - lista expandida com variações
-      if (/tracker|creta|compass|renegade|captur|kicks|hrv|hr-v|tcross|t-cross|ecosport|duster|tucson|sportage|rav4|cx5|cx-5|tiguan|trailblazer|sw4|jimny|vitara|tiggo|caoa|chery|haval|jac|cherry|ix35|santa\s*fe|sorento|outlander|asx|xtrail|x-trail|equinox|spin|edge|territory|bronco|defender|discovery|evoque|velar|q3|q5|q7|x1|x3|x5|glb|glc|gle|xc40|xc60|xc90|2008|3008|5008|cx3|cx30|cx50|seltos|soul|niro|stonic|nivus|taos|atlas/.test(fullName)) {
-        category = 'SUV';
-      }
-      // Hatch / Compacto
-      else if (/onix|gol|polo|hb20|sandero|ka|fiesta|up|etios|fit|march|mobi|kwid|argo|cronos|fox|golf|i30|a3|serie1|118|120|a1|yaris|swift|rio|clio|c3|208|punto|bravo|stilo|palio|uno|celta|corsa|astra|focus/.test(fullName)) {
-        category = 'Hatch';
-      }
-      // Picape / Utilitário
-      else if (/hilux|ranger|s10|s-10|frontier|amarok|toro|oroch|montana|saveiro|strada|l200|triton|tacoma|ram|f250|f-250|silverado|maverick/.test(fullName)) {
-        category = 'Picape';
-      }
-      // Sedan
-      else if (/civic|corolla|cruze|jetta|sentra|city|fluence|virtus|voyage|prisma|versa|cobalt|onix\s*plus|hb20s|logan|siena|linea|cerato|elantra|fusion|passat|a4|serie3|320|c180|c200|c250/.test(fullName)) {
-        category = 'Sedan';
-      }
-      
+      // Usar a função centralizada - agora está disponível no escopo
+      const category = v.vehicle_category || getVehicleCategory(v.model || '', v.version || '');
       vehicleCategories[category] = (vehicleCategories[category] || 0) + 1;
       
       const brand = v.brand || 'Outro';
       vehicleBrands[brand] = (vehicleBrands[brand] || 0) + 1;
     }
     
-    // Se tem MUITAS opções (> 15), sugerir refinamento inteligente
-    if (totalInBudget > 15) {
+    // ===== BUSCA ESPECÍFICA POR CATEGORIA (ex: "sedans até 100 mil") =====
+    if (requestedCat) {
+      if (ragQueryInfo.no_vehicles_in_category) {
+        // Não encontrou veículos dessa categoria no orçamento
+        systemPrompt += `
+
+===== ⚠️ SEM ${requestedCat.toUpperCase()}S DISPONÍVEIS NESSA FAIXA =====
+
+O cliente pediu ${requestedCat}s até R$ ${maxPrice.toLocaleString('pt-BR')}.
+
+📊 RESULTADO:
+   - Total de veículos no orçamento (TODAS categorias): ${totalInBudget}
+   - ${requestedCat}s disponíveis nessa faixa: 0
+
+⚠️ COMO RESPONDER:
+1. Explique que não temos ${requestedCat}s nessa faixa específica
+2. Ofereça ALTERNATIVAS - outras categorias que temos no orçamento
+3. Pergunte se quer ver outras categorias
+
+📝 EXEMPLO:
+"No momento não temos ${requestedCat}s até R$ ${maxPrice.toLocaleString('pt-BR')} 😅
+
+Mas temos outras opções ótimas nessa faixa! Você toparia ver um Hatch, SUV ou Picape?"
+`;
+      } else {
+        // Encontrou veículos da categoria - LISTAR TODOS
+        systemPrompt += `
+
+===== 🎯 BUSCA: ${requestedCat.toUpperCase()}S ATÉ R$ ${maxPrice.toLocaleString('pt-BR')} =====
+
+O cliente pediu especificamente ${requestedCat}s.
+
+📊 RESULTADO:
+   - ${requestedCat}s disponíveis nessa faixa: ${totalInCategory || shownCount}
+   - Listados abaixo: ${shownCount}
+
+⚠️ REGRA CRÍTICA - LISTAR APENAS ${requestedCat.toUpperCase()}S:
+1. A lista abaixo JÁ ESTÁ FILTRADA para mostrar apenas ${requestedCat}s
+2. Liste TODOS os veículos da lista - são especificamente o que o cliente pediu!
+3. Use formato de LISTA NUMERADA com marca, modelo, versão, ano e preço
+4. NÃO inclua veículos de outras categorias!
+
+📝 FORMATO DE RESPOSTA:
+"Aqui estão os ${requestedCat}s até R$ ${maxPrice.toLocaleString('pt-BR')}! 🚗
+
+1. *Marca Modelo Versão Ano* - R$ X.XXX
+2. *Marca Modelo Versão Ano* - R$ X.XXX
+(continue para todos)
+
+Algum te interessou? Posso mandar mais detalhes e fotos!"
+
+⚠️ IMPORTANTE: Não repita que "não temos mais opções" se a lista já contém o que há!
+`;
+      }
+    }
+    // Se tem MUITAS opções (> 15) E não especificou categoria, sugerir refinamento
+    else if (totalInBudget > 15) {
       const categoriesAvailable = Object.entries(vehicleCategories)
         .filter(([_, count]) => count >= 1)
         .map(([cat, count]) => `${cat} (${count})`)
@@ -1653,6 +1778,9 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       const versao = v.version ? ` ${v.version}` : '';
       const similaridade = v.similarity ? ` (relevância: ${Math.round(v.similarity * 100)}%)` : '';
       
+      // ADICIONAR CATEGORIA para que a IA saiba exatamente o tipo de cada veículo
+      const categoria = v.vehicle_category || getVehicleCategory(v.model || '', v.version || '');
+      
       // Pegar fotos da tabela vehicle_images OU do campo images (fallback)
       const dbPhotos = photosByVehicle[v.id] || [];
       const legacyPhotos = v.images && v.images.length > 0 ? v.images : [];
@@ -1681,8 +1809,8 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
         photosByCategory['geral'] = legacyPhotos[0];
       }
       
-      // Montar linha do veículo com TODAS as fotos categorizadas
-      systemPrompt += `• ${v.brand} ${v.model}${versao} ${ano} | ${preco} | ${km}`;
+      // Montar linha do veículo com categoria e TODAS as fotos categorizadas
+      systemPrompt += `• [${categoria}] ${v.brand} ${v.model}${versao} ${ano} | ${preco} | ${km}`;
       
       if (Object.keys(photosByCategory).length > 0 || fotoPrincipal) {
         systemPrompt += `\n  📸 FOTOS DISPONÍVEIS:`;

@@ -632,108 +632,171 @@ async function processWithAIAgent(
   let relevantVehicles: any[] = [];
   let ragQueryInfo: any = null;
   
-  // Check if message mentions a vehicle (use RAG for semantic search)
-  // EXPANDED LIST: All models in the regex fallback PLUS common terms
-  const vehicleKeywords = [
-    // Generic terms
-    'carro', 'veículo', 'veiculo', 'modelo', 'marca', 'ano', 'preço', 'preco', 'estoque', 'disponível', 'disponivel',
-    'sedan', 'hatch', 'suv', 'pickup', 'caminhonete', 'crossover', 'minivan', 'utilitário',
-    // Brands
-    'toyota', 'volkswagen', 'vw', 'chevrolet', 'gm', 'honda', 'hyundai', 'fiat', 'jeep', 'nissan', 'ford',
-    'renault', 'mitsubishi', 'suzuki', 'cherry', 'peugeot', 'citroen', 'kia', 'bmw', 'mercedes', 'audi',
-    // Popular models - MUST match the regex search fallback
-    'polo', 'gol', 'onix', 'civic', 'corolla', 'hb20', 'hilux', 'toro', 'compass', 'tracker', 'kicks',
-    'creta', 'tcross', 't-cross', 'ka', 'fiesta', 'uno', 'palio', 'argo', 'strada', 'mobi', 'bravo', 'doblo',
-    'fit', 'city', 'hr-v', 'hrv', 'cruze', 'spin', 'cobalt', 'prisma', 'voyage', 'fox', 'saveiro', 'amarok',
-    'ranger', 's10', 'frontier', 'l200', 'pajero', 'outlander', 'asx', 'jimny', 'vitara',
-    'duster', 'captur', 'logan', 'sandero', 'kwid', 'oroch', // RENAULT MODELS
-    'nivus', 'taos', 'tiguan', 'jetta', 'virtus', 'spacefox', 'golf', // VW
-    'renegade', 'freemont', 'commander', 'wrangler', // JEEP
-    'cronos', 'pulse', 'fastback', 'fiorino', 'ducato', 'toro', // FIAT
-    'versa', 'sentra', 'march', 'livina', // NISSAN
-    'ecosport', 'territory', 'bronco', 'maverick', // FORD
-    'etios', 'yaris', 'sw4', 'rav4', 'prius', // TOYOTA
-    'tucson', 'santa fe', 'santafe', 'ix35', 'azera', // HYUNDAI
-    'hr-v', 'wr-v', 'wrv', 'accord', // HONDA
-  ];
+  // ===== ESTRATÉGIA UNIVERSAL: Buscar modelos/marcas DINAMICAMENTE do banco =====
+  // PASSO 1: Buscar todos os modelos e marcas do estoque para criar lista dinâmica
+  const { data: stockModels } = await supabase
+    .from('vehicles')
+    .select('brand, model')
+    .eq('status', 'disponivel');
   
-  const messageHasVehicleIntent = vehicleKeywords.some(k => actualMessage.toLowerCase().includes(k));
+  // Criar set de keywords dinâmico baseado no estoque REAL
+  const dynamicKeywords = new Set<string>();
+  
+  // Keywords genéricas (sempre ativas)
+  const genericKeywords = [
+    'carro', 'veículo', 'veiculo', 'modelo', 'marca', 'ano', 'preço', 'preco', 
+    'estoque', 'disponível', 'disponivel', 'foto', 'fotos', 'imagem', 'ver',
+    'sedan', 'hatch', 'suv', 'pickup', 'caminhonete', 'crossover', 'minivan',
+    'barato', 'econômico', 'popular', 'automático', 'manual', 'flex', 'diesel',
+    'quanto', 'valor', 'tem', 'têm', 'vendeu', 'ainda', 'sobrou'
+  ];
+  genericKeywords.forEach(k => dynamicKeywords.add(k));
+  
+  // Adicionar TODAS as marcas e modelos do estoque REAL
+  if (stockModels) {
+    stockModels.forEach((v: any) => {
+      if (v.brand) {
+        dynamicKeywords.add(v.brand.toLowerCase().trim());
+        // Adicionar variações comuns
+        if (v.brand.toLowerCase() === 'volkswagen') dynamicKeywords.add('vw');
+        if (v.brand.toLowerCase() === 'chevrolet') dynamicKeywords.add('gm');
+        if (v.brand.toLowerCase() === 'citroën') dynamicKeywords.add('citroen');
+      }
+      if (v.model) {
+        // Adicionar modelo e variações
+        const model = v.model.toLowerCase().trim();
+        dynamicKeywords.add(model);
+        // Sem espaços
+        dynamicKeywords.add(model.replace(/\s+/g, ''));
+        // Com hífen
+        dynamicKeywords.add(model.replace(/\s+/g, '-'));
+        // Cada palavra do modelo (para "t cross" -> "t", "cross")
+        model.split(/\s+/).forEach((word: string) => {
+          if (word.length > 1) dynamicKeywords.add(word);
+        });
+      }
+    });
+  }
+  
+  console.log('[RAG] Dynamic keywords from stock:', dynamicKeywords.size, 'terms');
+  
+  // Verificar se a mensagem contém qualquer termo do estoque
+  const messageLower = actualMessage.toLowerCase();
+  const messageHasVehicleIntent = Array.from(dynamicKeywords).some(k => messageLower.includes(k));
+  
+  console.log('[RAG] Vehicle intent detected:', messageHasVehicleIntent);
   
   if (messageHasVehicleIntent) {
-    console.log('[RAG] Vehicle intent detected, calling RAG search...');
+    console.log('[RAG] Vehicle intent detected, starting universal search...');
+    
+    // PASSO 2: Tentar RAG semântico primeiro
     try {
-      // Call the RAG search edge function internally
       const ragResponse = await searchVehiclesWithRAG(actualMessage);
       if (ragResponse.vehicles && ragResponse.vehicles.length > 0) {
         relevantVehicles = ragResponse.vehicles;
         ragQueryInfo = ragResponse.query_info;
-        console.log('[RAG] Found', relevantVehicles.length, 'relevant vehicles');
+        console.log('[RAG] Semantic search found', relevantVehicles.length, 'vehicles');
       }
     } catch (ragError) {
       console.error('[RAG] Search error:', ragError);
     }
-  }
-  
-  // ===== FALLBACK: BUSCA DIRETA POR TEXTO =====
-  // Se o RAG não encontrou nada mas tem intenção de veículo, buscar por nome/modelo
-  if (relevantVehicles.length === 0 && messageHasVehicleIntent) {
-    console.log('[RAG] No RAG results but vehicle intent detected - trying direct text search');
     
-    // Extrair termos de busca da mensagem
-    const searchTermsMatch = actualMessage.toLowerCase().match(
-      /polo|gol|onix|civic|corolla|hb20|hilux|toro|compass|tracker|kicks|creta|tcross|t-cross|ka|fiesta|uno|palio|argo|strada|mobi|bravo|doblo|fit|city|hr-v|hrv|cruze|spin|cobalt|prisma|voyage|fox|saveiro|amarok|ranger|s10|frontier|l200|pajero|outlander|asx|jimny|vitara|duster|captur|logan|sandero|kwid|nivus|taos|tiguan|jetta|virtus|renegade|freemont|cronos|argo|pulse|fastback/gi
-    );
+    // PASSO 3: BUSCA DIRETA - Extrair termos e buscar no banco
+    // Criar regex dinâmico baseado nos modelos do estoque
+    const modelList: string[] = stockModels?.map((v: any) => v.model?.toLowerCase().trim()).filter(Boolean) || [];
+    const brandList: string[] = stockModels?.map((v: any) => v.brand?.toLowerCase().trim()).filter(Boolean) || [];
+    const uniqueModels: string[] = [...new Set(modelList)].filter((m: string) => m && m.length > 1);
+    const uniqueBrands: string[] = [...new Set(brandList)].filter((b: string) => b && b.length > 1);
     
-    if (searchTermsMatch && searchTermsMatch.length > 0) {
-      const searchTerm = searchTermsMatch[0];
-      console.log('[RAG] Direct search for:', searchTerm);
+    // Procurar por modelos na mensagem
+    const foundModelTerms: string[] = [];
+    const foundBrandTerms: string[] = [];
+    
+    for (const model of uniqueModels) {
+      // Escape regex special chars
+      const escapedModel = model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const modelRegex = new RegExp(escapedModel.replace(/\s+/g, '\\s*'), 'i');
+      if (modelRegex.test(messageLower)) {
+        foundModelTerms.push(model);
+      }
+    }
+    
+    for (const brand of uniqueBrands) {
+      if (messageLower.includes(brand)) {
+        foundBrandTerms.push(brand);
+      }
+    }
+    
+    console.log('[RAG] Found terms - Models:', foundModelTerms, 'Brands:', foundBrandTerms);
+    
+    // PASSO 4: Se RAG não achou ou achou poucos, busca DIRETA complementar
+    if (relevantVehicles.length < 3) {
+      // Buscar por modelo
+      for (const term of foundModelTerms) {
+        if (relevantVehicles.length >= 10) break;
+        
+        const { data: vehiclesByModel } = await supabase
+          .from('vehicles')
+          .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+          .eq('status', 'disponivel')
+          .ilike('model', `%${term}%`)
+          .limit(10);
+        
+        if (vehiclesByModel && vehiclesByModel.length > 0) {
+          // Adicionar sem duplicar
+          const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
+          vehiclesByModel.forEach((v: any) => {
+            if (!existingIds.has(v.id)) {
+              relevantVehicles.push({ ...v, similarity: 0.9 });
+              existingIds.add(v.id);
+            }
+          });
+          console.log('[RAG] Direct model search added vehicles for:', term);
+        }
+      }
       
-      const { data: vehiclesByName } = await supabase
-        .from('vehicles')
-        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
-        .eq('status', 'disponivel')
-        .ilike('model', `%${searchTerm}%`)
-        .limit(5);
-      
-      if (vehiclesByName && vehiclesByName.length > 0) {
-        relevantVehicles = vehiclesByName;
-        console.log('[RAG] Direct search found', relevantVehicles.length, 'vehicles');
-      } else {
-        // Tentar buscar por marca também
+      // Buscar por marca
+      for (const term of foundBrandTerms) {
+        if (relevantVehicles.length >= 10) break;
+        
         const { data: vehiclesByBrand } = await supabase
           .from('vehicles')
           .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
           .eq('status', 'disponivel')
-          .ilike('brand', `%${searchTerm}%`)
+          .ilike('brand', `%${term}%`)
           .limit(5);
         
         if (vehiclesByBrand && vehiclesByBrand.length > 0) {
-          relevantVehicles = vehiclesByBrand;
-          console.log('[RAG] Brand search found', relevantVehicles.length, 'vehicles');
+          const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
+          vehiclesByBrand.forEach((v: any) => {
+            if (!existingIds.has(v.id)) {
+              relevantVehicles.push({ ...v, similarity: 0.7 });
+              existingIds.add(v.id);
+            }
+          });
+          console.log('[RAG] Direct brand search added vehicles for:', term);
         }
       }
     }
     
-    // ANTI-HALLUCINATION FIX: Se ainda não encontrou, busca limitada do estoque
+    // PASSO 5: Se ainda não encontrou nada E tem intent, buscar amostra do estoque
     if (relevantVehicles.length === 0) {
-      console.log('[RAG] Fetching limited fallback inventory');
-      const { data: vehicles, error: vehiclesError } = await supabase
+      console.log('[RAG] No specific matches - fetching inventory sample');
+      const { data: sampleVehicles } = await supabase
         .from('vehicles')
         .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
         .eq('status', 'disponivel')
         .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (vehiclesError) {
-        console.error('Error fetching vehicles:', vehiclesError);
-      } else {
-        relevantVehicles = vehicles || [];
+        .limit(15);
+      
+      if (sampleVehicles) {
+        relevantVehicles = sampleVehicles.map((v: any) => ({ ...v, similarity: 0.3 }));
       }
     }
-  } else if (relevantVehicles.length === 0) {
-    // No vehicle intent - don't inject any vehicles to prevent hallucinations
-    console.log('[RAG] No vehicle intent detected - NOT injecting vehicle context');
   }
+  
+  // Log final
+  console.log('[AI Agent] Universal search complete:', relevantVehicles.length, 'vehicles found');
 
   console.log('[AI Agent] Using', relevantVehicles.length, 'vehicles for context');
 

@@ -115,92 +115,125 @@ serve(async (req) => {
   }
 });
 
-// Build comprehensive search text from vehicle data
+// Build comprehensive search text from vehicle data - EXPANDED FOR ALL MODELS
 function buildSearchText(vehicle: any): string {
   const parts: string[] = [];
 
-  // Core vehicle info
-  if (vehicle.brand) parts.push(vehicle.brand);
-  if (vehicle.model) parts.push(vehicle.model);
+  // Core vehicle info - NORMALIZADO
+  if (vehicle.brand) {
+    parts.push(vehicle.brand);
+    // Adicionar variações de marca
+    const brandLower = vehicle.brand.toLowerCase();
+    if (brandLower === 'volkswagen') parts.push('vw');
+    if (brandLower === 'chevrolet') parts.push('gm');
+    if (brandLower === 'citroën' || brandLower === 'citroen') parts.push('citroen citroën');
+    if (brandLower === 'land rover') parts.push('landrover');
+  }
+  
+  if (vehicle.model) {
+    parts.push(vehicle.model);
+    // Adicionar variações do modelo
+    const modelLower = vehicle.model.toLowerCase().trim();
+    // Sem espaços
+    parts.push(modelLower.replace(/\s+/g, ''));
+    // Com hífen
+    parts.push(modelLower.replace(/\s+/g, '-'));
+    // Palavras individuais
+    modelLower.split(/\s+/).forEach((word: string) => {
+      if (word.length > 1) parts.push(word);
+    });
+  }
+  
   if (vehicle.version) parts.push(vehicle.version);
   
-  // Year info
+  // Year info - MÚLTIPLOS FORMATOS
   const year = vehicle.year_model || vehicle.year_fabrication;
-  if (year) parts.push(`${year}`);
+  if (year) {
+    parts.push(`${year}`);
+    parts.push(`ano ${year}`);
+    // Anos próximos para tolerância
+    parts.push(`${year - 1} ${year + 1}`);
+  }
   
-  // Price
+  // Price - MÚLTIPLOS FORMATOS
   if (vehicle.sale_price) {
-    parts.push(`R$ ${Number(vehicle.sale_price).toLocaleString('pt-BR')}`);
+    const price = Number(vehicle.sale_price);
+    parts.push(`R$ ${price.toLocaleString('pt-BR')}`);
+    parts.push(`${price}`);
+    parts.push(`${Math.round(price / 1000)}k`);
+    parts.push(`${Math.round(price / 1000)} mil`);
+    
     // Add price range keywords for semantic search
-    if (vehicle.sale_price < 30000) parts.push('barato econômico popular');
-    else if (vehicle.sale_price < 60000) parts.push('médio intermediário');
-    else if (vehicle.sale_price < 100000) parts.push('executivo premium');
-    else parts.push('luxo top alta gama');
+    if (price < 30000) parts.push('barato econômico popular acessível entrada');
+    else if (price < 60000) parts.push('médio intermediário custo-benefício');
+    else if (price < 100000) parts.push('executivo premium confortável');
+    else if (price < 150000) parts.push('luxo top alta gama sofisticado');
+    else parts.push('luxo exclusivo top de linha importado premium');
   }
   
-  // Mileage
+  // Mileage - MÚLTIPLOS FORMATOS
   if (vehicle.km !== null && vehicle.km !== undefined) {
-    parts.push(`${Number(vehicle.km).toLocaleString('pt-BR')} km`);
-    if (vehicle.km < 30000) parts.push('baixa quilometragem seminovo');
-    else if (vehicle.km < 60000) parts.push('quilometragem média');
-    else parts.push('alta quilometragem rodado');
+    const km = Number(vehicle.km);
+    parts.push(`${km.toLocaleString('pt-BR')} km`);
+    parts.push(`${km} quilometros`);
+    
+    if (km < 20000) parts.push('zero km novinho seminovo baixíssima quilometragem');
+    else if (km < 40000) parts.push('baixa quilometragem seminovo pouco rodado');
+    else if (km < 80000) parts.push('quilometragem média normal');
+    else if (km < 120000) parts.push('quilometragem alta rodado');
+    else parts.push('alta quilometragem muito rodado');
   }
   
-  // Color
-  if (vehicle.color) parts.push(vehicle.color);
+  // Color - COM VARIAÇÕES
+  if (vehicle.color) {
+    parts.push(vehicle.color);
+    const colorLower = vehicle.color.toLowerCase();
+    // Variações de cor
+    const colorVariations: Record<string, string> = {
+      'preto': 'preta black escuro',
+      'branco': 'branca white claro',
+      'prata': 'prato silver cinza',
+      'cinza': 'grafite grey gray',
+      'vermelho': 'vermelha red rubi',
+      'azul': 'blue marinho',
+      'verde': 'green',
+    };
+    if (colorVariations[colorLower]) parts.push(colorVariations[colorLower]);
+  }
   
   // Fuel type with synonyms
   if (vehicle.fuel_type) {
     parts.push(vehicle.fuel_type);
     const fuelSynonyms: Record<string, string> = {
-      'flex': 'álcool gasolina',
-      'gasolina': 'combustível fóssil',
-      'diesel': 'óleo diesel',
-      'elétrico': 'elétrico EV zero emissão',
-      'híbrido': 'híbrido economia',
+      'flex': 'álcool gasolina bicombustível',
+      'gasolina': 'combustível fóssil gasosa',
+      'diesel': 'óleo diesel econômico força',
+      'elétrico': 'elétrico EV zero emissão sustentável',
+      'híbrido': 'híbrido economia sustentável plug-in',
     };
     if (fuelSynonyms[vehicle.fuel_type.toLowerCase()]) {
       parts.push(fuelSynonyms[vehicle.fuel_type.toLowerCase()]);
     }
   }
   
-  // Transmission
+  // Transmission - COM VARIAÇÕES
   if (vehicle.transmission) {
     parts.push(vehicle.transmission);
-    if (vehicle.transmission.toLowerCase().includes('auto')) {
-      parts.push('automático câmbio automático');
+    const transLower = vehicle.transmission.toLowerCase();
+    if (transLower.includes('auto')) {
+      parts.push('automático câmbio automático automatico at');
+    } else if (transLower.includes('cvt')) {
+      parts.push('cvt automático variável');
     } else {
-      parts.push('manual câmbio manual');
+      parts.push('manual câmbio manual mt');
     }
   }
   
   // Notes/description
   if (vehicle.notes) parts.push(vehicle.notes);
 
-  // Add common search variations for popular models
-  const modelSynonyms: Record<string, string[]> = {
-    'polo': ['volkswagen vw'],
-    'gol': ['volkswagen vw popular'],
-    'onix': ['chevrolet gm'],
-    'hb20': ['hyundai hatch'],
-    'civic': ['honda sedan'],
-    'corolla': ['toyota sedan'],
-    'hilux': ['toyota pickup caminhonete'],
-    'toro': ['fiat pickup'],
-    'compass': ['jeep suv'],
-    'tracker': ['chevrolet gm suv'],
-    't-cross': ['volkswagen vw suv'],
-    'kicks': ['nissan suv'],
-    'creta': ['hyundai suv'],
-  };
-
-  const modelLower = (vehicle.model || '').toLowerCase();
-  for (const [model, synonyms] of Object.entries(modelSynonyms)) {
-    if (modelLower.includes(model)) {
-      parts.push(...synonyms);
-      break;
-    }
-  }
+  // Status
+  parts.push('disponível disponivel em estoque pronta entrega');
 
   // Add first image URL for reference
   if (vehicle.images && Array.isArray(vehicle.images) && vehicle.images.length > 0) {

@@ -154,10 +154,16 @@ async function smartTextSearch(
     });
   }
 
-  // Extract keywords from query
-  const stopWords = ['que', 'para', 'com', 'sem', 'até', 'ate', 'mil', 'carro', 'veículo', 'veiculo', 'procuro', 'quero', 'busco', 'tem', 'tenho', 'interesse', 'um', 'uma'];
+  // EXPANDED: Stop words + normalize keywords more aggressively
+  const stopWords = ['que', 'para', 'com', 'sem', 'até', 'ate', 'mil', 'carro', 'veículo', 'veiculo', 
+    'procuro', 'quero', 'busco', 'tem', 'tenho', 'interesse', 'um', 'uma', 'dos', 'das', 'de', 'do', 'da',
+    'isso', 'esse', 'essa', 'este', 'esta', 'voces', 'vocês', 'ainda', 'vendeu', 'sobre', 'qual', 'quais',
+    'como', 'onde', 'quando', 'porque', 'por', 'mais', 'menos', 'muito', 'pouco', 'algum', 'alguma', 'nenhum',
+    'seria', 'seria', 'poderia', 'pode', 'posso', 'consigo', 'gostaria', 'queria', 'preciso', 'precisa',
+    'ola', 'olá', 'oi', 'bom', 'boa', 'dia', 'tarde', 'noite', 'obrigado', 'obrigada', 'valeu'];
   const keywords = query.toLowerCase()
-    .replace(/[^\w\sáéíóúàèìòùâêîôûãõç]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[^\w\s]/g, ' ') // Remove pontuação
     .split(/\s+/)
     .filter(k => k.length > 1 && !stopWords.includes(k));
 

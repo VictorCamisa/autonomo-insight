@@ -1267,7 +1267,18 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       });
     }
     
-    systemPrompt += '\n\n=== VEÍCULOS DISPONÍVEIS ===\n';
+    // Contar o total de veículos no estoque para contextualizar a IA
+    const { data: stockCount } = await supabase
+      .from('vehicles')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'disponivel');
+    
+    const totalInStock = stockCount?.length || relevantVehicles.length;
+    
+    systemPrompt += `\n\n=== VEÍCULOS SUGERIDOS (mostrando ${relevantVehicles.length} de ${totalInStock}+ no estoque) ===\n`;
+    systemPrompt += `⚠️ IMPORTANTE: Estes são apenas alguns veículos RELEVANTES para a busca do cliente.\n`;
+    systemPrompt += `NÃO diga "só temos esses" - temos MAIS veículos! Se o cliente perguntar quantos temos, diga "temos mais de ${totalInStock} veículos disponíveis".\n`;
+    systemPrompt += `Se o cliente quiser ver outras opções ou modelos específicos não listados aqui, diga que pode buscar outras opções no estoque.\n\n`;
     
     relevantVehicles.forEach((v: any) => {
       const preco = v.sale_price ? `R$ ${Number(v.sale_price).toLocaleString('pt-BR')}` : 'Consultar';
@@ -1337,9 +1348,9 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       }
       systemPrompt += `${similaridade}\n`;
     });
-    systemPrompt += '=== FIM ===\n';
+    systemPrompt += '=== FIM DAS SUGESTÕES ===\n';
   } else {
-    systemPrompt += '\n\n⚠️ Nenhum veículo disponível no momento.\n';
+    systemPrompt += '\n\n⚠️ Nenhum veículo encontrado para essa busca específica. Temos outros modelos no estoque - pergunte ao cliente qual modelo ou marca ele procura!\n';
   }
 
   // ===== CONVERSATION MEMORY & CONTEXT =====

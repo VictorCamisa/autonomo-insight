@@ -509,7 +509,9 @@ async function processWithAIAgent(
     return;
   }
 
-  // ===== CHECK NEGOTIATION STAGE - AI only responds in atendimento_ia and follow_up =====
+  // ===== CHECK NEGOTIATION STAGE - Get context for AI response =====
+  let negotiationContext: { status: string; salesperson_id: string | null; salesperson_name: string | null } | null = null;
+  
   if (leadId) {
     const { data: negotiation } = await supabase
       .from('negotiations')
@@ -519,22 +521,28 @@ async function processWithAIAgent(
       .limit(1)
       .maybeSingle();
 
-    // Stages where AI should be silent (salesperson handles)
-    const silentStages = ['negociando', 'ganho'];
-    
-    if (negotiation && silentStages.includes(negotiation.status)) {
-      console.log('[AI Agent] Stage is', negotiation.status, '- AI silenced, salesperson handles');
+    if (negotiation) {
+      negotiationContext = {
+        status: negotiation.status,
+        salesperson_id: negotiation.salesperson_id,
+        salesperson_name: null,
+      };
       
-      // Still save the message for history
-      await supabase.from('ai_agent_messages').insert({
-        conversation_id: conversation.id,
-        role: 'user',
-        content: actualMessage,
-      });
-      
-      // Notify salesperson about new message
+      // Get salesperson name if exists
       if (negotiation.salesperson_id) {
-        // Get lead name for notification
+        const { data: salesperson } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', negotiation.salesperson_id)
+          .single();
+        
+        if (salesperson?.full_name) {
+          negotiationContext.salesperson_name = salesperson.full_name;
+        }
+      }
+      
+      // Always notify salesperson when lead messages in negotiating/won stages
+      if (['negociando', 'ganho'].includes(negotiation.status) && negotiation.salesperson_id) {
         const { data: leadData } = await supabase
           .from('leads')
           .select('name')
@@ -551,8 +559,6 @@ async function processWithAIAgent(
         
         console.log('[AI Agent] Notified salesperson:', negotiation.salesperson_id);
       }
-      
-      return; // Do NOT generate AI response
     }
   }
 
@@ -931,6 +937,90 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
     systemPrompt += '=== FIM ===\n';
   } else {
     systemPrompt += '\n\n⚠️ Nenhum veículo disponível no momento.\n';
+  }
+
+  // ===== CONVERSATION MEMORY & CONTEXT =====
+  // Fetch historical context to demonstrate memory
+  if (leadId) {
+    // Get lead info for context
+    const { data: leadInfo } = await supabase
+      .from('leads')
+      .select('name, vehicle_interest, qualification_data, source, created_at')
+      .eq('id', leadId)
+      .single();
+    
+    // Get recent conversation history from all sessions
+    const { data: historicalMessages } = await supabase
+      .from('ai_agent_messages')
+      .select('role, content, created_at')
+      .eq('conversation_id', conversation.id)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    
+    // Get lead interactions for more context
+    const { data: interactions } = await supabase
+      .from('lead_interactions')
+      .select('type, description, created_at')
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    // Build memory context
+    let memoryContext = '\n\n===== 🧠 MEMÓRIA DA CONVERSA =====\n';
+    memoryContext += '⚠️ IMPORTANTE: Use este contexto para demonstrar que você LEMBRA da conversa!\n\n';
+    
+    if (leadInfo) {
+      memoryContext += `📋 DADOS DO CLIENTE:\n`;
+      memoryContext += `- Nome: ${leadInfo.name || 'Não informado'}\n`;
+      if (leadInfo.vehicle_interest) memoryContext += `- Interesse anterior: ${leadInfo.vehicle_interest}\n`;
+      if (leadInfo.qualification_data) {
+        const qd = leadInfo.qualification_data as Record<string, any>;
+        if (qd.orcamento) memoryContext += `- Orçamento: R$ ${qd.orcamento}\n`;
+        if (qd.entrada) memoryContext += `- Entrada: R$ ${qd.entrada}\n`;
+        if (qd.parcela) memoryContext += `- Parcela: R$ ${qd.parcela}\n`;
+        if (qd.tem_troca) memoryContext += `- Tem troca: ${qd.tem_troca}\n`;
+        if (qd.veiculo_troca) memoryContext += `- Veículo troca: ${qd.veiculo_troca}\n`;
+      }
+    }
+    
+    // Add negotiation context if in special stages
+    if (negotiationContext && ['negociando', 'ganho'].includes(negotiationContext.status)) {
+      memoryContext += `\n🔔 CONTEXTO ESPECIAL - ${negotiationContext.status === 'ganho' ? 'VENDA FECHADA' : 'EM NEGOCIAÇÃO'}:\n`;
+      memoryContext += `- O cliente está sendo atendido pelo vendedor ${negotiationContext.salesperson_name || 'da equipe'}\n`;
+      memoryContext += `- O vendedor usa um NÚMERO DIFERENTE (não este WhatsApp)\n`;
+      memoryContext += `- Se o cliente voltou a falar AQUI, provavelmente:\n`;
+      memoryContext += `  1. Não conseguiu contato com o vendedor\n`;
+      memoryContext += `  2. Tem uma dúvida rápida\n`;
+      memoryContext += `  3. Quer falar sobre outro assunto\n\n`;
+      memoryContext += `📝 SUA TAREFA:\n`;
+      memoryContext += `- Seja acolhedora e demonstre que lembra dele!\n`;
+      memoryContext += `- Pergunte educadamente como pode ajudar\n`;
+      memoryContext += `- Se for sobre a negociação em andamento, informe que ${negotiationContext.salesperson_name || 'o vendedor'} vai entrar em contato\n`;
+      memoryContext += `- Se for uma dúvida simples, responda normalmente\n`;
+      memoryContext += `- Se for sobre outro veículo, continue o atendimento!\n\n`;
+      memoryContext += `EXEMPLO DE RESPOSTA BOA:\n`;
+      memoryContext += `"Oi [nome]! 😊 Tudo bem? Lembro de você, conversamos sobre o [veículo]. Como posso te ajudar agora?"\n`;
+    } else if (negotiationContext && negotiationContext.status === 'follow_up') {
+      memoryContext += `\n🔔 CONTEXTO: REENGAJAMENTO (follow-up)\n`;
+      memoryContext += `- Este cliente estava em acompanhamento\n`;
+      memoryContext += `- Demonstre que lembra dele e seja acolhedora\n`;
+      memoryContext += `- Pergunte se ainda tem interesse ou se podemos ajudar\n`;
+    }
+    
+    // Add recent interaction history
+    if (interactions && interactions.length > 0) {
+      memoryContext += `\n📜 HISTÓRICO DE INTERAÇÕES:\n`;
+      interactions.slice(0, 5).forEach((i: any) => {
+        const date = new Date(i.created_at).toLocaleDateString('pt-BR');
+        memoryContext += `- ${date}: ${i.description?.substring(0, 80) || i.type}\n`;
+      });
+    }
+    
+    memoryContext += '\n===== FIM MEMÓRIA =====\n';
+    
+    systemPrompt += memoryContext;
+    
+    console.log('[AI Agent] Added memory context. Negotiation status:', negotiationContext?.status || 'none');
   }
 
   // Call AI using OpenAI directly

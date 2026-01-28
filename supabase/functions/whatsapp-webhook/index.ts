@@ -655,21 +655,61 @@ async function processWithAIAgent(
     }
   }
   
-  // ANTI-HALLUCINATION FIX: Only fetch fallback vehicles if user is asking about vehicles
-  // Otherwise, don't inject random cars into context which can cause hallucinations
+  // ===== FALLBACK: BUSCA DIRETA POR TEXTO =====
+  // Se o RAG não encontrou nada mas tem intenção de veículo, buscar por nome/modelo
   if (relevantVehicles.length === 0 && messageHasVehicleIntent) {
-    console.log('[RAG] No RAG results but vehicle intent detected - fetching limited fallback');
-    const { data: vehicles, error: vehiclesError } = await supabase
-      .from('vehicles')
-      .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
-      .eq('status', 'disponivel')
-      .order('created_at', { ascending: false })
-      .limit(10); // Reduced from 30 to 10 for more focused context
+    console.log('[RAG] No RAG results but vehicle intent detected - trying direct text search');
+    
+    // Extrair termos de busca da mensagem
+    const searchTermsMatch = actualMessage.toLowerCase().match(
+      /polo|gol|onix|civic|corolla|hb20|hilux|toro|compass|tracker|kicks|creta|tcross|t-cross|ka|fiesta|uno|palio|argo|strada|mobi|bravo|doblo|fit|city|hr-v|hrv|cruze|spin|cobalt|prisma|voyage|fox|saveiro|amarok|ranger|s10|frontier|l200|pajero|outlander|asx|jimny|vitara|duster|captur|logan|sandero|kwid|nivus|taos|tiguan|jetta|virtus|renegade|freemont|cronos|argo|pulse|fastback/gi
+    );
+    
+    if (searchTermsMatch && searchTermsMatch.length > 0) {
+      const searchTerm = searchTermsMatch[0];
+      console.log('[RAG] Direct search for:', searchTerm);
+      
+      const { data: vehiclesByName } = await supabase
+        .from('vehicles')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+        .eq('status', 'disponivel')
+        .ilike('model', `%${searchTerm}%`)
+        .limit(5);
+      
+      if (vehiclesByName && vehiclesByName.length > 0) {
+        relevantVehicles = vehiclesByName;
+        console.log('[RAG] Direct search found', relevantVehicles.length, 'vehicles');
+      } else {
+        // Tentar buscar por marca também
+        const { data: vehiclesByBrand } = await supabase
+          .from('vehicles')
+          .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+          .eq('status', 'disponivel')
+          .ilike('brand', `%${searchTerm}%`)
+          .limit(5);
+        
+        if (vehiclesByBrand && vehiclesByBrand.length > 0) {
+          relevantVehicles = vehiclesByBrand;
+          console.log('[RAG] Brand search found', relevantVehicles.length, 'vehicles');
+        }
+      }
+    }
+    
+    // ANTI-HALLUCINATION FIX: Se ainda não encontrou, busca limitada do estoque
+    if (relevantVehicles.length === 0) {
+      console.log('[RAG] Fetching limited fallback inventory');
+      const { data: vehicles, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+        .eq('status', 'disponivel')
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    if (vehiclesError) {
-      console.error('Error fetching vehicles:', vehiclesError);
-    } else {
-      relevantVehicles = vehicles || [];
+      if (vehiclesError) {
+        console.error('Error fetching vehicles:', vehiclesError);
+      } else {
+        relevantVehicles = vehicles || [];
+      }
     }
   } else if (relevantVehicles.length === 0) {
     // No vehicle intent - don't inject any vehicles to prevent hallucinations
@@ -711,27 +751,29 @@ async function processWithAIAgent(
   // ===== ANTI-HALLUCINATION GUARDRAILS (CRITICAL) =====
   const antiHallucinationRules = `
 
-===== ⚠️ REGRAS CRÍTICAS - LEIA COM ATENÇÃO =====
+===== ⚠️ REGRAS CRÍTICAS DE ESTOQUE - LEIA COM ATENÇÃO =====
 🚫 VOCÊ ESTÁ PROIBIDA DE INVENTAR INFORMAÇÕES!
 
-❌ NUNCA faça isso:
-- Dizer que um carro está disponível se ele NÃO está na lista abaixo
-- Inventar cores, anos, versões, preços ou quilometragem
-- Afirmar algo que não está explícito nos dados
-- Criar detalhes "para ajudar" o cliente
+🔴 ANTES DE RESPONDER SOBRE QUALQUER VEÍCULO:
+1. LEIA a lista "VEÍCULOS DISPONÍVEIS" abaixo
+2. PROCURE o modelo que o cliente perguntou (ex: "Doblo", "Civic", "Polo")
+3. SE ENCONTRAR → Cite os detalhes EXATOS da lista (marca, modelo, ano, preço)
+4. SE NÃO ENCONTRAR → Diga "esse modelo não está no estoque no momento"
 
-✅ SEMPRE faça isso:
-- SE NÃO SOUBER: "Deixa eu verificar com a equipe e já te retorno!"
-- SE O CARRO NÃO EXISTIR: "Esse modelo específico não temos agora, mas temos [CITE APENAS veículos da lista]"
-- ANTES DE CONFIRMAR: Verifique se o veículo está LITERALMENTE na lista
+❌ PROIBIDO INVENTAR:
+- Não diga "foi vendido" se o carro simplesmente não está na lista
+- Não confirme disponibilidade sem verificar a lista
+- Não invente cores, anos, preços ou km
+- Não diga "não temos" sem antes procurar na lista
 
-EXEMPLO DE ERRO GRAVE (não faça):
-Cliente: "Tem Civic 2007?"
-IA: "Sim! Temos o Civic 2007 prata!" ← ERRADO! Você inventou isso!
+✅ RESPOSTAS CORRETAS:
+- Cliente: "Tem Doblo?" + Doblo NA lista → "Sim! Temos a Doblo [dados exatos da lista]!"
+- Cliente: "Tem Civic?" + Civic NÃO na lista → "O Civic não está no estoque agora. Temos outros modelos como [cite da lista]..."
+- Cliente: "Já vendeu a Doblo?" + Doblo NA lista → "Não, a Doblo ainda está disponível! [cite dados]"
+- Cliente: "Já vendeu a Doblo?" + Doblo NÃO na lista → "Esse modelo não está no estoque no momento. Posso te mostrar outros?"
 
-EXEMPLO CORRETO:
-Cliente: "Tem Civic 2007?"
-IA: "O Civic 2007 não está no estoque no momento. Posso te mostrar outros modelos que temos?"
+⚠️ SE NÃO SABE OU NÃO ENCONTROU → "Deixa eu verificar e já te retorno!"
+⚠️ "Já vendeu?" É PERGUNTA SOBRE ESTOQUE - verifique a lista antes de responder!
 
 ===== FIM DAS REGRAS CRÍTICAS =====
 `;
@@ -1191,8 +1233,8 @@ async function callOpenAI(agent: any, systemPrompt: string, messages: any[]): Pr
         ...messages,
       ],
       // ANTI-HALLUCINATION: Temperature mais baixa para respostas precisas
-      // Forçamos máximo de 0.4 mesmo se configurado mais alto
-      temperature: Math.min(agent.temperature || 0.35, 0.4),
+      // Forçamos máximo de 0.35 para evitar criatividade excessiva
+      temperature: Math.min(agent.temperature || 0.35, 0.35),
       max_tokens: agent.max_tokens || 1024,
     }),
   });
@@ -2146,13 +2188,30 @@ async function extractDataWithAI(
 4. Se o cliente fez uma pergunta genérica como "vocês tem carro?" sem especificar modelo = NÃO extraia vehicle_interest
 5. vehicle_interest SÓ deve ser preenchido se o cliente MENCIONOU um modelo específico (ex: "quero um Polo", "tem Civic 2020?")
 
+⚠️ CUIDADO COM FALSOS POSITIVOS DE TROCA:
+- "Já vendeu a Doblo?" = pergunta sobre ESTOQUE, NÃO é dado de troca!
+- "Vocês já venderam?" = pergunta sobre estoque, NÃO indica troca
+- "Vendeu aquele carro?" = pergunta sobre estoque
+- "Já vendi MEU carro" = pode indicar que TEM troca
+- "Tenho um Gol para trocar" = tem troca confirmado
+
+has_trade_in = true APENAS SE:
+- Cliente disse "tenho um carro para trocar"
+- Cliente disse "dou meu carro na troca"
+- Cliente disse "quero entregar meu [modelo]"
+- Cliente disse "já vendi meu carro" (tinha troca, vendeu fora)
+
+has_trade_in = false APENAS SE:
+- Cliente disse "não tenho carro para trocar"
+- Cliente disse "vou comprar à vista, sem troca"
+
 Retorne um JSON com APENAS os campos que o CLIENTE DISSE EXPLICITAMENTE:
 - vehicle_interest: string (APENAS se o cliente MENCIONOU um modelo/marca específica)
 - budget: number (APENAS se o cliente disse "tenho X para gastar")
 - down_payment: number (APENAS se o cliente disse valor de entrada)
 - desired_installment: number (APENAS se o cliente disse valor de parcela)
-- has_trade_in: boolean (APENAS se o cliente disse que tem ou não tem carro na troca)
-- trade_in_vehicle: string (APENAS se o cliente disse qual carro tem)
+- has_trade_in: boolean (APENAS se o cliente confirmou que tem ou não tem carro na troca - NÃO CONFUNDA com perguntas sobre estoque!)
+- trade_in_vehicle: string (APENAS se o cliente disse qual carro dele tem para trocar)
 - clean_credit: boolean (APENAS se o cliente confirmou nome limpo/sujo)
 - cpf: string (APENAS se o cliente informou o CPF)
 
@@ -2163,6 +2222,8 @@ EXEMPLOS:
 - Cliente: "tem carro bom?" → {}
 - Cliente: "quero um Polo" → {"vehicle_interest": "Polo"}
 - Cliente: "tem Civic 2020 por até 80 mil?" → {"vehicle_interest": "Civic 2020", "budget": 80000}
+- Cliente: "já vendeu a Doblo?" → {} (é pergunta sobre ESTOQUE, não sobre troca!)
+- Cliente: "tenho um Gol 2018 pra dar na troca" → {"has_trade_in": true, "trade_in_vehicle": "Gol 2018"}
 
 Retorne APENAS o JSON, sem explicações.`
           },

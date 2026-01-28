@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -73,6 +73,7 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('geral');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [isSyncing, setIsSyncing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -93,6 +94,51 @@ export function VehiclePhotosUpload({ vehicleId, images, onImagesUpdate, isManag
       return (data || []) as VehicleImage[];
     },
   });
+
+  // Sincronizar imagens antigas (da coluna vehicles.images) para vehicle_images
+  const syncLegacyImages = async () => {
+    if (!images || images.length === 0 || vehicleImages.length > 0) return;
+    
+    setIsSyncing(true);
+    try {
+      // Verificar quais imagens já existem na tabela vehicle_images
+      const existingUrls = vehicleImages.map(img => img.image_url);
+      const newImages = images.filter(url => !existingUrls.includes(url));
+      
+      if (newImages.length > 0) {
+        const insertData = newImages.map((url, index) => ({
+          vehicle_id: vehicleId,
+          image_url: url,
+          category: 'geral',
+          display_order: index,
+          is_cover: index === 0
+        }));
+
+        const { error } = await supabase
+          .from('vehicle_images')
+          .insert(insertData);
+
+        if (error) {
+          console.error('Error syncing legacy images:', error);
+          toast.error('Erro ao sincronizar fotos antigas');
+        } else {
+          await refetchImages();
+          toast.success(`${newImages.length} foto(s) sincronizada(s)! Agora você pode categorizar cada uma.`);
+        }
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Auto-sincronizar quando detectar imagens antigas
+  useEffect(() => {
+    if (images && images.length > 0 && vehicleImages.length === 0 && !isSyncing) {
+      syncLegacyImages();
+    }
+  }, [images, vehicleImages.length]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

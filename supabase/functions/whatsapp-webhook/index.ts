@@ -827,9 +827,16 @@ async function processWithAIAgent(
   }
 
   // ===== BUSCA DE VEÍCULOS: Por keyword, preço OU categoria =====
-  if (shouldSearchVehicles) {
-    console.log('[RAG] Search triggered. Keyword intent:', messageHasVehicleIntent, '| Price:', hasPriceIntent, '| Category:', hasCategoryIntent);
+  // CORRIGIDO: Busca SEMPRE é ativada quando há qualquer menção a veículo ou pergunta sobre estoque
+  const shouldAlwaysSearch = messageLower.includes('tem') || messageLower.includes('quero') || 
+                              messageLower.includes('procuro') || messageLower.includes('busco') ||
+                              messageLower.includes('carro') || messageLower.includes('veículo') ||
+                              messageLower.includes('disponível') || messageLower.includes('estoque');
+  
+  if (shouldSearchVehicles || shouldAlwaysSearch) {
+    console.log('[RAG] Search triggered. Keyword intent:', messageHasVehicleIntent, '| Price:', hasPriceIntent, '| Category:', hasCategoryIntent, '| Always search:', shouldAlwaysSearch);
     console.log('[RAG] Requested category:', requestedCategory, '| Extracted price:', extractedMaxPrice);
+    console.log('[RAG] Message:', actualMessage.substring(0, 100));
     
     // PASSO 2: Tentar RAG semântico primeiro
     try {
@@ -837,7 +844,10 @@ async function processWithAIAgent(
       if (ragResponse.vehicles && ragResponse.vehicles.length > 0) {
         relevantVehicles = ragResponse.vehicles;
         ragQueryInfo = ragResponse.query_info;
-        console.log('[RAG] Semantic search found', relevantVehicles.length, 'vehicles');
+        console.log('[RAG] Semantic search found', relevantVehicles.length, 'vehicles with scores:', 
+          ragResponse.vehicles.map((v: any) => `${v.model}:${(v.similarity * 100).toFixed(0)}%`).join(', '));
+      } else {
+        console.log('[RAG] Semantic search returned empty, will use fallback');
       }
     } catch (ragError) {
       console.error('[RAG] Search error:', ragError);
@@ -1122,19 +1132,42 @@ async function processWithAIAgent(
       }
     }
     
-    // PASSO 5: Se ainda não encontrou nada E tem intent, buscar amostra do estoque
+    // PASSO 5: Se ainda não encontrou nada, buscar amostra MAIOR do estoque
+    // CORRIGIDO: Agora sempre injeta veículos para a IA poder responder sobre o estoque
     if (relevantVehicles.length === 0) {
-      console.log('[RAG] No specific matches - fetching inventory sample (limited)');
+      console.log('[RAG] No specific matches - fetching inventory sample');
       const { data: sampleVehicles } = await supabase
         .from('vehicles')
         .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
         .eq('status', 'disponivel')
-        .order('created_at', { ascending: false })
-        .limit(5);
+        .order('sale_price', { ascending: true })  // Mais baratos primeiro
+        .limit(10);  // Aumentado de 5 para 10
       
       if (sampleVehicles) {
-        relevantVehicles = sampleVehicles.map((v: any) => ({ ...v, similarity: 0.3 }));
+        relevantVehicles = sampleVehicles.map((v: any) => ({ 
+          ...v, 
+          similarity: 0.5,  // Aumentado de 0.3 para 0.5
+          from_fallback: true 
+        }));
+        console.log('[RAG] Added', relevantVehicles.length, 'fallback vehicles from inventory');
       }
+    }
+  } else {
+    // NOVO: Mesmo sem intent detectado, sempre injeta alguns veículos populares
+    console.log('[RAG] No explicit vehicle intent, but injecting popular vehicles for context');
+    const { data: popularVehicles } = await supabase
+      .from('vehicles')
+      .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+      .eq('status', 'disponivel')
+      .order('sale_price', { ascending: true })
+      .limit(5);
+    
+    if (popularVehicles) {
+      relevantVehicles = popularVehicles.map((v: any) => ({ 
+        ...v, 
+        similarity: 0.3,
+        from_context_injection: true 
+      }));
     }
   }
   
@@ -3906,14 +3939,18 @@ async function searchVehiclesWithRAG(query: string): Promise<{ vehicles: any[]; 
     // Call Supabase RPC for vector search
     const supabase = createClient(SUPABASE_URL ?? '', SUPABASE_SERVICE_ROLE_KEY ?? '');
     
+    // CORRIGIDO: Threshold reduzido de 0.5 para 0.3 para capturar mais resultados
+    // O sistema de busca direta complementa com filtros por modelo/marca
     const { data: searchResults, error } = await supabase
       .rpc('search_similar_vehicles', {
         query_embedding: queryEmbedding,
-        match_threshold: 0.5,
-        match_count: 10,
-        year_tolerance: 2,
+        match_threshold: 0.3,  // Era 0.5 - muito restritivo!
+        match_count: 15,       // Era 10 - aumentado para mais opções
+        year_tolerance: 3,     // Era 2 - aumentado para mais flexibilidade
         target_year: extractedYear
       });
+    
+    console.log('[RAG] Vector search returned', searchResults?.length || 0, 'results');
 
     if (error) {
       console.error('[RAG] Search error:', error);

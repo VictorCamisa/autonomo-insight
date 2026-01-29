@@ -1784,7 +1784,19 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
     
     activeVehiclePhotos = fetchedActivePhotos || [];
     
-    console.log('[Active Vehicle Photos] Found', activeVehiclePhotos?.length || 0, 'photos for', activeVehicle.brand, activeVehicle.model);
+    // ===== FALLBACK CRÍTICO: Se vehicle_images está vazio, usar array images legado =====
+    if (activeVehiclePhotos.length === 0 && activeVehicle.images && Array.isArray(activeVehicle.images) && activeVehicle.images.length > 0) {
+      console.log('[Active Vehicle Photos] No photos in vehicle_images table, falling back to legacy images array with', activeVehicle.images.length, 'photos');
+      
+      // Converter array legado para formato compatível
+      activeVehiclePhotos = activeVehicle.images.map((url: string, index: number) => ({
+        image_url: url,
+        category: 'geral', // Fotos legadas não têm categoria
+        is_cover: index === 0 // Primeira foto é a capa
+      }));
+    }
+    
+    console.log('[Active Vehicle Photos] Final count:', activeVehiclePhotos?.length || 0, 'photos for', activeVehicle.brand, activeVehicle.model);
     
     // Organizar fotos por categoria
     const activePhotosByCategory: Record<string, string[]> = {};
@@ -1963,6 +1975,16 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       } else if (legacyPhotos.length > 0) {
         fotoPrincipal = legacyPhotos[0];
         photosByCategory['geral'] = legacyPhotos[0];
+        
+        // ===== CRÍTICO: Adicionar fotos legadas ao mapa de validação =====
+        // Sem isso, fotos do array images são bloqueadas na validação
+        if (!validPhotoUrls[v.id]) {
+          validPhotoUrls[v.id] = new Set();
+        }
+        for (const url of legacyPhotos) {
+          validPhotoUrls[v.id].add(url);
+        }
+        console.log('[Photo Validation] Added', legacyPhotos.length, 'legacy photos from', v.brand, v.model, 'to validPhotoUrls');
       }
       
       // Montar linha do veículo com categoria e TODAS as fotos categorizadas

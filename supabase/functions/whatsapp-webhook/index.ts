@@ -4575,13 +4575,13 @@ async function detectAndCreateVehicleInterestAlert(
         .select('user_id')
         .eq('role', 'gerente');
       
-      if (managers && managers.length > 0) {
+        if (managers && managers.length > 0) {
         const notifications = managers.map((m: any) => ({
           user_id: m.user_id,
           type: 'vehicle_demand',
           title: '🚗 Nova demanda de veículo',
           message: `${customerName} procura ${vehicleBrand || ''} ${vehicleModel || 'veículo específico'} que não está em estoque`,
-          link: '/follow-up',
+          link: '/crm/follow-up?tab=perdas',
         }));
         
         await supabase.from('notifications').insert(notifications);

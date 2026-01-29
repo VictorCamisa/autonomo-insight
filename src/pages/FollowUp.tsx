@@ -73,6 +73,7 @@ import {
   useUpdateVehicleInterestAlert,
   useDeleteVehicleInterestAlert,
   useMatchingVehicles,
+  useVehicleInterestAlertStats,
   VehicleInterestAlert,
   MatchingVehicle,
 } from '@/hooks/useVehicleInterestAlerts';
@@ -161,6 +162,7 @@ export default function FollowUp() {
   // ========== Loss Recovery Queries ==========
   const { data: negotiations = [], isLoading: isLoadingNegotiations } = useNegotiations();
   const { data: alerts = [], isLoading: isLoadingAlerts } = useVehicleInterestAlerts();
+  const { data: alertStats } = useVehicleInterestAlertStats();
   const { data: matchingVehicles = [] } = useMatchingVehicles(showMatchingVehicles ? selectedAlert : null);
   const { data: rules = [], isLoading: isLoadingRules } = useLossRecoveryRules();
 
@@ -913,7 +915,34 @@ Estamos à disposição para agendar uma visita. 😊`;
         </TabsContent>
 
         {/* ========== Alertas Tab ========== */}
-        <TabsContent value="alertas" className="mt-4">
+        <TabsContent value="alertas" className="mt-4 space-y-4">
+          {/* Statistics Cards */}
+          {alertStats && alertStats.total > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <Card className="p-3">
+                <div className="text-xs text-muted-foreground mb-1">Ativos</div>
+                <div className="text-2xl font-bold text-primary">{alertStats.active}</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-xs text-muted-foreground mb-1">Notificados</div>
+                <div className="text-2xl font-bold">{alertStats.notified}</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-xs text-muted-foreground mb-1">Aguard. Resposta</div>
+                <div className="text-2xl font-bold text-amber-500">{alertStats.pendingResponse}</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-xs text-muted-foreground mb-1">Taxa Resposta</div>
+                <div className="text-2xl font-bold text-blue-500">{alertStats.responseRate}%</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-xs text-muted-foreground mb-1">Convertidos</div>
+                <div className="text-2xl font-bold text-emerald-500">{alertStats.converted}</div>
+                <div className="text-xs text-muted-foreground">({alertStats.conversionRate}%)</div>
+              </Card>
+            </div>
+          )}
+
           {isLoadingAlerts ? (
             <div className="grid gap-4 md:grid-cols-2">
               {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-40" />)}
@@ -940,7 +969,7 @@ Estamos à disposição para agendar uma visita. 😊`;
                   }}
                   onOpenWhatsApp={handleOpenWhatsApp}
                   onExpire={(a) => updateAlert.mutate({ id: a.id, status: 'expired' })}
-                  onConvert={(a) => updateAlert.mutate({ id: a.id, status: 'converted' })}
+                  onConvert={(a) => updateAlert.mutate({ id: a.id, status: 'converted', converted_at: new Date().toISOString() })}
                   onDelete={(a) => deleteAlert.mutate(a.id)}
                 />
               ))}

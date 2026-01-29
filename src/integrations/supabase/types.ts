@@ -3921,19 +3921,25 @@ export type Database = {
       }
       vehicle_interest_alerts: {
         Row: {
+          conversion_sale_id: string | null
+          converted_at: string | null
           created_at: string
           created_by: string | null
           customer_email: string | null
           customer_name: string
           customer_phone: string
           id: string
+          last_notification_message: string | null
           lead_id: string | null
           negotiation_id: string | null
           notes: string | null
+          notification_count: number | null
           notified_at: string | null
           notified_vehicle_id: string | null
           price_max: number | null
           price_min: number | null
+          responded_at: string | null
+          response_message: string | null
           status: string
           updated_at: string
           vehicle_brand: string | null
@@ -3942,19 +3948,25 @@ export type Database = {
           year_min: number | null
         }
         Insert: {
+          conversion_sale_id?: string | null
+          converted_at?: string | null
           created_at?: string
           created_by?: string | null
           customer_email?: string | null
           customer_name: string
           customer_phone: string
           id?: string
+          last_notification_message?: string | null
           lead_id?: string | null
           negotiation_id?: string | null
           notes?: string | null
+          notification_count?: number | null
           notified_at?: string | null
           notified_vehicle_id?: string | null
           price_max?: number | null
           price_min?: number | null
+          responded_at?: string | null
+          response_message?: string | null
           status?: string
           updated_at?: string
           vehicle_brand?: string | null
@@ -3963,19 +3975,25 @@ export type Database = {
           year_min?: number | null
         }
         Update: {
+          conversion_sale_id?: string | null
+          converted_at?: string | null
           created_at?: string
           created_by?: string | null
           customer_email?: string | null
           customer_name?: string
           customer_phone?: string
           id?: string
+          last_notification_message?: string | null
           lead_id?: string | null
           negotiation_id?: string | null
           notes?: string | null
+          notification_count?: number | null
           notified_at?: string | null
           notified_vehicle_id?: string | null
           price_max?: number | null
           price_min?: number | null
+          responded_at?: string | null
+          response_message?: string | null
           status?: string
           updated_at?: string
           vehicle_brand?: string | null
@@ -3984,6 +4002,20 @@ export type Database = {
           year_min?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "vehicle_interest_alerts_conversion_sale_id_fkey"
+            columns: ["conversion_sale_id"]
+            isOneToOne: false
+            referencedRelation: "sale_profit_report"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_interest_alerts_conversion_sale_id_fkey"
+            columns: ["conversion_sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vehicle_interest_alerts_lead_id_fkey"
             columns: ["lead_id"]

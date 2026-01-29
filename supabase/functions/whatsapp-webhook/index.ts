@@ -1859,10 +1859,15 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
     
     // ===== DESTACAR CLARAMENTE SE TEM FOTOS OU NÃO =====
     const totalPhotosCount = Object.values(activePhotosByCategory).reduce((sum, arr) => sum + arr.length, 0);
+    console.log('[System Prompt] Active vehicle photo count:', totalPhotosCount, 'categories:', Object.keys(activePhotosByCategory));
     
     if (totalPhotosCount > 0) {
-      systemPrompt += `\n\n🎉 ✅ ESTE VEÍCULO TEM ${totalPhotosCount} FOTOS DISPONÍVEIS! 🎉`;
-      systemPrompt += `\n📸 Quando o cliente pedir foto do ${activeVehicle.model}, USE a foto_principal ou foto_geral listada acima!`;
+      console.log('[System Prompt] ✅ ADDING PHOTO AVAILABLE FLAG to prompt');
+      systemPrompt += `\n\n🎉🎉🎉 ATENÇÃO MÁXIMA: ESTE VEÍCULO TEM ${totalPhotosCount} FOTOS! 🎉🎉🎉`;
+      systemPrompt += `\n\n⚠️⚠️⚠️ REGRA CRÍTICA: Quando o cliente pedir QUALQUER foto do ${activeVehicle.model}:`;
+      systemPrompt += `\n   → VOCÊ TEM FOTOS! Use a foto_principal ou foto_geral acima!`;
+      systemPrompt += `\n   → PROIBIDO dizer "não temos foto" ou "foto não disponível"!`;
+      systemPrompt += `\n   → Use o formato: "Claro! Aqui está:" e na PRÓXIMA LINHA: [ENVIAR_FOTO: URL]`;
       
       // Se tem fotos de interior categorizadas, destacar
       const interiorPhotos = ['interior_painel', 'interior_bancos', 'interior_traseiro'].filter(cat => activePhotosByCategory[cat]);
@@ -1871,14 +1876,19 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       }
       
       // Se só tem fotos gerais, explicar que deve usar elas
-      if (Object.keys(activePhotosByCategory).length === 1 && activePhotosByCategory['geral']) {
-        systemPrompt += `\n⚠️ ATENÇÃO: Todas as fotos estão na categoria 'geral'. Quando pedirem qualquer foto do ${activeVehicle.model}, envie a foto_geral ou foto_principal!`;
+      const onlyHasGeneralPhotos = Object.keys(activePhotosByCategory).length === 1 && activePhotosByCategory['geral'];
+      if (onlyHasGeneralPhotos) {
+        systemPrompt += `\n\n🔴 IMPORTANTE: Todas as ${totalPhotosCount} fotos estão na categoria 'geral'.`;
+        systemPrompt += `\n   → Para QUALQUER pedido de foto (painel, bancos, frente, traseira, etc)`;
+        systemPrompt += `\n   → Use a foto_geral ou foto_principal listada acima!`;
+        systemPrompt += `\n   → NÃO diga que "não tem foto do interior" - USE a foto_geral!`;
       }
       
       // Mostrar categorias disponíveis
       const availableCategories = Object.keys(activePhotosByCategory).map(cat => categoryLabelsActive[cat] || cat);
-      systemPrompt += `\n📋 Categorias: ${availableCategories.join(', ')}`;
+      systemPrompt += `\n📋 Categorias disponíveis: ${availableCategories.join(', ')}`;
     } else {
+      console.log('[System Prompt] ❌ No photos found for active vehicle');
       systemPrompt += `\n\n⚠️ ❌ NENHUMA FOTO CADASTRADA para o ${activeVehicle.brand} ${activeVehicle.model}`;
       systemPrompt += `\n→ Diga ao cliente que ainda não temos foto no sistema, mas pode mostrar pessoalmente na loja.`;
     }

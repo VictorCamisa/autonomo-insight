@@ -64,6 +64,7 @@ import {
 // Loss Recovery components
 import { LossRecoveryRuleForm } from '@/components/crm/LossRecoveryRuleForm';
 import { LossRecoveryRuleCard } from '@/components/crm/LossRecoveryRuleCard';
+import { VehicleInterestAlertCard } from '@/components/follow-up/VehicleInterestAlertCard';
 import { useNegotiations } from '@/hooks/useNegotiations';
 import { 
   useVehicleInterestAlerts, 
@@ -873,98 +874,18 @@ export default function FollowUp() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {filteredAlerts.map(alert => (
-                <Card key={alert.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium truncate">{alert.customer_name}</span>
-                          <Badge className={alertStatusColors[alert.status]}>
-                            {alertStatusLabels[alert.status]}
-                          </Badge>
-                        </div>
-                        
-                        <div className="text-sm text-muted-foreground space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-3 w-3" />
-                            {alert.customer_phone}
-                          </div>
-                          
-                          {(alert.vehicle_brand || alert.vehicle_model) && (
-                            <div className="flex items-center gap-2">
-                              <Car className="h-3 w-3" />
-                              {[alert.vehicle_brand, alert.vehicle_model].filter(Boolean).join(' ')}
-                              {(alert.year_min || alert.year_max) && (
-                                <span className="text-xs">
-                                  ({alert.year_min || '?'} - {alert.year_max || '?'})
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-3 w-3" />
-                            Criado em {format(new Date(alert.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        {alert.status === 'active' && (
-                          <>
-                            <Button 
-                              size="sm" 
-                              onClick={() => {
-                                setSelectedAlert(alert);
-                                setShowMatchingVehicles(true);
-                              }}
-                            >
-                              <Car className="h-4 w-4 mr-1" />
-                              Ver Veículos
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleOpenWhatsApp(alert.customer_phone)}
-                            >
-                              <MessageCircle className="h-4 w-4 mr-1" />
-                              WhatsApp
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={() => updateAlert.mutate({ id: alert.id, status: 'expired' })}
-                            >
-                              <BellOff className="h-4 w-4 mr-1" />
-                              Expirar
-                            </Button>
-                          </>
-                        )}
-                        
-                        {alert.status === 'notified' && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => updateAlert.mutate({ id: alert.id, status: 'converted' })}
-                          >
-                            <Check className="h-4 w-4 mr-1" />
-                            Converteu
-                          </Button>
-                        )}
-
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          className="text-destructive"
-                          onClick={() => deleteAlert.mutate(alert.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <VehicleInterestAlertCard
+                  key={alert.id}
+                  alert={alert}
+                  onViewVehicles={(a) => {
+                    setSelectedAlert(a);
+                    setShowMatchingVehicles(true);
+                  }}
+                  onOpenWhatsApp={handleOpenWhatsApp}
+                  onExpire={(a) => updateAlert.mutate({ id: a.id, status: 'expired' })}
+                  onConvert={(a) => updateAlert.mutate({ id: a.id, status: 'converted' })}
+                  onDelete={(a) => deleteAlert.mutate(a.id)}
+                />
               ))}
             </div>
           )}

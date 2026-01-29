@@ -1771,13 +1771,18 @@ ${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
 
   // ===== VEÍCULO ATIVO: Buscar TODAS as fotos categorizadas e incluir no prompt =====
   // Isso resolve o problema de "foto do painel" / "tem interna?" sem especificar o carro
+  // Declarar fora do if para usar na validação de fotos depois
+  let activeVehiclePhotos: { image_url: string; category: string | null; is_cover: boolean | null }[] = [];
+  
   if (activeVehicle) {
     // Buscar TODAS as fotos categorizadas do veículo ativo DIRETAMENTE
-    const { data: activeVehiclePhotos } = await supabase
+    const { data: fetchedActivePhotos } = await supabase
       .from('vehicle_images')
       .select('image_url, category, is_cover')
       .eq('vehicle_id', activeVehicle.id)
       .order('display_order', { ascending: true });
+    
+    activeVehiclePhotos = fetchedActivePhotos || [];
     
     console.log('[Active Vehicle Photos] Found', activeVehiclePhotos?.length || 0, 'photos for', activeVehicle.brand, activeVehicle.model);
     
@@ -1868,6 +1873,16 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
 
   // Variável para armazenar URLs válidas por veículo (usado na validação de fotos)
   const validPhotoUrls: Record<string, Set<string>> = {};
+
+  // ===== CRÍTICO: Adicionar fotos do activeVehicle ao mapa de validação =====
+  // Sem isso, fotos do veículo ativo são bloqueadas!
+  if (activeVehicle && activeVehiclePhotos && activeVehiclePhotos.length > 0) {
+    validPhotoUrls[activeVehicle.id] = new Set();
+    for (const photo of activeVehiclePhotos) {
+      validPhotoUrls[activeVehicle.id].add(photo.image_url);
+    }
+    console.log('[Photo Validation] Added', activeVehiclePhotos.length, 'photos from activeVehicle to validPhotoUrls');
+  }
 
   if (relevantVehicles.length > 0) {
     // Buscar fotos da tabela vehicle_images para cada veículo
@@ -2175,7 +2190,61 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       }
     }
 
-    // PASSO 2: Remover TODAS as variações de tags de foto do texto
+    // PASSO 1.5: FALLBACK - Extrair URLs soltas do storage (quando IA esquece a tag)
+    // Só se não encontrou nenhuma foto com a tag principal
+    if (extractedPhotos.length === 0) {
+      console.log('[Photo Extraction] No photos from tags, trying rawUrlRegex fallback...');
+      while ((match = rawUrlRegex.exec(aiResponse)) !== null) {
+        const photoUrl = match[1].trim().replace(/[\]\)\s]+$/, '');
+        
+        // Evitar duplicatas
+        if (extractedPhotos.includes(photoUrl)) continue;
+        
+        let isPhotoValid = false;
+        let photoVehicleInfo = '';
+        let resolvedUrl = photoUrl;
+        
+        // Verificar se foto pertence ao veículo ativo
+        if (activeVehicle && validPhotoUrls[activeVehicle.id]) {
+          const matchedUrl = findMatchingUrl(photoUrl, validPhotoUrls[activeVehicle.id]);
+          if (matchedUrl) {
+            isPhotoValid = true;
+            resolvedUrl = matchedUrl;
+            photoVehicleInfo = `${activeVehicle.brand} ${activeVehicle.model}`;
+            console.log('[Photo Validation Fallback] ✅ VALID - Photo belongs to active vehicle:', photoVehicleInfo);
+          }
+        }
+        
+        // Verificar se pertence a algum veículo do contexto
+        if (!isPhotoValid) {
+          for (const vehicleId of Object.keys(validPhotoUrls)) {
+            const matchedUrl = findMatchingUrl(photoUrl, validPhotoUrls[vehicleId]);
+            if (matchedUrl) {
+              const vehicleOwner = relevantVehicles.find((v: any) => v.id === vehicleId);
+              if (vehicleOwner) {
+                isPhotoValid = true;
+                resolvedUrl = matchedUrl;
+                photoVehicleInfo = `${vehicleOwner.brand} ${vehicleOwner.model}`;
+                console.log('[Photo Validation Fallback] ✅ VALID - Photo belongs to:', photoVehicleInfo);
+              }
+              break;
+            }
+          }
+        }
+        
+        if (isPhotoValid) {
+          extractedPhotos.push(resolvedUrl);
+        } else {
+          blockedPhotos.push(photoUrl);
+          console.warn('[Photo Validation Fallback] ❌ BLOCKED - Photo URL not from any vehicle in context:', photoUrl.substring(0, 100));
+        }
+      }
+      
+      if (extractedPhotos.length > 0) {
+        console.log('[Photo Extraction] Fallback found', extractedPhotos.length, 'valid photos from raw URLs');
+      }
+    }
+
     // Regex ultra-agressivo para garantir que nenhuma tag apareça no texto final
     let cleanResponse = aiResponse
       // Remove tag formatada corretamente

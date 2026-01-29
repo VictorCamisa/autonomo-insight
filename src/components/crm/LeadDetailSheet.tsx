@@ -5,13 +5,25 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { 
   Phone, Mail, Calendar, User, Car, MessageSquare, 
   Plus, Clock, MapPin, Tag, ExternalLink, TrendingUp,
-  Brain, History, Handshake
+  Brain, History, Handshake, Trash2, RotateCcw
 } from 'lucide-react';
 import type { Lead } from '@/types/crm';
 import { leadStatusLabels, leadStatusColors, leadSourceLabels } from '@/types/crm';
 import { useNegotiations } from '@/hooks/useNegotiations';
+import { useClearLeadHistory, useDeleteLeadComplete } from '@/hooks/useLeads';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState } from 'react';
@@ -31,6 +43,8 @@ interface LeadDetailSheetProps {
 export function LeadDetailSheet({ lead, open, onOpenChange, onStartNegotiation }: LeadDetailSheetProps) {
   const { data: allNegotiations = [] } = useNegotiations();
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
+  const clearHistory = useClearLeadHistory();
+  const deleteLead = useDeleteLeadComplete();
 
   const leadNegotiations = allNegotiations.filter(n => n.lead_id === lead?.id);
   const activeNegotiations = leadNegotiations.filter(n => !['perdida', 'venda_concluida'].includes(n.status));
@@ -48,6 +62,18 @@ export function LeadDetailSheet({ lead, open, onOpenChange, onStartNegotiation }
     : lead.qualification_status === 'desqualificado'
       ? 'bg-red-500'
       : 'bg-amber-500';
+
+  const handleClearHistory = () => {
+    clearHistory.mutate(lead.id);
+  };
+
+  const handleDeleteLead = () => {
+    deleteLead.mutate(lead.id, {
+      onSuccess: () => {
+        onOpenChange(false);
+      }
+    });
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -92,7 +118,7 @@ export function LeadDetailSheet({ lead, open, onOpenChange, onStartNegotiation }
         </SheetHeader>
 
         {/* Quick Actions Bar */}
-        <div className="px-6 py-3 border-b flex gap-2 flex-shrink-0 bg-muted/30">
+        <div className="px-6 py-3 border-b flex flex-wrap gap-2 flex-shrink-0 bg-muted/30">
           <Button
             size="sm"
             className="flex-1 bg-emerald-500 hover:bg-emerald-600"
@@ -121,6 +147,67 @@ export function LeadDetailSheet({ lead, open, onOpenChange, onStartNegotiation }
               Negociar
             </Button>
           )}
+        </div>
+
+        {/* Testing Actions - Clear History / Delete Lead */}
+        <div className="px-6 py-2 border-b flex gap-2 flex-shrink-0 bg-destructive/5">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 text-amber-600 border-amber-300 hover:bg-amber-50"
+                disabled={clearHistory.isPending}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                {clearHistory.isPending ? 'Limpando...' : 'Limpar Histórico'}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Limpar histórico de conversa?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Isso apagará todas as mensagens da IA, qualificação e resetará o lead para testar novamente do zero.
+                  O lead em si será mantido.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClearHistory} className="bg-amber-600 hover:bg-amber-700">
+                  Limpar Histórico
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                disabled={deleteLead.isPending}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {deleteLead.isPending ? 'Excluindo...' : 'Excluir Lead'}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir lead completamente?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Isso apagará permanentemente o lead, todas as negociações, mensagens e histórico.
+                  Esta ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteLead} className="bg-destructive hover:bg-destructive/90">
+                  Excluir Permanentemente
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {/* WhatsApp Modal */}

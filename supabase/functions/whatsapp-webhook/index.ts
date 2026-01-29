@@ -2303,6 +2303,25 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       if (qualResult.newlyQualified) {
         console.log('[Qualification] Lead newly qualified (Q2) - handoff message sent separately by Q2 flow');
       }
+      
+      // ===== CRIAR ALERTA DE INTERESSE QUANDO VEÍCULO NÃO ESTÁ EM ESTOQUE =====
+      // Detecta padrões de "não temos" na resposta da IA e cria alerta automático
+      // Busca o nome do lead para usar no alerta
+      const { data: leadForAlert } = await supabase
+        .from('leads')
+        .select('name')
+        .eq('id', leadId)
+        .single();
+      
+      await detectAndCreateVehicleInterestAlert(
+        supabase,
+        aiResponse,
+        actualMessage,
+        leadId,
+        conversation.id,
+        leadForAlert?.name || 'Cliente',
+        phone
+      );
     }
 
     // Save assistant message (with clean response, no tags)
@@ -4330,4 +4349,207 @@ async function findContactByLeadId(supabase: any, leadId: string): Promise<{ id:
     .maybeSingle();
   
   return data || null;
+}
+
+// ===== DETECTAR QUANDO VEÍCULO NÃO ESTÁ EM ESTOQUE E CRIAR ALERTA AUTOMÁTICO =====
+// Esta função analisa a resposta da IA para detectar quando ela indica que um veículo
+// não está disponível e automaticamente cria um alerta de interesse na tabela vehicle_interest_alerts
+async function detectAndCreateVehicleInterestAlert(
+  supabase: any,
+  aiResponse: string,
+  userMessage: string,
+  leadId: string | null,
+  conversationId: string,
+  customerName: string,
+  customerPhone: string
+): Promise<void> {
+  try {
+    // Padrões que indicam "não temos" ou "não está em estoque"
+    const outOfStockPatterns = [
+      /não\s+temos?\s+(?:o|a|esse|essa|este|esta)?[\s]?(?:modelo|veículo|carro)?[\s]*(?:de\s+)?([a-zA-ZÀ-ú0-9\s\-]+)?\s*(?:no\s+)?(?:estoque|momento|disponível)?/gi,
+      /(?:o|a)?\s*([a-zA-ZÀ-ú\-]+(?:\s+[a-zA-ZÀ-ú\-]+)?)\s+não\s+está\s+(?:no\s+estoque|disponível|no\s+momento)/gi,
+      /(?:no\s+momento|infelizmente),?\s+não\s+temos\s+(?:o|a)?\s*([a-zA-ZÀ-ú0-9\s\-]+)/gi,
+      /esse?\s+modelo(?:\/ano)?\s+não\s+está\s+no\s+estoque/gi,
+      /não\s+temos?\s+(?:HR-?V|HRV|Civic|Corolla|Hilux|Ranger|S10|Onix|Tracker|Creta|Compass|T-Cross|Kicks|Renegade|Toro|Argo|Cronos|Polo|Virtus|Jetta|Sentra|Yaris|Etios|Fit|City|Cruze|Cobalt|Prisma|Spin|Montana|Saveiro|Strada|Fiat|Chevrolet|Volkswagen|Ford|Toyota|Honda|Hyundai|Jeep|Nissan|Renault|Peugeot|Citroën|Kia|Mitsubishi)[^\.]*/gi,
+    ];
+    
+    const responseLower = aiResponse.toLowerCase();
+    const messageLower = userMessage.toLowerCase();
+    
+    // Verificar se a resposta contém indicação de "não temos"
+    let matchedOutOfStock = false;
+    let extractedModel = '';
+    
+    for (const pattern of outOfStockPatterns) {
+      pattern.lastIndex = 0; // Reset regex state
+      const match = pattern.exec(aiResponse);
+      if (match) {
+        matchedOutOfStock = true;
+        if (match[1]) {
+          extractedModel = match[1].trim();
+        }
+        break;
+      }
+    }
+    
+    // Se não encontrou padrão específico, verificar frases simples
+    if (!matchedOutOfStock) {
+      if (
+        responseLower.includes('não temos') ||
+        responseLower.includes('não está no estoque') ||
+        responseLower.includes('não está disponível') ||
+        responseLower.includes('esse modelo/ano não está')
+      ) {
+        matchedOutOfStock = true;
+      }
+    }
+    
+    if (!matchedOutOfStock) {
+      console.log('[Vehicle Interest Alert] No out-of-stock pattern detected');
+      return;
+    }
+    
+    console.log('[Vehicle Interest Alert] OUT OF STOCK detected! Creating alert...');
+    
+    // Extrair o modelo/marca que o cliente pediu da mensagem original
+    let vehicleBrand: string | null = null;
+    let vehicleModel: string | null = null;
+    
+    // Tentar extrair modelo da mensagem do usuário
+    const knownModels = [
+      'hrv', 'hr-v', 'civic', 'corolla', 'hilux', 'ranger', 's10', 'onix', 'tracker',
+      'creta', 'compass', 't-cross', 'tcross', 'kicks', 'renegade', 'toro', 'argo',
+      'cronos', 'polo', 'virtus', 'jetta', 'sentra', 'yaris', 'etios', 'fit', 'city',
+      'cruze', 'cobalt', 'prisma', 'spin', 'montana', 'saveiro', 'strada', 'gol',
+      'ka', 'fiesta', 'ecosport', 'territory', 'bronco', 'maverick', 'tucson',
+      'santa fe', 'ix35', 'hb20', 'hb20s', 'azera', 'elantra', 'sonata', 'commander',
+      'wrangler', 'gladiator', 'kwid', 'sandero', 'logan', 'duster', 'captur', 'oroch',
+      '208', '2008', '3008', '5008', 'c3', 'c4', 'aircross', 'cerato', 'sportage',
+      'sorento', 'soul', 'picanto', 'l200', 'outlander', 'pajero', 'asx', 'lancer',
+      'amarok', 'tiguan', 'taos', 'nivus', 'voyage', 'up', 'fox', 'spacefox', 'crossfox',
+      'golf', 'passat', 'a3', 'a4', 'q3', 'q5', 'x1', 'x3', 'serie 1', 'serie 3', 
+      'c180', 'c200', 'gla', 'cla', 'classe a', 'mobi', 'uno', 'palio', 'siena',
+      'grand siena', 'linea', 'bravo', 'punto', 'freemont', 'doblo', 'ducato',
+      'sprinter', 'master', 'jumper', 'fiorino', 'kangoo', 'partner', 'berlingo'
+    ];
+    
+    const knownBrands = [
+      'fiat', 'chevrolet', 'volkswagen', 'vw', 'ford', 'toyota', 'honda', 'hyundai',
+      'jeep', 'nissan', 'renault', 'peugeot', 'citroën', 'citroen', 'kia', 'mitsubishi',
+      'audi', 'bmw', 'mercedes', 'land rover', 'volvo', 'subaru', 'suzuki', 'jac',
+      'chery', 'caoa chery', 'byd', 'gwm', 'haval', 'ram', 'dodge'
+    ];
+    
+    // Procurar modelo na mensagem do usuário
+    for (const model of knownModels) {
+      if (messageLower.includes(model.toLowerCase())) {
+        vehicleModel = model.toUpperCase().replace('-', '');
+        break;
+      }
+    }
+    
+    // Procurar marca na mensagem do usuário
+    for (const brand of knownBrands) {
+      if (messageLower.includes(brand.toLowerCase())) {
+        vehicleBrand = brand.charAt(0).toUpperCase() + brand.slice(1);
+        break;
+      }
+    }
+    
+    // Se extraímos modelo da resposta da IA, usar também
+    if (!vehicleModel && extractedModel) {
+      vehicleModel = extractedModel.toUpperCase();
+    }
+    
+    // Se não conseguiu extrair nada específico, usar a mensagem como nota
+    if (!vehicleBrand && !vehicleModel) {
+      console.log('[Vehicle Interest Alert] Could not extract specific brand/model, saving user message as note');
+    }
+    
+    // Verificar se já existe alerta ativo para este lead com mesmo modelo
+    if (leadId && vehicleModel) {
+      const { data: existingAlert } = await supabase
+        .from('vehicle_interest_alerts')
+        .select('id')
+        .eq('lead_id', leadId)
+        .ilike('vehicle_model', `%${vehicleModel}%`)
+        .eq('status', 'active')
+        .maybeSingle();
+      
+      if (existingAlert) {
+        console.log('[Vehicle Interest Alert] Alert already exists for this lead/model, skipping');
+        return;
+      }
+    }
+    
+    // Buscar negotiation_id se existir
+    let negotiationId: string | null = null;
+    if (leadId) {
+      const { data: negotiation } = await supabase
+        .from('negotiations')
+        .select('id')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      negotiationId = negotiation?.id || null;
+    }
+    
+    // Criar o alerta de interesse
+    const alertData = {
+      lead_id: leadId,
+      negotiation_id: negotiationId,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      vehicle_brand: vehicleBrand,
+      vehicle_model: vehicleModel,
+      notes: `Cliente perguntou: "${userMessage.substring(0, 200)}"${userMessage.length > 200 ? '...' : ''}\n\nResposta IA: "${aiResponse.substring(0, 200)}"${aiResponse.length > 200 ? '...' : ''}`,
+      status: 'active',
+    };
+    
+    const { data: newAlert, error: alertError } = await supabase
+      .from('vehicle_interest_alerts')
+      .insert(alertData)
+      .select()
+      .single();
+    
+    if (alertError) {
+      console.error('[Vehicle Interest Alert] Error creating alert:', alertError);
+      return;
+    }
+    
+    console.log('[Vehicle Interest Alert] ✅ Alert created successfully!', {
+      alertId: newAlert.id,
+      leadId,
+      brand: vehicleBrand,
+      model: vehicleModel,
+    });
+    
+    // Criar notificação para gerentes sobre a demanda
+    try {
+      const { data: managers } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'gerente');
+      
+      if (managers && managers.length > 0) {
+        const notifications = managers.map((m: any) => ({
+          user_id: m.user_id,
+          type: 'vehicle_demand',
+          title: '🚗 Nova demanda de veículo',
+          message: `${customerName} procura ${vehicleBrand || ''} ${vehicleModel || 'veículo específico'} que não está em estoque`,
+          link: '/follow-up',
+        }));
+        
+        await supabase.from('notifications').insert(notifications);
+        console.log('[Vehicle Interest Alert] Notified', managers.length, 'managers');
+      }
+    } catch (e) {
+      console.error('[Vehicle Interest Alert] Error notifying managers:', e);
+    }
+    
+  } catch (error) {
+    console.error('[Vehicle Interest Alert] Error in detectAndCreateVehicleInterestAlert:', error);
+  }
 }

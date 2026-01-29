@@ -3,6 +3,218 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Lead, LeadStatus, LeadSource, QualificationStatus } from '@/types/crm';
 import { toast } from 'sonner';
 
+// Clear all conversation history for a lead (for testing purposes)
+export function useClearLeadHistory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (leadId: string) => {
+      // 1. Get all AI conversations for this lead
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: conversations } = await (supabase as any)
+        .from('ai_agent_conversations')
+        .select('id')
+        .eq('lead_id', leadId);
+
+      const conversationIds = (conversations || []).map((c: any) => c.id);
+
+      // 2. Delete AI messages for these conversations
+      if (conversationIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('ai_agent_messages')
+          .delete()
+          .in('conversation_id', conversationIds);
+
+        // 3. Delete conversation embeddings
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('conversation_embeddings')
+          .delete()
+          .in('conversation_id', conversationIds);
+      }
+
+      // 4. Delete lead-level embeddings
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('conversation_embeddings')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 5. Delete AI conversations
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('ai_agent_conversations')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 6. Delete lead qualification data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('lead_qualification_data')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 7. Delete WhatsApp messages for this lead's contacts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: contacts } = await (supabase as any)
+        .from('whatsapp_contacts')
+        .select('id')
+        .eq('lead_id', leadId);
+
+      const contactIds = (contacts || []).map((c: any) => c.id);
+      if (contactIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('whatsapp_messages')
+          .delete()
+          .in('contact_id', contactIds);
+      }
+
+      // 8. Reset lead qualification status
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('leads')
+        .update({
+          qualification_status: 'nao_qualificado',
+          qualification_reason: null,
+          vehicle_interest: null,
+        })
+        .eq('id', leadId);
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-qualification'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-ai-conversation'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-conversation-messages'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] });
+      toast.success('Histórico de conversa limpo com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao limpar histórico: ${error.message}`);
+    },
+  });
+}
+
+// Delete lead and all related data completely
+export function useDeleteLeadComplete() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (leadId: string) => {
+      // 1. Get all AI conversations for this lead
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: conversations } = await (supabase as any)
+        .from('ai_agent_conversations')
+        .select('id')
+        .eq('lead_id', leadId);
+
+      const conversationIds = (conversations || []).map((c: any) => c.id);
+
+      // 2. Delete AI messages
+      if (conversationIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('ai_agent_messages')
+          .delete()
+          .in('conversation_id', conversationIds);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('conversation_embeddings')
+          .delete()
+          .in('conversation_id', conversationIds);
+      }
+
+      // 3. Delete lead embeddings
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('conversation_embeddings')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 4. Delete AI conversations
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('ai_agent_conversations')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 5. Delete lead qualification data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('lead_qualification_data')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 6. Delete WhatsApp messages and contacts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: contacts } = await (supabase as any)
+        .from('whatsapp_contacts')
+        .select('id')
+        .eq('lead_id', leadId);
+
+      const contactIds = (contacts || []).map((c: any) => c.id);
+      if (contactIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('whatsapp_messages')
+          .delete()
+          .in('contact_id', contactIds);
+      }
+
+      // 7. Delete WhatsApp contacts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('whatsapp_contacts')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 8. Delete follow-up tracking
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('lead_follow_up_tracking')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 9. Delete negotiations
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('negotiations')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 10. Delete lead assignments
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('lead_assignments')
+        .delete()
+        .eq('lead_id', leadId);
+
+      // 11. Finally delete the lead itself
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('leads')
+        .delete()
+        .eq('id', leadId);
+
+      if (error) throw error;
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['negotiations'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-contacts'] });
+      toast.success('Lead e todo histórico excluídos com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao excluir lead: ${error.message}`);
+    },
+  });
+}
+
 // Shared query options for better caching
 const leadQueryOptions = {
   staleTime: 1000 * 60 * 3, // 3 minutes

@@ -154,7 +154,8 @@ export function useSharedWhatsAppInstance() {
     queryKey: ['whatsapp-instance-shared'],
     queryFn: async (): Promise<WhatsAppInstance | null> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      // First try to find a shared instance that is connected
+      const { data: sharedInstance, error: sharedError } = await (supabase as any)
         .from('whatsapp_instances')
         .select('*')
         .eq('is_shared', true)
@@ -162,8 +163,20 @@ export function useSharedWhatsAppInstance() {
         .limit(1)
         .maybeSingle();
 
-      if (error) throw error;
-      return data as WhatsAppInstance | null;
+      if (sharedError) throw sharedError;
+      if (sharedInstance) return sharedInstance as WhatsAppInstance;
+
+      // Fallback: get any connected instance (prefer default, then any)
+      const { data: anyInstance, error: anyError } = await (supabase as any)
+        .from('whatsapp_instances')
+        .select('*')
+        .eq('status', 'connected')
+        .order('is_default', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (anyError) throw anyError;
+      return anyInstance as WhatsAppInstance | null;
     },
   });
 }

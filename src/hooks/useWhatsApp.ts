@@ -153,8 +153,10 @@ export function useSharedWhatsAppInstance() {
   return useQuery({
     queryKey: ['whatsapp-instance-shared'],
     queryFn: async (): Promise<WhatsAppInstance | null> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.log('[WhatsApp] Buscando instância compartilhada...');
+      
       // First try to find a shared instance that is connected
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: sharedInstance, error: sharedError } = await (supabase as any)
         .from('whatsapp_instances')
         .select('*')
@@ -163,10 +165,18 @@ export function useSharedWhatsAppInstance() {
         .limit(1)
         .maybeSingle();
 
-      if (sharedError) throw sharedError;
-      if (sharedInstance) return sharedInstance as WhatsAppInstance;
+      if (sharedError) {
+        console.error('[WhatsApp] Erro ao buscar instância shared:', sharedError);
+        throw sharedError;
+      }
+      
+      if (sharedInstance) {
+        console.log('[WhatsApp] Instância shared encontrada:', sharedInstance.name);
+        return sharedInstance as WhatsAppInstance;
+      }
 
       // Fallback: get any connected instance (prefer default, then any)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: anyInstance, error: anyError } = await (supabase as any)
         .from('whatsapp_instances')
         .select('*')
@@ -175,9 +185,21 @@ export function useSharedWhatsAppInstance() {
         .limit(1)
         .maybeSingle();
 
-      if (anyError) throw anyError;
+      if (anyError) {
+        console.error('[WhatsApp] Erro ao buscar qualquer instância:', anyError);
+        throw anyError;
+      }
+      
+      if (anyInstance) {
+        console.log('[WhatsApp] Usando instância fallback:', anyInstance.name);
+      } else {
+        console.log('[WhatsApp] Nenhuma instância conectada encontrada');
+      }
+      
       return anyInstance as WhatsAppInstance | null;
     },
+    staleTime: 0, // Always refetch to get latest connection status
+    refetchOnWindowFocus: true,
   });
 }
 

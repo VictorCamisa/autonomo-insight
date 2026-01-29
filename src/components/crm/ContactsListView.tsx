@@ -1,9 +1,19 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Filter, Users, UserCheck, UserX, Phone, Mail, MessageSquare, Calendar, ArrowRight, MoreVertical } from 'lucide-react';
+import { Plus, Search, Filter, Users, UserCheck, UserX, Phone, Mail, MessageSquare, Calendar, ArrowRight, MoreVertical, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -32,7 +42,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useLeads } from '@/hooks/useLeads';
+import { useLeads, useClearLeadHistory, useDeleteLeadComplete } from '@/hooks/useLeads';
 import { useNegotiations, useCreateNegotiation } from '@/hooks/useNegotiations';
 import { useCustomers } from '@/hooks/useCustomers';
 import { LeadForm } from '@/components/crm/LeadForm';
@@ -71,12 +81,16 @@ export function ContactsListView() {
   const [isCreateNegotiationOpen, setIsCreateNegotiationOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<UnifiedContact | null>(null);
   const [preSelectedLeadId, setPreSelectedLeadId] = useState<string | null>(null);
+  const [contactToClearHistory, setContactToClearHistory] = useState<UnifiedContact | null>(null);
+  const [contactToDelete, setContactToDelete] = useState<UnifiedContact | null>(null);
 
   const { data: leads, isLoading: leadsLoading } = useLeads();
   const { data: negotiations } = useNegotiations();
   const { data: customers } = useCustomers();
   const { data: users } = useUsersWithRoles();
   const createNegotiation = useCreateNegotiation();
+  const clearHistory = useClearLeadHistory();
+  const deleteLead = useDeleteLeadComplete();
   const { user } = useAuth();
 
   // Consolidar leads e clientes em lista unificada
@@ -373,6 +387,24 @@ export function ContactsListView() {
                             <Phone className="h-4 w-4 mr-2" />
                             Ligar
                           </DropdownMenuItem>
+                          {contact.leadId && (
+                            <>
+                              <DropdownMenuItem 
+                                onClick={() => setContactToClearHistory(contact)}
+                                className="text-amber-600"
+                              >
+                                <RotateCcw className="h-4 w-4 mr-2" />
+                                Limpar Histórico
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => setContactToDelete(contact)}
+                                className="text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Excluir Lead
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -409,6 +441,67 @@ export function ContactsListView() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog Limpar Histórico */}
+      <AlertDialog open={!!contactToClearHistory} onOpenChange={() => setContactToClearHistory(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar Histórico de Conversa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso irá apagar todo o histórico de mensagens, conversas com IA e dados de qualificação de <strong>{contactToClearHistory?.name}</strong>.
+              O lead será resetado para "não qualificado" e poderá ser testado novamente do zero.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (contactToClearHistory?.leadId) {
+                  clearHistory.mutate(contactToClearHistory.leadId);
+                  setContactToClearHistory(null);
+                }
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Limpar Histórico
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog Excluir Lead */}
+      <AlertDialog open={!!contactToDelete} onOpenChange={() => setContactToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Lead Permanentemente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação é irreversível! Isso irá excluir completamente o lead <strong>{contactToDelete?.name}</strong>, incluindo:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Todas as negociações associadas</li>
+                <li>Todo o histórico de mensagens</li>
+                <li>Dados de qualificação</li>
+                <li>Tracking de follow-up</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (contactToDelete?.leadId) {
+                  deleteLead.mutate(contactToDelete.leadId);
+                  setContactToDelete(null);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir Permanentemente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

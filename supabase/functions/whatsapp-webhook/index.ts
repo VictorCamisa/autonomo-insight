@@ -4458,21 +4458,56 @@ async function detectAndCreateVehicleInterestAlert(
     let vehicleModel: string | null = null;
     
     // Tentar extrair modelo da mensagem do usuário
+    // Lista expandida de modelos conhecidos - inclui premium/luxo
     const knownModels = [
-      'hrv', 'hr-v', 'civic', 'corolla', 'hilux', 'ranger', 's10', 'onix', 'tracker',
-      'creta', 'compass', 't-cross', 'tcross', 'kicks', 'renegade', 'toro', 'argo',
-      'cronos', 'polo', 'virtus', 'jetta', 'sentra', 'yaris', 'etios', 'fit', 'city',
-      'cruze', 'cobalt', 'prisma', 'spin', 'montana', 'saveiro', 'strada', 'gol',
-      'ka', 'fiesta', 'ecosport', 'territory', 'bronco', 'maverick', 'tucson',
-      'santa fe', 'ix35', 'hb20', 'hb20s', 'azera', 'elantra', 'sonata', 'commander',
-      'wrangler', 'gladiator', 'kwid', 'sandero', 'logan', 'duster', 'captur', 'oroch',
-      '208', '2008', '3008', '5008', 'c3', 'c4', 'aircross', 'cerato', 'sportage',
-      'sorento', 'soul', 'picanto', 'l200', 'outlander', 'pajero', 'asx', 'lancer',
-      'amarok', 'tiguan', 'taos', 'nivus', 'voyage', 'up', 'fox', 'spacefox', 'crossfox',
-      'golf', 'passat', 'a3', 'a4', 'q3', 'q5', 'x1', 'x3', 'serie 1', 'serie 3', 
-      'c180', 'c200', 'gla', 'cla', 'classe a', 'mobi', 'uno', 'palio', 'siena',
-      'grand siena', 'linea', 'bravo', 'punto', 'freemont', 'doblo', 'ducato',
-      'sprinter', 'master', 'jumper', 'fiorino', 'kangoo', 'partner', 'berlingo'
+      // Honda
+      'hrv', 'hr-v', 'civic', 'fit', 'city', 'accord', 'cr-v', 'crv', 'wr-v', 'wrv',
+      // Toyota
+      'corolla', 'hilux', 'yaris', 'etios', 'camry', 'rav4', 'sw4', 'prius', 'corolla cross',
+      // Chevrolet
+      's10', 'onix', 'tracker', 'cruze', 'cobalt', 'prisma', 'spin', 'montana', 'trailblazer', 'equinox',
+      // Ford
+      'ranger', 'ka', 'fiesta', 'ecosport', 'territory', 'bronco', 'maverick', 'edge', 'fusion', 'mustang',
+      // Hyundai
+      'creta', 'tucson', 'santa fe', 'ix35', 'hb20', 'hb20s', 'azera', 'elantra', 'sonata', 'kona',
+      // Jeep
+      'compass', 'renegade', 'commander', 'wrangler', 'gladiator', 'cherokee', 'grand cherokee',
+      // Fiat
+      'toro', 'argo', 'cronos', 'mobi', 'uno', 'palio', 'siena', 'grand siena', 'linea', 'bravo', 
+      'punto', 'freemont', 'doblo', 'ducato', 'fiorino', 'strada', 'pulse', 'fastback',
+      // Volkswagen
+      'polo', 'virtus', 'jetta', 'gol', 'voyage', 'up', 'fox', 'spacefox', 'crossfox', 'golf', 
+      'passat', 'amarok', 'tiguan', 'taos', 'nivus', 't-cross', 'tcross', 'tiguan allspace',
+      // Nissan
+      'kicks', 'sentra', 'versa', 'march', 'frontier', 'leaf',
+      // Renault
+      'kwid', 'sandero', 'logan', 'duster', 'captur', 'oroch', 'stepway',
+      // Peugeot / Citroën
+      '208', '2008', '3008', '5008', 'c3', 'c4', 'aircross', 'c4 cactus',
+      // Kia / Mitsubishi
+      'cerato', 'sportage', 'sorento', 'soul', 'picanto', 'stinger', 'carnival',
+      'l200', 'outlander', 'pajero', 'asx', 'lancer', 'eclipse cross',
+      // BMW - TODOS OS MODELOS
+      'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'ix', 'ix3',
+      'serie 1', 'serie 2', 'serie 3', 'serie 4', 'serie 5', 'serie 6', 'serie 7', 'serie 8',
+      '116i', '118i', '120i', '218i', '220i', '320i', '325i', '328i', '330i', '335i', '340i',
+      '420i', '430i', '520i', '525i', '528i', '530i', '540i', '550i', '640i', '650i', '730i', '740i', '750i',
+      'm2', 'm3', 'm4', 'm5', 'm8', 'z4',
+      // Audi
+      'a1', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'q3', 'q5', 'q7', 'q8', 'e-tron', 'tt', 'r8', 'rs3', 'rs5', 'rs6',
+      // Mercedes
+      'c180', 'c200', 'c250', 'c300', 'c350', 'e200', 'e250', 'e300', 'e350', 'e400',
+      'gla', 'glb', 'glc', 'gle', 'gls', 'cla', 'classe a', 'classe c', 'classe e', 'classe s',
+      'a180', 'a200', 'a250', 'a35', 'a45', 'amg gt',
+      // Land Rover / Jaguar
+      'evoque', 'range rover', 'discovery', 'defender', 'velar', 'freelander', 'sport',
+      'f-pace', 'e-pace', 'xe', 'xf', 'xj', 'f-type',
+      // Volvo
+      'xc40', 'xc60', 'xc90', 's60', 's90', 'v40', 'v60',
+      // Porsche
+      'cayenne', 'macan', 'panamera', '911', 'boxster', 'cayman', 'taycan',
+      // Outros
+      'sprinter', 'master', 'jumper', 'kangoo', 'partner', 'berlingo'
     ];
     
     const knownBrands = [

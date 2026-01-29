@@ -1857,28 +1857,38 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
       systemPrompt += `\n   - ${label}: ${urls[0]}`;
     }
     
-    // Mostrar categorias disponíveis de forma clara
-    const availableCategories = Object.keys(activePhotosByCategory).map(cat => categoryLabelsActive[cat] || cat);
-    systemPrompt += `\n\n📋 RESUMO: Temos fotos de: ${availableCategories.join(', ')}`;
+    // ===== DESTACAR CLARAMENTE SE TEM FOTOS OU NÃO =====
+    const totalPhotosCount = Object.values(activePhotosByCategory).reduce((sum, arr) => sum + arr.length, 0);
     
-    // Se tem fotos de interior, destacar
-    const interiorPhotos = ['interior_painel', 'interior_bancos', 'interior_traseiro'].filter(cat => activePhotosByCategory[cat]);
-    if (interiorPhotos.length > 0) {
-      systemPrompt += `\n✅ TEM FOTOS DE INTERIOR! (painel, bancos, banco traseiro)`;
-    }
-
-    if (Object.keys(activePhotosByCategory).length === 0) {
-      systemPrompt += `\n   ⚠️ Nenhuma foto cadastrada para este veículo`;
+    if (totalPhotosCount > 0) {
+      systemPrompt += `\n\n🎉 ✅ ESTE VEÍCULO TEM ${totalPhotosCount} FOTOS DISPONÍVEIS! 🎉`;
+      systemPrompt += `\n📸 Quando o cliente pedir foto do ${activeVehicle.model}, USE a foto_principal ou foto_geral listada acima!`;
+      
+      // Se tem fotos de interior categorizadas, destacar
+      const interiorPhotos = ['interior_painel', 'interior_bancos', 'interior_traseiro'].filter(cat => activePhotosByCategory[cat]);
+      if (interiorPhotos.length > 0) {
+        systemPrompt += `\n✅ TEM FOTOS DE INTERIOR! (painel, bancos, banco traseiro)`;
+      }
+      
+      // Se só tem fotos gerais, explicar que deve usar elas
+      if (Object.keys(activePhotosByCategory).length === 1 && activePhotosByCategory['geral']) {
+        systemPrompt += `\n⚠️ ATENÇÃO: Todas as fotos estão na categoria 'geral'. Quando pedirem qualquer foto do ${activeVehicle.model}, envie a foto_geral ou foto_principal!`;
+      }
+      
+      // Mostrar categorias disponíveis
+      const availableCategories = Object.keys(activePhotosByCategory).map(cat => categoryLabelsActive[cat] || cat);
+      systemPrompt += `\n📋 Categorias: ${availableCategories.join(', ')}`;
+    } else {
+      systemPrompt += `\n\n⚠️ ❌ NENHUMA FOTO CADASTRADA para o ${activeVehicle.brand} ${activeVehicle.model}`;
+      systemPrompt += `\n→ Diga ao cliente que ainda não temos foto no sistema, mas pode mostrar pessoalmente na loja.`;
     }
 
     systemPrompt += `
 
-⚠️ REGRA: Se o cliente pedir "foto interna", "tem interna?", "foto por dentro":
-   → Use foto_painel OU foto_bancos OU foto_banco_traseiro (qualquer uma que exista)
-   
-⚠️ REGRA: Se NÃO houver a foto específica pedida:
-   → Diga: "Não temos foto [do painel/dos bancos/etc] do ${activeVehicle.model} no sistema ainda"
-   → NÃO use foto de outro veículo!
+⚠️ REGRAS DE FOTO:
+   → Se TEM foto_principal ou foto_geral, SEMPRE use quando pedirem foto do ${activeVehicle.model}!
+   → Se pedirem "foto interna" e NÃO existe foto específica, diga que não temos foto do interior (mas se tiver foto_geral, pode oferecer)
+   → NUNCA diga "não temos foto" se existir foto_principal ou foto_geral listada acima!
 ===== FIM VEÍCULO ATIVO =====
 `;
   }

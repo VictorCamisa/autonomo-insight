@@ -19,6 +19,14 @@ export interface VehicleInterestAlert {
   status: 'active' | 'notified' | 'expired' | 'converted';
   notified_at: string | null;
   notified_vehicle_id: string | null;
+  // Tracking fields
+  responded_at: string | null;
+  response_message: string | null;
+  converted_at: string | null;
+  conversion_sale_id: string | null;
+  notification_count: number;
+  last_notification_message: string | null;
+  // Metadata
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -45,6 +53,56 @@ export function useVehicleInterestAlerts() {
 
       if (error) throw error;
       return (data || []) as VehicleInterestAlert[];
+    },
+  });
+}
+
+// Statistics for reactivation tracking
+export function useVehicleInterestAlertStats() {
+  return useQuery({
+    queryKey: ['vehicle-interest-alerts', 'stats'],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('vehicle_interest_alerts')
+        .select('status, responded_at, notified_at');
+
+      if (error) throw error;
+      
+      const alerts = (data || []) as Array<{
+        status: string;
+        responded_at: string | null;
+        notified_at: string | null;
+      }>;
+      
+      const total = alerts.length;
+      const active = alerts.filter(a => a.status === 'active').length;
+      const notified = alerts.filter(a => a.status === 'notified').length;
+      const responded = alerts.filter(a => a.responded_at !== null).length;
+      const converted = alerts.filter(a => a.status === 'converted').length;
+      const expired = alerts.filter(a => a.status === 'expired').length;
+      
+      // Calculate response rate (responded / notified)
+      const respondedFromNotified = alerts.filter(a => 
+        (a.status === 'notified' || a.status === 'converted') && a.responded_at !== null
+      ).length;
+      const totalNotified = alerts.filter(a => a.notified_at !== null).length;
+      const responseRate = totalNotified > 0 ? (respondedFromNotified / totalNotified) * 100 : 0;
+      
+      // Conversion rate (converted / notified)
+      const conversionRate = totalNotified > 0 ? (converted / totalNotified) * 100 : 0;
+      
+      return {
+        total,
+        active,
+        notified,
+        responded,
+        converted,
+        expired,
+        responseRate: Math.round(responseRate),
+        conversionRate: Math.round(conversionRate),
+        pendingResponse: notified - respondedFromNotified,
+      };
     },
   });
 }
@@ -157,6 +215,13 @@ interface UpdateAlertInput {
   notified_at?: string;
   notified_vehicle_id?: string;
   notes?: string;
+  // Tracking fields
+  responded_at?: string;
+  response_message?: string;
+  converted_at?: string;
+  conversion_sale_id?: string;
+  notification_count?: number;
+  last_notification_message?: string;
 }
 
 export function useUpdateVehicleInterestAlert() {

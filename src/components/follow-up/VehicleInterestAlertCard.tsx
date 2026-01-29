@@ -332,23 +332,55 @@ export function VehicleInterestAlertCard({
           )}
         </div>
 
-        {/* Notified info */}
+        {/* Tracking Info */}
         {alert.status === 'notified' && alert.notified_at && (
-          <div className="mt-3 pt-3 border-t border-dashed">
-            <div className="flex items-center gap-2 text-xs text-primary">
+          <div className="mt-3 pt-3 border-t border-dashed space-y-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <MessageCircle className="h-3 w-3" />
               <span>
                 Notificado em {format(new Date(alert.notified_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
               </span>
             </div>
+            
+            {/* Response Tracking */}
+            {alert.responded_at ? (
+              <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-2.5 border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 font-medium">
+                  <Check className="h-4 w-4" />
+                  <span>Respondeu!</span>
+                  <span className="text-xs font-normal text-green-600 dark:text-green-500">
+                    {formatDistanceToNow(new Date(alert.responded_at), { addSuffix: true, locale: ptBR })}
+                  </span>
+                </div>
+                {alert.response_message && (
+                  <p className="text-xs text-green-600 dark:text-green-500 mt-1 italic truncate">
+                    "{alert.response_message}"
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2.5 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                  <Clock className="h-4 w-4" />
+                  <span>Aguardando resposta do cliente...</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {alert.status === 'converted' && (
           <div className="mt-3 pt-3 border-t border-dashed">
-            <div className="flex items-center gap-2 text-xs text-primary">
-              <Check className="h-3 w-3" />
-              <span className="font-medium">🎉 Cliente realizou a compra!</span>
+            <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-2.5 border border-emerald-200 dark:border-emerald-800">
+              <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 font-medium">
+                <Check className="h-4 w-4" />
+                <span>🎉 Cliente realizou a compra!</span>
+              </div>
+              {alert.converted_at && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">
+                  Convertido em {format(new Date(alert.converted_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                </p>
+              )}
             </div>
           </div>
         )}

@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { toast } from 'sonner';
 
 // Icons
 import { BarChart3 } from 'lucide-react';
@@ -72,7 +73,8 @@ import {
   useUpdateVehicleInterestAlert,
   useDeleteVehicleInterestAlert,
   useMatchingVehicles,
-  VehicleInterestAlert 
+  VehicleInterestAlert,
+  MatchingVehicle,
 } from '@/hooks/useVehicleInterestAlerts';
 import {
   useLossRecoveryRules,
@@ -82,6 +84,7 @@ import {
   useToggleLossRecoveryRule,
   LossRecoveryRule,
 } from '@/hooks/useLossRecoveryRules';
+import { useSendWhatsAppMessage, useSharedWhatsAppInstance } from '@/hooks/useWhatsApp';
 
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -171,6 +174,11 @@ export default function FollowUp() {
   const updateRule = useUpdateLossRecoveryRule();
   const deleteRule = useDeleteLossRecoveryRule();
   const toggleRule = useToggleLossRecoveryRule();
+
+  // WhatsApp
+  const { data: sharedInstance } = useSharedWhatsAppInstance();
+  const sendWhatsAppMutation = useSendWhatsAppMessage();
+  const [notifyingVehicleId, setNotifyingVehicleId] = useState<string | null>(null);
 
   // ========== Follow-up Flows Logic ==========
   const filteredFlows = flows?.filter((flow) => {
@@ -287,6 +295,55 @@ export default function FollowUp() {
       ? `Olá! Temos uma novidade para você: acabou de chegar um ${vehicleName} que pode ser do seu interesse! Gostaria de saber mais?`
       : 'Olá! Temos novidades que podem ser do seu interesse!';
     window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const handleNotifyCustomer = async (alert: VehicleInterestAlert, vehicle: MatchingVehicle) => {
+    if (!sharedInstance) {
+      toast.error('Nenhuma instância WhatsApp conectada. Configure uma instância primeiro.');
+      return;
+    }
+
+    setNotifyingVehicleId(vehicle.id);
+
+    const vehicleName = `${vehicle.brand} ${vehicle.model} ${vehicle.year_model}`;
+    const price = vehicle.sale_price 
+      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(vehicle.sale_price)
+      : '';
+    
+    const message = `Olá ${alert.customer_name.split(' ')[0]}! 🚗✨
+
+Temos uma ótima notícia! Acabou de chegar um veículo que combina exatamente com o que você procurava:
+
+*${vehicleName}*${price ? `\n💰 *${price}*` : ''}
+
+📸 Quer receber fotos e mais detalhes? Responda essa mensagem!
+
+Estamos à disposição para agendar uma visita. 😊`;
+
+    try {
+      await sendWhatsAppMutation.mutateAsync({
+        phone: alert.customer_phone,
+        message,
+        instanceId: sharedInstance.id,
+        leadId: alert.lead_id || undefined,
+      });
+
+      // Update alert status
+      updateAlert.mutate({
+        id: alert.id,
+        status: 'notified',
+        notified_at: new Date().toISOString(),
+        notified_vehicle_id: vehicle.id,
+      });
+
+      toast.success(`Mensagem enviada para ${alert.customer_name}!`);
+      setShowMatchingVehicles(false);
+      setSelectedAlert(null);
+    } catch (error) {
+      console.error('Erro ao enviar notificação:', error);
+    } finally {
+      setNotifyingVehicleId(null);
+    }
   };
 
   const handleMarkAsNotified = (alert: VehicleInterestAlert, vehicleId?: string) => {
@@ -959,6 +1016,12 @@ export default function FollowUp() {
             )}
           </DialogHeader>
 
+          {!sharedInstance && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-400">
+              ⚠️ Nenhuma instância WhatsApp conectada. Configure uma instância em Configurações → WhatsApp para enviar mensagens diretas.
+            </div>
+          )}
+
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {matchingVehicles.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -993,18 +1056,24 @@ export default function FollowUp() {
                     
                     <Button 
                       size="sm"
+                      disabled={notifyingVehicleId === vehicle.id || sendWhatsAppMutation.isPending}
                       onClick={() => {
                         if (selectedAlert) {
-                          handleOpenWhatsApp(
-                            selectedAlert.customer_phone,
-                            `${vehicle.brand} ${vehicle.model} ${vehicle.year_model}`
-                          );
-                          handleMarkAsNotified(selectedAlert, vehicle.id);
+                          handleNotifyCustomer(selectedAlert, vehicle);
                         }
                       }}
                     >
-                      <MessageCircle className="h-4 w-4 mr-1" />
-                      Notificar
+                      {notifyingVehicleId === vehicle.id ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <MessageCircle className="h-4 w-4 mr-1" />
+                          Notificar
+                        </>
+                      )}
                     </Button>
                   </CardContent>
                 </Card>

@@ -1357,7 +1357,7 @@ SITUAÇÃO 3: Cliente pergunta "Já vendeu o Polo?"
 - ${toneDescription}
 
 ===== 📍 INFORMAÇÕES DA LOJA =====
-- Endereço: Avenida Major Joaquim Monteiro Patto, 25, Jardim Monção - Jaguariúna/SP
+- Endereço: Avenida Major Joaquim Monteiro Patto, 25, Chácara do Visconde - Taubaté/SP, CEP 12050-620
 - Telefone: (12) 98897-3547
 - Horário: Segunda a Sexta das 9h às 18h, Sábados das 9h às 13h
 

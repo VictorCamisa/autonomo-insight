@@ -1,9 +1,16 @@
-import { Car, Calendar, Gauge, Fuel, ImageOff, Bike } from 'lucide-react';
+import { Car, Calendar, Gauge, Fuel, Bike } from 'lucide-react';
 import { useState } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import type { Vehicle } from '@/types/inventory';
+import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import type { Vehicle, VehicleType } from '@/types/inventory';
 import { vehicleStatusLabels, vehicleStatusColors, fuelTypeLabels } from '@/types/inventory';
+import { useUpdateVehicle } from '@/hooks/useVehicles';
 
 interface VehicleCardProps {
   vehicle: Vehicle;
@@ -12,6 +19,7 @@ interface VehicleCardProps {
 
 export function VehicleCard({ vehicle, onClick }: VehicleCardProps) {
   const [imageError, setImageError] = useState(false);
+  const updateVehicle = useUpdateVehicle();
   
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
@@ -23,6 +31,12 @@ export function VehicleCard({ vehicle, onClick }: VehicleCardProps) {
 
   const formatKm = (km: number) => {
     return new Intl.NumberFormat('pt-BR').format(km) + ' km';
+  };
+
+  const handleToggleType = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newType: VehicleType = vehicle.vehicle_type === 'carro' ? 'moto' : 'carro';
+    updateVehicle.mutate({ id: vehicle.id, vehicle_type: newType });
   };
 
   // Pegar a primeira imagem do veículo
@@ -55,6 +69,30 @@ export function VehicleCard({ vehicle, onClick }: VehicleCardProps) {
           </div>
         )}
         
+        {/* Botão de tipo no canto superior esquerdo */}
+        <div className="absolute top-2 left-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-8 w-8 bg-background/80 backdrop-blur-sm hover:bg-background"
+                onClick={handleToggleType}
+                disabled={updateVehicle.isPending}
+              >
+                {vehicle.vehicle_type === 'moto' ? (
+                  <Bike className="h-4 w-4" />
+                ) : (
+                  <Car className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Clique para alternar para {vehicle.vehicle_type === 'carro' ? 'Moto' : 'Carro'}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
         {/* Badge de status no canto */}
         <div className="absolute top-2 right-2">
           <Badge className={vehicleStatusColors[vehicle.status]}>

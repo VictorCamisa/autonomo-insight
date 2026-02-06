@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { Vehicle, VehicleCost, VehicleDRE, VehicleStatus, VehicleCostType } from '@/types/inventory';
+import type { Vehicle, VehicleCost, VehicleDRE, VehicleStatus, VehicleCostType, VehicleType } from '@/types/inventory';
 import { toast } from 'sonner';
 import { syncVehiclePurchase, syncVehicleCost } from './useFinancialSync';
 
@@ -177,6 +177,7 @@ export function useVehicleCosts(vehicleId: string) {
 }
 
 interface CreateVehicleInput {
+  vehicle_type?: VehicleType;
   brand: string;
   model: string;
   version?: string;

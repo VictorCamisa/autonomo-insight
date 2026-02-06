@@ -4278,6 +4278,7 @@ export type Database = {
           status: Database["public"]["Enums"]["vehicle_status"]
           transmission: string
           updated_at: string
+          vehicle_type: string
           version: string | null
           year_fabrication: number
           year_model: number
@@ -4322,6 +4323,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["vehicle_status"]
           transmission?: string
           updated_at?: string
+          vehicle_type?: string
           version?: string | null
           year_fabrication: number
           year_model: number
@@ -4366,6 +4368,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["vehicle_status"]
           transmission?: string
           updated_at?: string
+          vehicle_type?: string
           version?: string | null
           year_fabrication?: number
           year_model?: number

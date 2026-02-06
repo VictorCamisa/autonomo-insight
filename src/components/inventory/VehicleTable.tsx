@@ -20,8 +20,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { Vehicle } from '@/types/inventory';
+import type { Vehicle, VehicleType } from '@/types/inventory';
 import { vehicleStatusLabels, vehicleStatusColors, fuelTypeLabels } from '@/types/inventory';
+import { useUpdateVehicle } from '@/hooks/useVehicles';
 
 interface VehicleTableProps {
   vehicles: Vehicle[];
@@ -29,6 +30,8 @@ interface VehicleTableProps {
 }
 
 export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
+  const updateVehicle = useUpdateVehicle();
+
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
     return new Intl.NumberFormat('pt-BR', {
@@ -39,6 +42,12 @@ export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
 
   const formatKm = (km: number) => {
     return new Intl.NumberFormat('pt-BR').format(km) + ' km';
+  };
+
+  const handleToggleType = (e: React.MouseEvent, vehicle: Vehicle) => {
+    e.stopPropagation();
+    const newType: VehicleType = vehicle.vehicle_type === 'carro' ? 'moto' : 'carro';
+    updateVehicle.mutate({ id: vehicle.id, vehicle_type: newType });
   };
 
   if (vehicles.length === 0) {
@@ -75,13 +84,26 @@ export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
               onClick={() => onVehicleClick(vehicle)}
             >
               <TableCell>
-                <div className="flex items-center justify-center">
-                  {vehicle.vehicle_type === 'moto' ? (
-                    <Bike className="h-5 w-5 text-primary" />
-                  ) : (
-                    <Car className="h-5 w-5 text-primary" />
-                  )}
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={(e) => handleToggleType(e, vehicle)}
+                      disabled={updateVehicle.isPending}
+                    >
+                      {vehicle.vehicle_type === 'moto' ? (
+                        <Bike className="h-5 w-5 text-primary" />
+                      ) : (
+                        <Car className="h-5 w-5 text-primary" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Clique para alternar para {vehicle.vehicle_type === 'carro' ? 'Moto' : 'Carro'}
+                  </TooltipContent>
+                </Tooltip>
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-3">

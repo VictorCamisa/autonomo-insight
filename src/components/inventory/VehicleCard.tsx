@@ -1,4 +1,4 @@
-import { Car, Calendar, Gauge, Fuel, ImageOff } from 'lucide-react';
+import { Car, Calendar, Gauge, Fuel, ImageOff, Bike } from 'lucide-react';
 import { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +46,11 @@ export function VehicleCard({ vehicle, onClick }: VehicleCardProps) {
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
-            <Car className="h-12 w-12 opacity-30" />
+            {vehicle.vehicle_type === 'moto' ? (
+              <Bike className="h-12 w-12 opacity-30" />
+            ) : (
+              <Car className="h-12 w-12 opacity-30" />
+            )}
             <span className="text-xs mt-1">Sem foto</span>
           </div>
         )}

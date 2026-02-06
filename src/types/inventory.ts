@@ -1,8 +1,10 @@
 export type VehicleStatus = 'disponivel' | 'reservado' | 'vendido' | 'em_manutencao';
+export type VehicleType = 'carro' | 'moto';
 export type VehicleCostType = 'aquisicao' | 'documentacao' | 'transferencia' | 'ipva' | 'manutencao' | 'limpeza' | 'frete' | 'comissao_compra' | 'outros';
 
 export interface Vehicle {
   id: string;
+  vehicle_type: VehicleType;
   brand: string;
   model: string;
   version: string | null;
@@ -148,4 +150,9 @@ export const transmissionLabels: Record<string, string> = {
   automatico: 'Automático',
   automatizado: 'Automatizado',
   cvt: 'CVT',
+};
+
+export const vehicleTypeLabels: Record<VehicleType, string> = {
+  carro: 'Carro',
+  moto: 'Moto',
 };

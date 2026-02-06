@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Store, Eye } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Store, Eye, Bike } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -19,8 +19,8 @@ import { MercadoLivreConfigDialog } from '@/components/inventory/MercadoLivreCon
 import { BentoCard } from '@/components/ui/bento-card';
 import { useVehicles, useAllVehicleDRE, useCreateVehicle, useBulkUpdateVehiclesVisibility } from '@/hooks/useVehicles';
 import { usePermissions } from '@/hooks/usePermissions';
-import type { Vehicle, VehicleStatus, VehicleDRE } from '@/types/inventory';
-import { vehicleStatusLabels } from '@/types/inventory';
+import type { Vehicle, VehicleStatus, VehicleDRE, VehicleType } from '@/types/inventory';
+import { vehicleStatusLabels, vehicleTypeLabels } from '@/types/inventory';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -32,6 +32,7 @@ export default function Inventory() {
   const [isMercadoLivreDialogOpen, setIsMercadoLivreDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('all');
+  const [vehicleTypeFilter, setVehicleTypeFilter] = useState<VehicleType | 'all'>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const navigate = useNavigate();
   const { role } = useAuth();
@@ -49,10 +50,11 @@ export default function Inventory() {
       vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
       vehicle.plate?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
+      const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
+      const matchesType = vehicleTypeFilter === 'all' || vehicle.vehicle_type === vehicleTypeFilter;
 
-    return matchesSearch && matchesStatus;
-  }) || [];
+      return matchesSearch && matchesStatus && matchesType;
+    }) || [];
 
   const filteredDRE = (Array.isArray(dreData) ? dreData : []).filter((dre) => {
     const matchesSearch =
@@ -198,6 +200,26 @@ export default function Inventory() {
               className="pl-10"
             />
           </div>
+
+          <Select 
+            value={vehicleTypeFilter} 
+            onValueChange={(value) => setVehicleTypeFilter(value as VehicleType | 'all')}
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              {Object.entries(vehicleTypeLabels).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  <span className="flex items-center gap-2">
+                    {value === 'carro' ? <Car className="h-4 w-4" /> : <Bike className="h-4 w-4" />}
+                    {label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Select 
             value={statusFilter} 

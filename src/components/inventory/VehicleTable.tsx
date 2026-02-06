@@ -1,4 +1,4 @@
-import { Car, MoreHorizontal, Globe, EyeOff } from 'lucide-react';
+import { Car, MoreHorizontal, Globe, EyeOff, Bike } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -55,7 +55,8 @@ export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[300px]">Veículo</TableHead>
+            <TableHead className="w-[50px]">Tipo</TableHead>
+            <TableHead className="w-[280px]">Veículo</TableHead>
             <TableHead>Ano</TableHead>
             <TableHead>KM</TableHead>
             <TableHead>Placa</TableHead>
@@ -73,6 +74,15 @@ export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
               className="cursor-pointer"
               onClick={() => onVehicleClick(vehicle)}
             >
+              <TableCell>
+                <div className="flex items-center justify-center">
+                  {vehicle.vehicle_type === 'moto' ? (
+                    <Bike className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Car className="h-5 w-5 text-primary" />
+                  )}
+                </div>
+              </TableCell>
               <TableCell>
                 <div className="flex items-center gap-3">
                   {vehicle.images && vehicle.images.length > 0 ? (

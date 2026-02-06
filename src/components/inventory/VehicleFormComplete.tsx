@@ -24,12 +24,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { vehicleStatusLabels, fuelTypeLabels, transmissionLabels } from '@/types/inventory';
-import type { Vehicle } from '@/types/inventory';
-import { Car, DollarSign, Calculator, FileText, Globe, AlertCircle, Trash2 } from 'lucide-react';
+import { vehicleStatusLabels, fuelTypeLabels, transmissionLabels, vehicleTypeLabels } from '@/types/inventory';
+import type { Vehicle, VehicleType } from '@/types/inventory';
+import { Car, DollarSign, Calculator, FileText, Globe, AlertCircle, Trash2, Bike } from 'lucide-react';
 import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
 
 const completeFormSchema = z.object({
+  // Tipo de veículo
+  vehicle_type: z.enum(['carro', 'moto']),
+  
   // Dados básicos
   brand: z.string().min(1, 'Marca é obrigatória').max(50),
   model: z.string().min(1, 'Modelo é obrigatório').max(100),
@@ -85,6 +88,7 @@ export function VehicleFormComplete({ vehicle, onSubmit, isLoading }: VehicleFor
   const form = useForm<CompleteFormValues>({
     resolver: zodResolver(completeFormSchema),
     defaultValues: {
+      vehicle_type: vehicle?.vehicle_type || 'carro',
       brand: vehicle?.brand || '',
       model: vehicle?.model || '',
       version: vehicle?.version || '',
@@ -182,12 +186,66 @@ export function VehicleFormComplete({ vehicle, onSubmit, isLoading }: VehicleFor
         <Card>
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
-              <Car className="h-5 w-5 text-primary" />
+              {form.watch('vehicle_type') === 'moto' ? (
+                <Bike className="h-5 w-5 text-primary" />
+              ) : (
+                <Car className="h-5 w-5 text-primary" />
+              )}
               <CardTitle className="text-lg">Dados do Veículo</CardTitle>
             </div>
             <CardDescription>Informações básicas de identificação</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Tipo de Veículo */}
+            <FormField
+              control={form.control}
+              name="vehicle_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Veículo *</FormLabel>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label
+                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        field.value === 'carro'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        value="carro"
+                        checked={field.value === 'carro'}
+                        onChange={() => field.onChange('carro')}
+                        className="sr-only"
+                      />
+                      <Car className="h-5 w-5" />
+                      <span className="font-medium">Carro</span>
+                    </label>
+                    <label
+                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        field.value === 'moto'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        value="moto"
+                        checked={field.value === 'moto'}
+                        onChange={() => field.onChange('moto')}
+                        className="sr-only"
+                      />
+                      <Bike className="h-5 w-5" />
+                      <span className="font-medium">Moto</span>
+                    </label>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Separator />
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}

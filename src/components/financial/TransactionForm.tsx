@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { CalendarIcon, Plus, Loader2, Repeat } from 'lucide-react';
+import { CalendarIcon, Plus, Loader2, Repeat, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,8 +35,8 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
-import { useFinancialCategories, useCreateTransaction } from '@/hooks/useFinancialTransactions';
+import { cn, parseDate } from '@/lib/utils';
+import { useFinancialCategories, useCreateTransaction, useUpdateTransaction, FinancialTransaction } from '@/hooks/useFinancialTransactions';
 
 const formSchema = z.object({
   type: z.enum(['receita', 'despesa']),
@@ -58,29 +58,60 @@ interface TransactionFormProps {
   onSuccess?: () => void;
   defaultType?: 'receita' | 'despesa';
   trigger?: React.ReactNode;
+  transaction?: FinancialTransaction;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function TransactionForm({ onSuccess, defaultType = 'despesa', trigger }: TransactionFormProps) {
-  const [open, setOpen] = useState(false);
-  const [type, setType] = useState<'receita' | 'despesa'>(defaultType);
+export function TransactionForm({ onSuccess, defaultType = 'despesa', trigger, transaction, open: controlledOpen, onOpenChange }: TransactionFormProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = onOpenChange || setInternalOpen;
+
+  const isEditing = !!transaction;
+  const [type, setType] = useState<'receita' | 'despesa'>(transaction?.type || defaultType);
   const { data: categories } = useFinancialCategories(type);
   const createTransaction = useCreateTransaction();
+  const updateTransaction = useUpdateTransaction();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      type: defaultType,
-      category: '',
-      description: '',
-      amount: undefined,
-      transaction_date: new Date(),
-      status: 'pendente',
-      recurrence: 'unica',
+      type: transaction?.type || defaultType,
+      category: transaction?.category || '',
+      description: transaction?.description || '',
+      amount: transaction?.amount || undefined,
+      transaction_date: transaction?.transaction_date ? parseDate(transaction.transaction_date) || new Date() : new Date(),
+      due_date: transaction?.due_date ? parseDate(transaction.due_date) || undefined : undefined,
+      status: transaction?.status || 'pendente',
+      recurrence: (transaction?.recurrence as any) || 'unica',
+      recurrence_end_date: transaction?.recurrence_end_date ? parseDate(transaction.recurrence_end_date) || undefined : undefined,
+      notes: transaction?.notes || '',
+      payment_method: transaction?.payment_method || undefined,
     },
   });
 
+  useEffect(() => {
+    if (transaction && open) {
+      setType(transaction.type);
+      form.reset({
+        type: transaction.type,
+        category: transaction.category,
+        description: transaction.description,
+        amount: transaction.amount,
+        transaction_date: parseDate(transaction.transaction_date) || new Date(),
+        due_date: transaction.due_date ? parseDate(transaction.due_date) || undefined : undefined,
+        status: transaction.status,
+        recurrence: (transaction.recurrence as any) || 'unica',
+        recurrence_end_date: transaction.recurrence_end_date ? parseDate(transaction.recurrence_end_date) || undefined : undefined,
+        notes: transaction.notes || '',
+        payment_method: transaction.payment_method || undefined,
+      });
+    }
+  }, [transaction, open]);
+
   const onSubmit = async (values: FormValues) => {
-    await createTransaction.mutateAsync({
+    const payload = {
       type: values.type,
       category: values.category,
       description: values.description,
@@ -92,11 +123,19 @@ export function TransactionForm({ onSuccess, defaultType = 'despesa', trigger }:
       recurrence: values.recurrence,
       recurrence_end_date: values.recurrence_end_date ? format(values.recurrence_end_date, 'yyyy-MM-dd') : undefined,
       notes: values.notes,
-    });
+    };
+
+    if (isEditing) {
+      await updateTransaction.mutateAsync({ id: transaction.id, ...payload });
+    } else {
+      await createTransaction.mutateAsync(payload);
+    }
     form.reset();
     setOpen(false);
     onSuccess?.();
   };
+
+  const isPending = isEditing ? updateTransaction.isPending : createTransaction.isPending;
 
   const handleTypeChange = (newType: 'receita' | 'despesa') => {
     setType(newType);
@@ -106,17 +145,19 @@ export function TransactionForm({ onSuccess, defaultType = 'despesa', trigger }:
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Novo Lançamento
-          </Button>
-        )}
-      </DialogTrigger>
+      {!controlledOpen && (
+        <DialogTrigger asChild>
+          {trigger || (
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Novo Lançamento
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Novo Lançamento Financeiro</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Lançamento' : 'Novo Lançamento Financeiro'}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -309,9 +350,9 @@ export function TransactionForm({ onSuccess, defaultType = 'despesa', trigger }:
 
             <div className="flex justify-end gap-3 pt-4">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={createTransaction.isPending}>
-                {createTransaction.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Salvar
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEditing ? 'Atualizar' : 'Salvar'}
               </Button>
             </div>
           </form>

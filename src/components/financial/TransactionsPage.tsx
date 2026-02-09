@@ -13,6 +13,7 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
+  Pencil,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ import {
   useMarkAsPaid,
   useDeleteTransaction,
   useFinancialSummary,
+  FinancialTransaction,
 } from '@/hooks/useFinancialTransactions';
 import { cn, parseDate } from '@/lib/utils';
 
@@ -67,6 +69,7 @@ export function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null);
 
   const { data: transactions, isLoading } = useFinancialTransactions(
     typeFilter !== 'all' ? { type: typeFilter } : undefined
@@ -323,6 +326,12 @@ export function TransactionsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => setEditingTransaction(transaction)}
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
                           {transaction.status === 'pendente' && (
                             <DropdownMenuItem
                               onClick={() => markAsPaid.mutate(transaction.id)}
@@ -349,6 +358,14 @@ export function TransactionsPage() {
           </Table>
         </CardContent>
       </Card>
+      {/* Edit Dialog */}
+      {editingTransaction && (
+        <TransactionForm
+          transaction={editingTransaction}
+          open={!!editingTransaction}
+          onOpenChange={(open) => { if (!open) setEditingTransaction(null); }}
+        />
+      )}
     </div>
   );
 }

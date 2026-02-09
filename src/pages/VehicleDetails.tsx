@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Plus, Calendar, Gauge, Car, DollarSign, Clock, TrendingUp, TrendingDown, AlertTriangle, Globe, EyeOff, Image, Share2, Copy, FileText, Bookmark, CircleCheck, CircleDashed, Wrench, Paperclip } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, Calendar, Gauge, Car, DollarSign, Clock, TrendingUp, TrendingDown, AlertTriangle, Globe, EyeOff, Image, Share2, Copy, FileText, Bookmark, CircleCheck, CircleDashed, Wrench, Paperclip, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { parseDate } from '@/lib/utils';
@@ -37,7 +37,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { VehicleForm } from '@/components/inventory/VehicleForm';
 import { VehicleCostForm } from '@/components/inventory/VehicleCostForm';
-import { useVehicle, useVehicleDRE, useVehicleCosts, useUpdateVehicle, useDeleteVehicle, useCreateVehicleCost, useDeleteVehicleCost } from '@/hooks/useVehicles';
+import type { VehicleCostEditData } from '@/components/inventory/VehicleCostForm';
+import { useVehicle, useVehicleDRE, useVehicleCosts, useUpdateVehicle, useDeleteVehicle, useCreateVehicleCost, useDeleteVehicleCost, useUpdateVehicleCost } from '@/hooks/useVehicles';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { vehicleStatusLabels, vehicleStatusColors, vehicleCostTypeLabels, fuelTypeLabels, transmissionLabels } from '@/types/inventory';
@@ -50,6 +51,7 @@ export default function VehicleDetails() {
   const { role } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCostDialogOpen, setIsCostDialogOpen] = useState(false);
+  const [editingCost, setEditingCost] = useState<VehicleCostEditData | null>(null);
   const queryClient = useQueryClient();
 
   const { data: vehicle, isLoading } = useVehicle(id!);
@@ -60,6 +62,7 @@ export default function VehicleDetails() {
   const deleteVehicle = useDeleteVehicle();
   const createCost = useCreateVehicleCost();
   const deleteCost = useDeleteVehicleCost();
+  const updateCost = useUpdateVehicleCost();
 
   const isManager = role === 'gerente';
   const dre = dreData as VehicleDRE | null;
@@ -112,9 +115,38 @@ export default function VehicleDetails() {
   };
 
   const handleAddCost = (data: Parameters<typeof createCost.mutate>[0]) => {
-    createCost.mutate(data, {
-      onSuccess: () => setIsCostDialogOpen(false),
+    if (editingCost) {
+      updateCost.mutate({
+        id: editingCost.id,
+        vehicleId: vehicle.id,
+        oldDescription: editingCost.description,
+        oldAmount: editingCost.amount,
+        cost_type: data.cost_type,
+        description: data.description,
+        amount: data.amount,
+        cost_date: data.cost_date,
+      }, {
+        onSuccess: () => {
+          setEditingCost(null);
+          setIsCostDialogOpen(false);
+        },
+      });
+    } else {
+      createCost.mutate(data, {
+        onSuccess: () => setIsCostDialogOpen(false),
+      });
+    }
+  };
+
+  const handleEditCost = (cost: { id: string; cost_type: string; description: string; amount: number; cost_date?: string | null }) => {
+    setEditingCost({
+      id: cost.id,
+      cost_type: cost.cost_type as any,
+      description: cost.description,
+      amount: cost.amount,
+      cost_date: cost.cost_date,
     });
+    setIsCostDialogOpen(true);
   };
 
   const handleToggleFeatured = () => {
@@ -666,7 +698,10 @@ export default function VehicleDetails() {
 
         <TabsContent value="costs" className="space-y-4 mt-4">
           {isManager && (
-            <Dialog open={isCostDialogOpen} onOpenChange={setIsCostDialogOpen}>
+            <Dialog open={isCostDialogOpen} onOpenChange={(open) => {
+              setIsCostDialogOpen(open);
+              if (!open) setEditingCost(null);
+            }}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
@@ -675,12 +710,14 @@ export default function VehicleDetails() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Adicionar Custo</DialogTitle>
+                  <DialogTitle>{editingCost ? 'Editar Custo' : 'Adicionar Custo'}</DialogTitle>
                 </DialogHeader>
                 <VehicleCostForm
                   vehicleId={vehicle.id}
                   onSubmit={handleAddCost}
-                  isLoading={createCost.isPending}
+                  isLoading={createCost.isPending || updateCost.isPending}
+                  editingCost={editingCost}
+                  onCancelEdit={() => { setEditingCost(null); setIsCostDialogOpen(false); }}
                 />
               </DialogContent>
             </Dialog>
@@ -710,34 +747,39 @@ export default function VehicleDetails() {
                       {formatDate(cost.cost_date)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
                     <span className="font-semibold text-lg">
                       {formatCurrency(cost.amount)}
                     </span>
                     {isManager && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Excluir custo?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta ação não pode ser desfeita.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteCost.mutate({ id: cost.id, vehicleId: vehicle.id })}
-                            >
-                              Excluir
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditCost(cost)}>
+                          <Pencil className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir custo?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta ação não pode ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteCost.mutate({ id: cost.id, vehicleId: vehicle.id })}
+                              >
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
                     )}
                   </div>
                 </div>

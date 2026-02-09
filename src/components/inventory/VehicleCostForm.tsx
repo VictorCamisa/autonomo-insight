@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { vehicleCostTypeLabels } from '@/types/inventory';
 import type { VehicleCostType } from '@/types/inventory';
+import { useEffect } from 'react';
 
 const costFormSchema = z.object({
   cost_type: z.enum(['aquisicao', 'documentacao', 'transferencia', 'ipva', 'manutencao', 'limpeza', 'frete', 'comissao_compra', 'outros']),
@@ -30,13 +31,23 @@ const costFormSchema = z.object({
 
 type CostFormValues = z.infer<typeof costFormSchema>;
 
+export interface VehicleCostEditData {
+  id: string;
+  cost_type: VehicleCostType;
+  description: string;
+  amount: number;
+  cost_date?: string | null;
+}
+
 interface VehicleCostFormProps {
   onSubmit: (data: CostFormValues & { vehicle_id: string }) => void;
   vehicleId: string;
   isLoading?: boolean;
+  editingCost?: VehicleCostEditData | null;
+  onCancelEdit?: () => void;
 }
 
-export function VehicleCostForm({ onSubmit, vehicleId, isLoading }: VehicleCostFormProps) {
+export function VehicleCostForm({ onSubmit, vehicleId, isLoading, editingCost, onCancelEdit }: VehicleCostFormProps) {
   const form = useForm<CostFormValues>({
     resolver: zodResolver(costFormSchema),
     defaultValues: {
@@ -47,9 +58,25 @@ export function VehicleCostForm({ onSubmit, vehicleId, isLoading }: VehicleCostF
     },
   });
 
+  useEffect(() => {
+    if (editingCost) {
+      form.reset({
+        cost_type: editingCost.cost_type,
+        description: editingCost.description,
+        amount: editingCost.amount,
+        cost_date: editingCost.cost_date?.split('T')[0] || new Date().toISOString().split('T')[0],
+      });
+    }
+  }, [editingCost, form]);
+
   const handleSubmit = (data: CostFormValues) => {
     onSubmit({ ...data, vehicle_id: vehicleId });
-    form.reset();
+    form.reset({
+      cost_type: 'manutencao',
+      description: '',
+      amount: undefined,
+      cost_date: new Date().toISOString().split('T')[0],
+    });
   };
 
   return (
@@ -61,7 +88,7 @@ export function VehicleCostForm({ onSubmit, vehicleId, isLoading }: VehicleCostF
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tipo de Custo *</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o tipo" />
@@ -124,9 +151,16 @@ export function VehicleCostForm({ onSubmit, vehicleId, isLoading }: VehicleCostF
           />
         </div>
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? 'Adicionando...' : 'Adicionar Custo'}
-        </Button>
+        <div className="flex gap-2">
+          <Button type="submit" className="flex-1" disabled={isLoading}>
+            {isLoading ? (editingCost ? 'Salvando...' : 'Adicionando...') : (editingCost ? 'Salvar Alterações' : 'Adicionar Custo')}
+          </Button>
+          {editingCost && onCancelEdit && (
+            <Button type="button" variant="outline" onClick={onCancelEdit}>
+              Cancelar
+            </Button>
+          )}
+        </div>
       </form>
     </Form>
   );

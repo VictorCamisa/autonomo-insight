@@ -1,7 +1,14 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useSales, useDeleteSale } from '@/hooks/useSales';
 import { useContracts } from '@/hooks/useContracts';
 import { SaleCard } from '@/components/sales/SaleCard';
@@ -10,11 +17,14 @@ import { ContractFormDialog } from '@/components/contracts/ContractFormDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Sale } from '@/types/sales';
 import type { ContractFormData } from '@/hooks/useContracts';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export function SalesListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [monthFilter, setMonthFilter] = useState<string>('all');
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
   const [contractInitialData, setContractInitialData] = useState<Partial<ContractFormData> | undefined>();
   
@@ -25,7 +35,20 @@ export function SalesListPage() {
 
   const isManager = role === 'gerente';
 
-  // Check if a sale has a contract based on vehicle_id and customer_id
+  // Generate available months from sales data
+  const availableMonths = useMemo(() => {
+    if (!sales) return [];
+    const months = new Set<string>();
+    sales.forEach((sale) => {
+      if (sale.sale_date) {
+        const month = sale.sale_date.substring(0, 7); // YYYY-MM
+        months.add(month);
+      }
+    });
+    return Array.from(months).sort().reverse();
+  }, [sales]);
+
+  // Check if a sale has a contract
   const saleHasContract = (sale: Sale): boolean => {
     if (!sale.vehicle_id || !sale.customer_id) return false;
     return contracts.some(
@@ -33,29 +56,68 @@ export function SalesListPage() {
     );
   };
 
-  // Filter sales by search query
+  // Filter sales by search query and month
   const filteredSales = useMemo(() => {
-    if (!searchQuery.trim() || !sales) return sales;
+    let result = sales || [];
     
-    const query = searchQuery.toLowerCase();
-    return sales.filter((sale) => {
-      const vehicleInfo = sale.vehicle 
-        ? `${sale.vehicle.brand} ${sale.vehicle.model} ${sale.vehicle.plate || ''}`.toLowerCase() 
-        : '';
-      const customerName = sale.customer?.name?.toLowerCase() || '';
-      const customerPhone = sale.customer?.phone?.toLowerCase() || '';
-      const paymentMethod = sale.payment_method?.toLowerCase() || '';
-      const salePrice = sale.sale_price?.toString() || '';
-      
-      return (
-        vehicleInfo.includes(query) ||
-        customerName.includes(query) ||
-        customerPhone.includes(query) ||
-        paymentMethod.includes(query) ||
-        salePrice.includes(query)
-      );
+    if (monthFilter !== 'all') {
+      result = result.filter((sale) => sale.sale_date?.startsWith(monthFilter));
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((sale) => {
+        const vehicleInfo = sale.vehicle 
+          ? `${sale.vehicle.brand} ${sale.vehicle.model} ${sale.vehicle.plate || ''}`.toLowerCase() 
+          : '';
+        const customerName = sale.customer?.name?.toLowerCase() || '';
+        const customerPhone = sale.customer?.phone?.toLowerCase() || '';
+        const paymentMethod = sale.payment_method?.toLowerCase() || '';
+        const salePrice = sale.sale_price?.toString() || '';
+        
+        return (
+          vehicleInfo.includes(query) ||
+          customerName.includes(query) ||
+          customerPhone.includes(query) ||
+          paymentMethod.includes(query) ||
+          salePrice.includes(query)
+        );
+      });
+    }
+
+    return result;
+  }, [sales, searchQuery, monthFilter]);
+
+  // Group sales by month
+  const groupedSales = useMemo(() => {
+    const groups: Record<string, { sales: Sale[]; total: number; count: number }> = {};
+    
+    (filteredSales || []).forEach((sale) => {
+      const monthKey = sale.sale_date?.substring(0, 7) || 'sem-data';
+      if (!groups[monthKey]) {
+        groups[monthKey] = { sales: [], total: 0, count: 0 };
+      }
+      groups[monthKey].sales.push(sale);
+      groups[monthKey].total += sale.sale_price || 0;
+      groups[monthKey].count += 1;
     });
-  }, [sales, searchQuery]);
+
+    return Object.entries(groups)
+      .sort(([a], [b]) => b.localeCompare(a));
+  }, [filteredSales]);
+
+  const formatMonthLabel = (monthKey: string) => {
+    if (monthKey === 'sem-data') return 'Sem data';
+    try {
+      return format(parseISO(`${monthKey}-01`), "MMMM 'de' yyyy", { locale: ptBR });
+    } catch {
+      return monthKey;
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
 
   const handleEdit = (sale: Sale) => {
     setEditingSale(sale);
@@ -69,7 +131,6 @@ export function SalesListPage() {
   };
 
   const handleGenerateContract = (sale: Sale) => {
-    // Prepara os dados iniciais do contrato com todos os campos disponíveis
     const initialData: Partial<ContractFormData> = {
       contract_type: 'venda',
       customer_id: sale.customer_id,
@@ -104,10 +165,10 @@ export function SalesListPage() {
         <div>
           <h2 className="text-xl font-semibold">Todas as Vendas</h2>
           <p className="text-muted-foreground">
-            {filteredSales?.length || 0} vendas {searchQuery ? 'encontradas' : 'registradas'}
+            {filteredSales?.length || 0} vendas {searchQuery || monthFilter !== 'all' ? 'encontradas' : 'registradas'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -117,6 +178,20 @@ export function SalesListPage() {
               className="pl-9 w-[280px]"
             />
           </div>
+          <Select value={monthFilter} onValueChange={setMonthFilter}>
+            <SelectTrigger className="w-[200px]">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Filtrar por mês" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os meses</SelectItem>
+              {availableMonths.map((month) => (
+                <SelectItem key={month} value={month}>
+                  {formatMonthLabel(month)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {isManager && (
             <Button onClick={() => { setEditingSale(null); setFormOpen(true); }}>
               <Plus className="h-4 w-4 mr-2" /> Nova Venda
@@ -127,24 +202,38 @@ export function SalesListPage() {
 
       {isLoading ? (
         <p>Carregando...</p>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredSales?.map((sale) => (
-            <SaleCard
-              key={sale.id}
-              sale={sale}
-              hasContract={saleHasContract(sale)}
-              onEdit={isManager ? handleEdit : undefined}
-              onDelete={isManager ? handleDelete : undefined}
-              onGenerateContract={handleGenerateContract}
-            />
+      ) : groupedSales.length > 0 ? (
+        <div className="space-y-8">
+          {groupedSales.map(([monthKey, group]) => (
+            <div key={monthKey}>
+              <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                <h3 className="text-lg font-semibold capitalize">
+                  {formatMonthLabel(monthKey)}
+                </h3>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>{group.count} {group.count === 1 ? 'venda' : 'vendas'}</span>
+                  <span className="font-medium text-foreground">{formatCurrency(group.total)}</span>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {group.sales.map((sale) => (
+                  <SaleCard
+                    key={sale.id}
+                    sale={sale}
+                    hasContract={saleHasContract(sale)}
+                    onEdit={isManager ? handleEdit : undefined}
+                    onDelete={isManager ? handleDelete : undefined}
+                    onGenerateContract={handleGenerateContract}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
-          {filteredSales?.length === 0 && (
-            <p className="text-muted-foreground col-span-full text-center py-8">
-              {searchQuery ? 'Nenhuma venda encontrada com essa busca' : 'Nenhuma venda registrada'}
-            </p>
-          )}
         </div>
+      ) : (
+        <p className="text-muted-foreground text-center py-8">
+          {searchQuery || monthFilter !== 'all' ? 'Nenhuma venda encontrada com esses filtros' : 'Nenhuma venda registrada'}
+        </p>
       )}
 
       <SaleForm 

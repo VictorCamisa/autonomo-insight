@@ -106,7 +106,7 @@ export function useContracts() {
 
   const createContract = useMutation({
     mutationFn: async (data: ContractFormData & { updateRelated?: boolean }) => {
-      const { updateRelated, ...contractData } = data;
+      const { updateRelated, negotiation_details, ...contractData } = data;
       
       // Se updateRelated = true, atualiza cliente e veículo com os dados do contrato
       if (updateRelated && contractData.customer_id) {

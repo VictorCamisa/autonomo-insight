@@ -161,7 +161,7 @@ serve(async (req) => {
           }
         }
 
-        // Q2 - Mover para "Negociando"
+        // Q2 - Mover para "Negociando" e enviar ficha ao vendedor via WhatsApp
         if (qualLevel === 'q2' || qualLevel === 'q3') {
           if (negotiation.status === 'atendimento_ia') {
             await supabase
@@ -174,8 +174,9 @@ serve(async (req) => {
               payload: { from: 'atendimento_ia', to: 'negociando' }
             });
 
-            // Criar alerta para vendedor
+            // Criar alerta para vendedor e enviar ficha via WhatsApp
             if (negotiation.salesperson_id) {
+              // Notificação in-app
               await supabase.from('notifications').insert({
                 user_id: negotiation.salesperson_id,
                 type: 'lead_qualified',
@@ -191,6 +192,130 @@ serve(async (req) => {
                   user_id: negotiation.salesperson_id 
                 }
               });
+
+              // === ENVIAR FICHA VIA WHATSAPP AO VENDEDOR ===
+              try {
+                // Buscar perfil do vendedor (telefone)
+                const { data: salespersonProfile } = await supabase
+                  .from('profiles')
+                  .select('full_name, phone')
+                  .eq('id', negotiation.salesperson_id)
+                  .single();
+
+                // Buscar conversas do lead para gerar ficha
+                const { data: conversations } = await supabase
+                  .from('ai_agent_conversations')
+                  .select('id')
+                  .eq('lead_id', negotiation.lead_id)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+
+                let conversationSummary = '';
+                if (conversations && conversations.length > 0) {
+                  const { data: messages } = await supabase
+                    .from('ai_agent_messages')
+                    .select('content, role, created_at')
+                    .eq('conversation_id', conversations[0].id)
+                    .order('created_at', { ascending: true })
+                    .limit(30);
+
+                  if (messages && messages.length > 0) {
+                    // Gerar ficha com GPT-4o-mini
+                    const fichaResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${openaiKey}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        messages: [
+                          {
+                            role: 'system',
+                            content: `Você é um assistente que gera fichas de qualificação de leads para vendedores de veículos.
+Gere uma ficha CONCISA e OBJETIVA em formato WhatsApp (com emojis e formatação *negrito*).
+
+A ficha deve conter:
+- Nome do lead e telefone
+- Resumo da conversa (máx 3 linhas)
+- Veículo de interesse (se mencionado)
+- Perfil financeiro coletado (se mencionado)
+- Dores e urgência identificadas
+- Sugestões de abordagem para o vendedor
+- Link direto para WhatsApp do lead
+
+OMITA seções onde não há informação. Seja direto e prático.
+Formato: mensagem de WhatsApp amigável, NÃO use markdown de tabela.`
+                          },
+                          {
+                            role: 'user',
+                            content: `Gere a ficha para este lead:
+Nome: ${lead?.name || 'N/A'}
+Telefone: ${(lead as any)?.phone || 'N/A'}
+Interesse: ${lead?.vehicle_interest || 'N/A'}
+
+Conversa:
+${messages.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'IA'}: ${m.content}`).join('\n').substring(0, 3000)}`
+                          }
+                        ],
+                        temperature: 0.4,
+                        max_tokens: 800,
+                      }),
+                    });
+
+                    if (fichaResponse.ok) {
+                      const fichaData = await fichaResponse.json();
+                      conversationSummary = fichaData.choices?.[0]?.message?.content || '';
+                    }
+                  }
+                }
+
+                // Enviar via WhatsApp se vendedor tem telefone
+                if (salespersonProfile?.phone && conversationSummary) {
+                  // Buscar instância WhatsApp ativa
+                  const { data: instance } = await supabase
+                    .from('whatsapp_instances')
+                    .select('id')
+                    .eq('status', 'connected')
+                    .limit(1)
+                    .single();
+
+                  if (instance) {
+                    // Formatar número do vendedor
+                    let sellerPhone = salespersonProfile.phone.replace(/\D/g, '');
+                    if (sellerPhone.length <= 11) sellerPhone = '55' + sellerPhone;
+
+                    const fichaMessage = `🔔 *NOVO LEAD QUALIFICADO*\n\n${conversationSummary}`;
+
+                    // Enviar via edge function whatsapp-send
+                    await supabase.functions.invoke('whatsapp-send', {
+                      body: {
+                        instance_id: instance.id,
+                        to: sellerPhone,
+                        message: fichaMessage,
+                      },
+                    });
+
+                    console.log('[ai-orchestrator] Ficha sent to salesperson via WhatsApp:', sellerPhone);
+                    
+                    result.actions_taken.push({
+                      type: 'create_alert',
+                      payload: { 
+                        type: 'whatsapp_ficha_sent', 
+                        user_id: negotiation.salesperson_id,
+                        phone: sellerPhone,
+                      }
+                    });
+                  } else {
+                    console.log('[ai-orchestrator] No connected WhatsApp instance found, skipping ficha send');
+                  }
+                } else {
+                  console.log('[ai-orchestrator] Salesperson has no phone or no ficha generated, skipping WhatsApp send');
+                }
+              } catch (whatsappError) {
+                console.error('[ai-orchestrator] Error sending ficha via WhatsApp:', whatsappError);
+                // Não falha a operação principal se o WhatsApp falhar
+              }
             }
           }
         }

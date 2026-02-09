@@ -31,7 +31,7 @@ export default function Inventory() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isMercadoLivreDialogOpen, setIsMercadoLivreDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('disponivel');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<VehicleType | 'all'>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const navigate = useNavigate();

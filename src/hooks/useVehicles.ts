@@ -414,6 +414,14 @@ export function useDeleteVehicleCost() {
 
   return useMutation({
     mutationFn: async ({ id, vehicleId }: { id: string; vehicleId: string }) => {
+      // Buscar dados do custo antes de deletar para sincronizar com financeiro
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: cost } = await (supabase as any)
+        .from('vehicle_costs')
+        .select('description, amount')
+        .eq('id', id)
+        .single();
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('vehicle_costs')
@@ -421,15 +429,90 @@ export function useDeleteVehicleCost() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Deletar transação financeira correspondente
+      if (cost) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('financial_transactions')
+          .delete()
+          .eq('vehicle_id', vehicleId)
+          .eq('category', 'Custos Veículo')
+          .ilike('description', `%${cost.description}%`)
+          .eq('amount', cost.amount);
+      }
+
       return { vehicleId };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['vehicle-costs', data.vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicle-dre'] });
+      queryClient.invalidateQueries({ queryKey: ['financial-transactions'] });
       toast.success('Custo excluído com sucesso!');
     },
     onError: (error: Error) => {
       toast.error(`Erro ao excluir custo: ${error.message}`);
+    },
+  });
+}
+
+export function useUpdateVehicleCost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, vehicleId, oldDescription, oldAmount, ...input }: {
+      id: string;
+      vehicleId: string;
+      oldDescription: string;
+      oldAmount: number;
+      cost_type?: VehicleCostType;
+      description?: string;
+      amount?: number;
+      cost_date?: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('vehicle_costs')
+        .update(input)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Atualizar transação financeira correspondente
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: vehicle } = await (supabase as any)
+        .from('vehicles')
+        .select('brand, model')
+        .eq('id', vehicleId)
+        .maybeSingle();
+
+      const vehicleLabel = vehicle ? ` - ${vehicle.brand} ${vehicle.model}` : '';
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('financial_transactions')
+        .update({
+          description: `${input.description || oldDescription}${vehicleLabel}`,
+          amount: input.amount || oldAmount,
+          transaction_date: input.cost_date || undefined,
+        })
+        .eq('vehicle_id', vehicleId)
+        .eq('category', 'Custos Veículo')
+        .ilike('description', `%${oldDescription}%`)
+        .eq('amount', oldAmount);
+
+      return { vehicleId, data };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['vehicle-costs', result.vehicleId] });
+      queryClient.invalidateQueries({ queryKey: ['vehicle-dre'] });
+      queryClient.invalidateQueries({ queryKey: ['financial-transactions'] });
+      toast.success('Custo atualizado com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao atualizar custo: ${error.message}`);
     },
   });
 }

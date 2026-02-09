@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn, parseDate } from '@/lib/utils';
-import { useFinancialCategories, useCreateTransaction, useUpdateTransaction, FinancialTransaction } from '@/hooks/useFinancialTransactions';
+import { useFinancialCategories, useFinancialTransactions, useCreateTransaction, useUpdateTransaction, FinancialTransaction } from '@/hooks/useFinancialTransactions';
 
 const formSchema = z.object({
   type: z.enum(['receita', 'despesa']),
@@ -71,8 +71,23 @@ export function TransactionForm({ onSuccess, defaultType = 'despesa', trigger, t
   const isEditing = !!transaction;
   const [type, setType] = useState<'receita' | 'despesa'>(transaction?.type || defaultType);
   const { data: categories } = useFinancialCategories(type);
+  const { data: allTransactions } = useFinancialTransactions();
   const createTransaction = useCreateTransaction();
   const updateTransaction = useUpdateTransaction();
+
+  // Merge predefined categories with categories already used in transactions
+  const mergedCategories = useMemo(() => {
+    const catNames = new Set(categories?.map(c => c.name) || []);
+    const extraCats: { id: string; name: string }[] = [];
+    allTransactions?.forEach(t => {
+      if (t.category && !catNames.has(t.category)) {
+        catNames.add(t.category);
+        extraCats.push({ id: `extra-${t.category}`, name: t.category });
+      }
+    });
+    const base = (categories || []).map(c => ({ id: c.id, name: c.name }));
+    return [...base, ...extraCats].sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories, allTransactions]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -195,7 +210,7 @@ export function TransactionForm({ onSuccess, defaultType = 'despesa', trigger, t
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {categories?.map((cat) => (
+                        {mergedCategories.map((cat) => (
                           <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
                         ))}
                       </SelectContent>

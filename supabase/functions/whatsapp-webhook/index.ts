@@ -696,7 +696,7 @@ async function processWithAIAgent(
 
   // ===== DEBOUNCE: Wait for rapid-fire messages before responding =====
   // Wait 4 seconds to allow multiple messages to arrive
-  const DEBOUNCE_MS = 4000;
+  const DEBOUNCE_MS = 7000;
   console.log('[AI Agent] Debounce: waiting', DEBOUNCE_MS, 'ms for additional messages from', phone);
   await new Promise(resolve => setTimeout(resolve, DEBOUNCE_MS));
   

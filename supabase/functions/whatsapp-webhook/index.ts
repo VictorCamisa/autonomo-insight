@@ -687,11 +687,35 @@ async function processWithAIAgent(
   }
 
   // Save user message (with actual transcribed content)
+  const messageInsertedAt = new Date().toISOString();
   await supabase.from('ai_agent_messages').insert({
     conversation_id: conversation.id,
     role: 'user',
     content: actualMessage,
   });
+
+  // ===== DEBOUNCE: Wait for rapid-fire messages before responding =====
+  // Wait 4 seconds to allow multiple messages to arrive
+  const DEBOUNCE_MS = 4000;
+  console.log('[AI Agent] Debounce: waiting', DEBOUNCE_MS, 'ms for additional messages from', phone);
+  await new Promise(resolve => setTimeout(resolve, DEBOUNCE_MS));
+  
+  // Check if newer messages arrived from this user during the wait
+  const { data: newerMessages } = await supabase
+    .from('whatsapp_messages')
+    .select('id, created_at')
+    .eq('lead_id', leadId || '')
+    .eq('direction', 'incoming')
+    .gt('created_at', messageInsertedAt)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  
+  if (newerMessages && newerMessages.length > 0) {
+    console.log('[AI Agent] Debounce: newer message detected, skipping response for this message (will respond on latest)');
+    return; // The latest message's webhook invocation will handle the response
+  }
+  
+  console.log('[AI Agent] Debounce: no newer messages, proceeding with AI response');
 
   // Get conversation history (fetch last N messages, most recent first, then reverse for chronological order)
   const contextWindowSize = agent.context_window_size || 20;

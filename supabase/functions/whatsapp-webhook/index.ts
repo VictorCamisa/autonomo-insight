@@ -515,25 +515,108 @@ async function processWithAIAgent(
   if (leadId) {
     const { data: negotiation } = await supabase
       .from('negotiations')
-      .select('status, salesperson_id')
+      .select('id, status, salesperson_id')
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (negotiation) {
-      negotiationContext = {
-        status: negotiation.status,
-        salesperson_id: negotiation.salesperson_id,
-        salesperson_name: null,
-      };
+    if (!negotiation) {
+      // ===== AUTO-CREATE NEGOTIATION for existing leads without one =====
+      console.log('[AI Agent] No negotiation found for lead:', leadId, '- creating one with atendimento_ia');
+      
+      // Get lead's assigned_to for salesperson
+      const { data: leadForNeg } = await supabase
+        .from('leads')
+        .select('assigned_to')
+        .eq('id', leadId)
+        .single();
+      
+      const { data: newNeg } = await supabase.from('negotiations').insert({
+        lead_id: leadId,
+        salesperson_id: leadForNeg?.assigned_to || null,
+        status: 'atendimento_ia',
+        last_message_at: new Date().toISOString(),
+        notes: 'Negociação criada automaticamente ao receber mensagem de lead existente',
+      }).select('id, status, salesperson_id').single();
+      
+      if (newNeg) {
+        negotiationContext = {
+          status: newNeg.status,
+          salesperson_id: newNeg.salesperson_id,
+          salesperson_name: null,
+        };
+        console.log('[AI Agent] Auto-created negotiation:', newNeg.id);
+      }
+    } else {
+      // ===== REACTIVATION: If lead is in follow_up or perdido, move back to atendimento_ia =====
+      if (['follow_up', 'perdido'].includes(negotiation.status)) {
+        console.log('[AI Agent] Lead responding from', negotiation.status, '- REACTIVATING to atendimento_ia');
+        
+        await supabase
+          .from('negotiations')
+          .update({ 
+            status: 'atendimento_ia', 
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', negotiation.id);
+        
+        // Update lead status
+        await supabase
+          .from('leads')
+          .update({ status: 'reativado', updated_at: new Date().toISOString() })
+          .eq('id', leadId);
+        
+        // Reset follow-up tracking if exists
+        await supabase
+          .from('lead_follow_up_tracking')
+          .update({ status: 'paused', updated_at: new Date().toISOString() })
+          .eq('lead_id', leadId)
+          .in('status', ['active', 'pending']);
+        
+        // Notify salesperson about reactivation
+        if (negotiation.salesperson_id) {
+          const { data: leadData } = await supabase
+            .from('leads')
+            .select('name')
+            .eq('id', leadId)
+            .single();
+          
+          await supabase.from('notifications').insert({
+            user_id: negotiation.salesperson_id,
+            type: 'lead_reactivated',
+            title: '🔄 Lead reativado!',
+            message: `${leadData?.name || 'Lead'} respondeu e voltou ao pipeline!`,
+            link: '/crm',
+          });
+        }
+        
+        negotiationContext = {
+          status: 'atendimento_ia', // Updated status
+          salesperson_id: negotiation.salesperson_id,
+          salesperson_name: null,
+        };
+      } else {
+        // Update last_message_at for active negotiations
+        await supabase
+          .from('negotiations')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', negotiation.id);
+        
+        negotiationContext = {
+          status: negotiation.status,
+          salesperson_id: negotiation.salesperson_id,
+          salesperson_name: null,
+        };
+      }
       
       // Get salesperson name if exists
-      if (negotiation.salesperson_id) {
+      if (negotiationContext?.salesperson_id) {
         const { data: salesperson } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', negotiation.salesperson_id)
+          .eq('id', negotiationContext.salesperson_id)
           .single();
         
         if (salesperson?.full_name) {

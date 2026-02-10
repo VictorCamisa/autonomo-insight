@@ -76,9 +76,9 @@ serve(async (req) => {
       );
     }
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -361,29 +361,16 @@ IMPORTANTE: Use APENAS URLs de fotos que existem no campo "todas_fotos" do veíc
 
     console.log('[ai-agent-chat] Calling AI with context data:', Object.keys(contextData));
 
-    // Map model to OpenAI format
-    const OPENAI_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'];
-    let selectedModel = agentConfig?.llm_model || 'gpt-4o-mini';
-    
-    // Normalize model name to OpenAI format
-    if (selectedModel.includes('gemini') || selectedModel.includes('google/')) {
-      selectedModel = 'gpt-4o-mini'; // Default fallback for Gemini models
-    }
-    if (selectedModel.includes('gpt-5') || selectedModel.includes('openai/')) {
-      selectedModel = selectedModel.replace('openai/', '').replace('gpt-5', 'gpt-4o');
-    }
-    if (!OPENAI_MODELS.includes(selectedModel)) {
-      console.log('[ai-agent-chat] Invalid model detected:', selectedModel, '- falling back to gpt-4o-mini');
-      selectedModel = 'gpt-4o-mini';
-    }
+    // Use Lovable AI Gateway with Gemini Flash
+    const selectedModel = 'google/gemini-3-flash-preview';
 
-    console.log('[ai-agent-chat] Using OpenAI model:', selectedModel);
+    console.log('[ai-agent-chat] Using Lovable AI model:', selectedModel);
 
-    // Call OpenAI API directly
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Call Lovable AI Gateway
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -397,8 +384,14 @@ IMPORTANTE: Use APENAS URLs de fotos que existem no campo "todas_fotos" do veíc
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[ai-agent-chat] OpenAI API error:', response.status, errorText);
-      throw new Error(`OpenAI API error: ${response.status}`);
+      console.error('[ai-agent-chat] Lovable AI error:', response.status, errorText);
+      if (response.status === 429) {
+        throw new Error("Rate limit exceeded - aguarde um momento e tente novamente");
+      }
+      if (response.status === 402) {
+        throw new Error("Créditos de IA esgotados - adicione créditos no workspace Lovable");
+      }
+      throw new Error(`Lovable AI error: ${response.status}`);
     }
 
     const aiResponse = await response.json();

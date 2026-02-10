@@ -2437,32 +2437,30 @@ O cliente está conversando sobre este veículo ESPECÍFICO:
   }
 }
 
-// Call OpenAI API
+// Call Lovable AI Gateway (replaces direct OpenAI calls)
 async function callOpenAI(agent: any, systemPrompt: string, messages: any[]): Promise<string | null> {
-  // CRITICAL: ALWAYS use environment variable - ignore any stored key
-  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  const apiKey = Deno.env.get('LOVABLE_API_KEY');
   
-  console.log('[OpenAI] Using API key from env:', apiKey ? `${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 4)}` : 'NOT SET');
+  console.log('[LovableAI] Using Lovable AI Gateway');
   
   if (!apiKey) {
-    console.error('No OpenAI API key configured in environment');
+    console.error('No LOVABLE_API_KEY configured in environment');
     return null;
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: agent.llm_model || 'gpt-4o-mini',
+      model: 'google/gemini-3-flash-preview',
       messages: [
         { role: 'system', content: systemPrompt },
         ...messages,
       ],
       // ANTI-HALLUCINATION: Temperature mais baixa para respostas precisas
-      // Forçamos máximo de 0.35 para evitar criatividade excessiva
       temperature: Math.min(agent.temperature || 0.35, 0.35),
       max_tokens: agent.max_tokens || 1024,
     }),
@@ -2470,7 +2468,7 @@ async function callOpenAI(agent: any, systemPrompt: string, messages: any[]): Pr
 
   if (!response.ok) {
     const error = await response.text();
-    console.error('OpenAI API error:', error);
+    console.error('Lovable AI error:', response.status, error);
     return null;
   }
 
@@ -3513,9 +3511,9 @@ async function extractDataWithAI(
   conversationId: string,
   leadId: string
 ): Promise<Record<string, any>> {
-  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-  if (!OPENAI_API_KEY) {
-    console.log('[Qualification] OPENAI_API_KEY not set, skipping AI extraction');
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    console.log('[Qualification] LOVABLE_API_KEY not set, skipping AI extraction');
     return {};
   }
   
@@ -3559,14 +3557,20 @@ async function extractDataWithAI(
   console.log('[Qualification] Running AI extraction on', messages.length, 'messages (', userMessageCount, 'from user)');
   
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const LOVABLE_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_KEY) {
+      console.error('[Qualification] No LOVABLE_API_KEY configured');
+      return {};
+    }
+    
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${LOVABLE_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'google/gemini-3-flash-preview',
         messages: [
           {
             role: 'system',
@@ -3875,18 +3879,18 @@ _Use essas opções para negociar!_`;
           .join('\n');
         
         // Generate summary and insights with AI
-        const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+        const LOVABLE_KEY_INSIGHTS = Deno.env.get('LOVABLE_API_KEY');
         
-        if (OPENAI_API_KEY && conversationText.length > 50) {
+        if (LOVABLE_KEY_INSIGHTS && conversationText.length > 50) {
           try {
-            const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Authorization': `Bearer ${LOVABLE_KEY_INSIGHTS}`,
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                model: 'gpt-4o-mini',
+                model: 'google/gemini-3-flash-preview',
                 messages: [
                   {
                     role: 'system',

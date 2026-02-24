@@ -52,6 +52,7 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
   const { data: vehicles = [] } = useVehicles();
   const { data: users = [] } = useUsersWithRoles();
   const [vehicleOpen, setVehicleOpen] = useState(false);
+  const [leadOpen, setLeadOpen] = useState(false);
 
   const isManager = role === 'gerente';
   const isEditing = !!negotiation?.id;
@@ -150,26 +151,62 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
         <FormField
           control={form.control}
           name="lead_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Lead *</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value} disabled={!!negotiation}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o lead" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {leads.map((lead) => (
-                    <SelectItem key={lead.id} value={lead.id}>
-                      {lead.name} - {lead.phone}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            const selectedLead = leads.find(l => l.id === field.value);
+            return (
+              <FormItem className="flex flex-col">
+                <FormLabel>Lead *</FormLabel>
+                <Popover open={leadOpen} onOpenChange={setLeadOpen}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={leadOpen}
+                        disabled={!!negotiation}
+                        className={cn(
+                          "w-full justify-between font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {selectedLead ? (
+                          <span className="truncate">{selectedLead.name} - {selectedLead.phone}</span>
+                        ) : "Buscar lead..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar por nome, telefone ou email..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhum lead encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {leads.map((lead) => (
+                            <CommandItem
+                              key={lead.id}
+                              value={`${lead.name} ${lead.phone} ${lead.email || ''}`}
+                              onSelect={() => {
+                                field.onChange(lead.id);
+                                setLeadOpen(false);
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", field.value === lead.id ? "opacity-100" : "opacity-0")} />
+                              <div className="flex flex-col">
+                                <span>{lead.name}</span>
+                                <span className="text-xs text-muted-foreground">{lead.phone}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <FormField

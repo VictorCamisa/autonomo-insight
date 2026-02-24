@@ -17,7 +17,7 @@ import { useUsersWithRoles } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
 import { negotiationStatusLabels, pipelineColumns, lossReasonLabels, objectionOptions } from '@/types/negotiations';
 import type { Negotiation, NegotiationStatus, LossReasonType } from '@/types/negotiations';
-import { Calendar, Clock, Lock, User, UserCheck, AlertCircle, Trash2, Car, Check, ChevronsUpDown } from 'lucide-react';
+import { Calendar, Clock, Lock, User, UserCheck, AlertCircle, Trash2, Car, Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
 import { cn } from '@/lib/utils';
 
@@ -44,9 +44,10 @@ interface NegotiationFormProps {
   negotiation?: Negotiation;
   onSubmit: (data: NegotiationFormValues) => void;
   isLoading?: boolean;
+  onCreateLead?: () => void;
 }
 
-export function NegotiationForm({ negotiation, onSubmit, isLoading }: NegotiationFormProps) {
+export function NegotiationForm({ negotiation, onSubmit, isLoading, onCreateLead }: NegotiationFormProps) {
   const { role } = useAuth();
   const { data: leads = [] } = useLeads();
   const { data: vehicles = [] } = useVehicles();
@@ -176,11 +177,28 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Buscar por nome, telefone ou email..." />
                       <CommandList>
-                        <CommandEmpty>Nenhum lead encontrado.</CommandEmpty>
+                        <CommandEmpty>
+                          <div className="py-2 text-center">
+                            <p className="text-sm text-muted-foreground mb-2">Nenhum lead encontrado.</p>
+                            {onCreateLead && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => {
+                                  setLeadOpen(false);
+                                  onCreateLead();
+                                }}
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Cadastrar Novo Lead
+                              </Button>
+                            )}
+                          </div>
+                        </CommandEmpty>
                         <CommandGroup>
                           {leads.map((lead) => (
                             <CommandItem
@@ -200,6 +218,23 @@ export function NegotiationForm({ negotiation, onSubmit, isLoading }: Negotiatio
                           ))}
                         </CommandGroup>
                       </CommandList>
+                      {onCreateLead && (
+                        <div className="border-t p-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start"
+                            onClick={() => {
+                              setLeadOpen(false);
+                              onCreateLead();
+                            }}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Cadastrar Novo Lead
+                          </Button>
+                        </div>
+                      )}
                     </Command>
                   </PopoverContent>
                 </Popover>

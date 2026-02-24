@@ -252,6 +252,10 @@ export default function CRMHome() {
           <NegotiationForm 
             onSubmit={handleCreateNegotiation} 
             isLoading={createNegotiation.isPending}
+            onCreateLead={() => {
+              setCreateNegotiationOpen(false);
+              setCreateLeadOpen(true);
+            }}
             negotiation={preSelectedLeadId ? { 
               lead_id: preSelectedLeadId,
               salesperson_id: preSelectedSalespersonId || ''

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useCreateSale, useUpdateSale } from '@/hooks/useSales';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useCustomers } from '@/hooks/useCustomers';
@@ -18,8 +20,9 @@ import { CommissionSection } from './CommissionSection';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, Trash2 } from 'lucide-react';
+import { AlertCircle, Trash2, Check, ChevronsUpDown, Car, User } from 'lucide-react';
 import { useFormPersistence, useFormLeaveWarning } from '@/hooks/useFormPersistence';
+import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   customer_id: z.string().min(1, 'Selecione um cliente'),
@@ -81,6 +84,10 @@ export function SaleForm({ open, onOpenChange, sale }: SaleFormProps) {
   const [commissionRuleId, setCommissionRuleId] = useState<string | null>(null);
   const [manualAdjustment, setManualAdjustment] = useState(0);
   const [calculatedCommission, setCalculatedCommission] = useState(0);
+
+  // Combobox state
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [vehicleOpen, setVehicleOpen] = useState(false);
 
   const availableVehicles = vehicles?.filter(v => v.status === 'disponivel' || v.id === sale?.vehicle_id);
 
@@ -185,48 +192,121 @@ export function SaleForm({ open, onOpenChange, sale }: SaleFormProps) {
               <FormField
                 control={form.control}
                 name="customer_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cliente *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o cliente" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {customers?.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const selectedCustomer = customers?.find(c => c.id === field.value);
+                  return (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Cliente *</FormLabel>
+                      <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={customerOpen}
+                              className={cn(
+                                "w-full justify-between font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {selectedCustomer ? (
+                                <span className="truncate">{selectedCustomer.name}</span>
+                              ) : "Buscar cliente..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[350px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Buscar por nome, telefone, CPF..." />
+                            <CommandList>
+                              <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                              <CommandGroup>
+                                {customers?.map((c) => (
+                                  <CommandItem
+                                    key={c.id}
+                                    value={`${c.name} ${c.phone} ${c.cpf_cnpj || ''} ${c.email || ''}`}
+                                    onSelect={() => {
+                                      field.onChange(c.id);
+                                      setCustomerOpen(false);
+                                    }}
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4", field.value === c.id ? "opacity-100" : "opacity-0")} />
+                                    <div className="flex flex-col">
+                                      <span>{c.name}</span>
+                                      <span className="text-xs text-muted-foreground">{c.phone}{c.cpf_cnpj ? ` • ${c.cpf_cnpj}` : ''}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
               <FormField
                 control={form.control}
                 name="vehicle_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Veículo *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o veículo" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {availableVehicles?.map((v) => (
-                          <SelectItem key={v.id} value={v.id}>
-                            {v.brand} {v.model} {v.year_model} - {v.plate || 'Sem placa'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const selectedVeh = availableVehicles?.find(v => v.id === field.value);
+                  return (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Veículo *</FormLabel>
+                      <Popover open={vehicleOpen} onOpenChange={setVehicleOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={vehicleOpen}
+                              className={cn(
+                                "w-full justify-between font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {selectedVeh ? (
+                                <span className="truncate">{selectedVeh.brand} {selectedVeh.model} - {selectedVeh.plate || 'Sem placa'}</span>
+                              ) : "Buscar veículo..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Buscar por marca, modelo ou placa..." />
+                            <CommandList>
+                              <CommandEmpty>Nenhum veículo encontrado.</CommandEmpty>
+                              <CommandGroup>
+                                {availableVehicles?.map((v) => (
+                                  <CommandItem
+                                    key={v.id}
+                                    value={`${v.brand} ${v.model} ${v.year_model} ${v.plate || ''}`}
+                                    onSelect={() => {
+                                      field.onChange(v.id);
+                                      setVehicleOpen(false);
+                                    }}
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4", field.value === v.id ? "opacity-100" : "opacity-0")} />
+                                    <Car className="mr-2 h-4 w-4 text-muted-foreground" />
+                                    <div className="flex flex-col">
+                                      <span>{v.brand} {v.model} {v.year_model}</span>
+                                      <span className="text-xs text-muted-foreground font-mono">{v.plate || 'Sem placa'}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             </div>
 

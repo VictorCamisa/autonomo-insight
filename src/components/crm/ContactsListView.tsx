@@ -342,7 +342,17 @@ export function ContactsListView() {
                           🟢 Ativo ({contact.activeNegotiationsCount})
                         </Badge>
                       ) : (
-                        <Badge variant="secondary">
+                        <Badge 
+                          variant="secondary" 
+                          className="cursor-pointer hover:bg-primary/20 hover:text-primary transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (contact.leadId) {
+                              handleStartNegotiation(contact);
+                            }
+                          }}
+                          title={contact.leadId ? "Clique para ativar (criar negociação)" : ""}
+                        >
                           ⚫ Inativo
                         </Badge>
                       )}
@@ -437,7 +447,15 @@ export function ContactsListView() {
           </DialogHeader>
           <NegotiationForm 
             onSubmit={handleCreateNegotiation} 
-            isLoading={createNegotiation.isPending} 
+            isLoading={createNegotiation.isPending}
+            onCreateLead={() => {
+              setIsCreateNegotiationOpen(false);
+              setIsCreateLeadOpen(true);
+            }}
+            negotiation={preSelectedLeadId ? {
+              lead_id: preSelectedLeadId,
+              salesperson_id: '',
+            } as any : undefined}
           />
         </DialogContent>
       </Dialog>

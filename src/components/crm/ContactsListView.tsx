@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLeads, useClearLeadHistory, useDeleteLeadComplete } from '@/hooks/useLeads';
-import { useNegotiations, useCreateNegotiation } from '@/hooks/useNegotiations';
+import { useNegotiations, useCreateNegotiation, useUpdateNegotiation } from '@/hooks/useNegotiations';
 import { useCustomers } from '@/hooks/useCustomers';
 import { LeadForm } from '@/components/crm/LeadForm';
 import { LeadDetailSheet } from '@/components/crm/LeadDetailSheet';
@@ -89,6 +89,7 @@ export function ContactsListView() {
   const { data: customers } = useCustomers();
   const { data: users } = useUsersWithRoles();
   const createNegotiation = useCreateNegotiation();
+  const updateNegotiation = useUpdateNegotiation();
   const clearHistory = useClearLeadHistory();
   const deleteLead = useDeleteLeadComplete();
   const { user } = useAuth();
@@ -199,6 +200,20 @@ export function ContactsListView() {
       });
     } catch (error) {
       console.error('Erro ao ativar contato:', error);
+    }
+  };
+
+  const handleQuickDeactivate = async (contact: UnifiedContact) => {
+    if (!contact.leadId) return;
+    try {
+      const activeNegs = negotiations?.filter(n => 
+        n.lead_id === contact.leadId && !['ganho', 'perdido'].includes(n.status)
+      ) || [];
+      for (const neg of activeNegs) {
+        await updateNegotiation.mutateAsync({ id: neg.id, status: 'perdido' });
+      }
+    } catch (error) {
+      console.error('Erro ao desativar contato:', error);
     }
   };
 
@@ -351,7 +366,14 @@ export function ContactsListView() {
                     </TableCell>
                     <TableCell>
                       {contact.isActive ? (
-                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                        <Badge 
+                          className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 cursor-pointer hover:bg-red-100 hover:text-red-800 dark:hover:bg-red-900 dark:hover:text-red-300 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickDeactivate(contact);
+                          }}
+                          title="Clique para desativar (mover negociações para Perdido)"
+                        >
                           🟢 Ativo ({contact.activeNegotiationsCount})
                         </Badge>
                       ) : (

@@ -189,6 +189,19 @@ export function ContactsListView() {
     }
   };
 
+  const handleQuickActivate = async (contact: UnifiedContact) => {
+    if (!contact.leadId || !user) return;
+    try {
+      await createNegotiation.mutateAsync({
+        lead_id: contact.leadId,
+        salesperson_id: contact.assignedTo || user.id,
+        status: 'atendimento_ia',
+      });
+    } catch (error) {
+      console.error('Erro ao ativar contato:', error);
+    }
+  };
+
   const handleCreateNegotiation = async (data: Record<string, unknown>) => {
     await createNegotiation.mutateAsync({
       lead_id: (preSelectedLeadId || data.lead_id) as string,
@@ -348,12 +361,12 @@ export function ContactsListView() {
                           onClick={(e) => {
                             e.stopPropagation();
                             if (contact.leadId) {
-                              handleStartNegotiation(contact);
+                              handleQuickActivate(contact);
                             }
                           }}
                           title={contact.leadId ? "Clique para ativar (criar negociação)" : ""}
                         >
-                          ⚫ Inativo
+                          {createNegotiation.isPending ? '⏳ Ativando...' : '⚫ Inativo'}
                         </Badge>
                       )}
                     </TableCell>

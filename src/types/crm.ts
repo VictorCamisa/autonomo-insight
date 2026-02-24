@@ -1,5 +1,5 @@
 export type LeadStatus = 'novo' | 'contato_inicial' | 'qualificado' | 'proposta' | 'negociacao' | 'convertido' | 'perdido';
-export type LeadSource = 'website' | 'indicacao' | 'facebook' | 'instagram' | 'google_ads' | 'olx' | 'webmotors' | 'outros';
+export type LeadSource = 'website' | 'indicacao' | 'facebook' | 'instagram' | 'google_ads' | 'olx' | 'webmotors' | 'frente_de_loja' | 'outros';
 export type QualificationStatus = 'nao_qualificado' | 'qualificado' | 'desqualificado';
 
 export interface Lead {
@@ -100,6 +100,7 @@ export const leadSourceLabels: Record<LeadSource, string> = {
   google_ads: 'Google Ads',
   olx: 'OLX',
   webmotors: 'WebMotors',
+  frente_de_loja: 'Frente de Loja',
   outros: 'Outros',
 };
 

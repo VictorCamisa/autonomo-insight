@@ -36,7 +36,7 @@ const leadFormSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   phone: z.string().min(10, 'Telefone inválido').max(20),
-  source: z.enum(['website', 'indicacao', 'facebook', 'instagram', 'google_ads', 'olx', 'webmotors', 'outros']),
+  source: z.enum(['website', 'indicacao', 'facebook', 'instagram', 'google_ads', 'olx', 'webmotors', 'frente_de_loja', 'outros']),
   status: z.enum(['novo', 'contato_inicial', 'qualificado', 'proposta', 'negociacao', 'convertido', 'perdido']).optional(),
   notes: z.string().max(1000).optional(),
   vehicle_interest: z.string().max(200).optional(),

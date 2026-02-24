@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLeads, useCreateLead } from '@/hooks/useLeads';
 import { useNegotiations, useCreateNegotiation, useUpdateNegotiation, useDeleteNegotiation } from '@/hooks/useNegotiations';
 import { LeadForm } from '@/components/crm/LeadForm';
+import { LeadSearchDialog } from '@/components/crm/LeadSearchDialog';
 import { LeadDetailSheet } from '@/components/crm/LeadDetailSheet';
 import { NegotiationPipeline } from '@/components/crm/NegotiationPipeline';
 import { NegotiationForm } from '@/components/crm/NegotiationForm';
@@ -27,6 +28,7 @@ export default function CRMHome() {
   const updateNegotiation = useUpdateNegotiation();
   const deleteNegotiation = useDeleteNegotiation();
   
+  const [searchLeadOpen, setSearchLeadOpen] = useState(false);
   const [createLeadOpen, setCreateLeadOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [leadDetailOpen, setLeadDetailOpen] = useState(false);
@@ -206,13 +208,20 @@ export default function CRMHome() {
             negotiations={filteredNegotiations}
             onNegotiationClick={handleNegotiationClick}
             onCreateNegotiation={() => setCreateNegotiationOpen(true)}
-            onCreateLead={() => setCreateLeadOpen(true)}
+            onCreateLead={() => setSearchLeadOpen(true)}
             showSalesperson={isManager}
           />
         </div>
       )}
 
-      {/* Dialogs */}
+      {/* Lead Search Dialog */}
+      <LeadSearchDialog
+        open={searchLeadOpen}
+        onOpenChange={setSearchLeadOpen}
+        onCreateNew={() => setCreateLeadOpen(true)}
+      />
+
+      {/* Create Lead Dialog */}
       <Dialog open={createLeadOpen} onOpenChange={setCreateLeadOpen}>
         <DialogContent>
           <DialogHeader>

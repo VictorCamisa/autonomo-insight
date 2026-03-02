@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Store, Eye, Bike, Download } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Eye, Bike, Settings2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,7 +15,14 @@ import { VehicleCard } from '@/components/inventory/VehicleCard';
 import { VehicleDRECard } from '@/components/inventory/VehicleDRECard';
 import { VehicleTable } from '@/components/inventory/VehicleTable';
 import { CreateVehicleDialog } from '@/components/inventory/CreateVehicleDialog';
-import { MercadoLivreConfigDialog } from '@/components/inventory/MercadoLivreConfigDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { BentoCard } from '@/components/ui/bento-card';
 import { useVehicles, useAllVehicleDRE, useCreateVehicle, useBulkUpdateVehiclesVisibility } from '@/hooks/useVehicles';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -29,7 +36,7 @@ type ViewMode = 'grid' | 'table' | 'dre';
 
 export default function Inventory() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isMercadoLivreDialogOpen, setIsMercadoLivreDialogOpen] = useState(false);
+  const [enabledPortals, setEnabledPortals] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('disponivel');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<VehicleType | 'all'>('all');
@@ -120,21 +127,46 @@ export default function Inventory() {
               <Eye className="h-4 w-4 mr-2 text-green-600" />
               {bulkUpdateVisibility.isPending ? 'Atualizando...' : 'Exibir Todos no Site'}
             </Button>
-            <Link to="/estoque/exportar-alm">
-              <Button variant="outline" size="lg" className="border-blue-500/50 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                <Download className="h-4 w-4 mr-2 text-blue-600" />
-                Exportar ALM
-              </Button>
-            </Link>
-            <Button 
-              variant="outline" 
-              size="lg"
-              onClick={() => setIsMercadoLivreDialogOpen(true)}
-              className="border-yellow-500/50 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
-            >
-              <Store className="h-4 w-4 mr-2 text-yellow-600" />
-              Mercado Livre
-            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="lg" className="border-primary/50">
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Portais {enabledPortals.length > 0 && `(${enabledPortals.length})`}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Integrar com portais</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={enabledPortals.includes('mercadolivre')}
+                  onCheckedChange={(checked) => {
+                    setEnabledPortals(prev =>
+                      checked ? [...prev, 'mercadolivre'] : prev.filter(p => p !== 'mercadolivre')
+                    );
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded bg-[#FFE600] flex items-center justify-center text-[10px] font-bold text-black">ML</span>
+                    Mercado Livre
+                  </span>
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={enabledPortals.includes('napista')}
+                  onCheckedChange={(checked) => {
+                    setEnabledPortals(prev =>
+                      checked ? [...prev, 'napista'] : prev.filter(p => p !== 'napista')
+                    );
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded bg-[#1a1a2e] flex items-center justify-center text-[10px] font-bold text-white">NP</span>
+                    Napista
+                  </span>
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Link to="/estoque/importar">
               <Button variant="outline" size="lg">
                 <Upload className="h-4 w-4 mr-2" />
@@ -275,6 +307,7 @@ export default function Inventory() {
         <VehicleTable 
           vehicles={filteredVehicles} 
           onVehicleClick={handleVehicleClick}
+          enabledPortals={enabledPortals}
         />
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -318,11 +351,6 @@ export default function Inventory() {
         isLoading={createVehicle.isPending}
       />
 
-      {/* Mercado Livre Config Dialog */}
-      <MercadoLivreConfigDialog
-        open={isMercadoLivreDialogOpen}
-        onOpenChange={setIsMercadoLivreDialogOpen}
-      />
     </div>
   );
 }

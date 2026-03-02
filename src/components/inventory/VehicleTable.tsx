@@ -182,13 +182,7 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
                                   : `${cfg.bg} ${cfg.text} border-transparent opacity-40 hover:opacity-100`
                               }`}
                               onClick={() => {
-                                setPublishedMap((prev) => {
-                                  const current = prev[vehicle.id] || [];
-                                  const updated = isPublished
-                                    ? current.filter((p) => p !== portalId)
-                                    : [...current, portalId];
-                                  return { ...prev, [vehicle.id]: updated };
-                                });
+                                window.open('http://amodolo82-004-site5.jtempurl.com/index.html#!/vehiclead/2', '_blank');
                               }}
                             >
                               {cfg.abbr}

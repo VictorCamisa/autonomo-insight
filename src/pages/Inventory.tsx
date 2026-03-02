@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Store, Eye, Bike } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Store, Eye, Bike, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -120,6 +120,12 @@ export default function Inventory() {
               <Eye className="h-4 w-4 mr-2 text-green-600" />
               {bulkUpdateVisibility.isPending ? 'Atualizando...' : 'Exibir Todos no Site'}
             </Button>
+            <Link to="/estoque/exportar-alm">
+              <Button variant="outline" size="lg" className="border-blue-500/50 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                <Download className="h-4 w-4 mr-2 text-blue-600" />
+                Exportar ALM
+              </Button>
+            </Link>
             <Button 
               variant="outline" 
               size="lg"

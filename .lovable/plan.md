@@ -1,232 +1,75 @@
 
-# Plano: Estoque Central com Sincronização Mercado Livre e Napista
+# Exportar Estoque para ALM
 
-## Resumo Executivo
-Implementar seu sistema como estoque central (source of truth) que sincroniza automaticamente com Mercado Livre e Napista. Quando você criar, atualizar ou vender um veículo aqui, os anúncios são gerenciados automaticamente nas plataformas externas.
+## Objetivo
+Adicionar um botao "Exportar ALM" na pagina de Estoque que abre uma tela completa de exportacao, replicando toda a logica do HTML fornecido para mapear veiculos do sistema para o formato da API ALM (vendas.almprocessamentos.com.br).
 
-## Arquitetura Proposta
-```text
-+---------------------+
-|   SEU SISTEMA       |
-|   (Estoque Central) |
-+----------+----------+
-           |
-           | Triggers/Hooks
-           v
-+----------+----------+
-|  Edge Functions     |
-|  (Sincronização)    |
-+----+----------+-----+
-     |          |
-     v          v
-+--------+ +---------+
-|   ML   | | Napista |
-| API    | | XML/API |
-+--------+ +---------+
-```
+## O que sera criado
 
----
+### 1. Novo arquivo: `src/lib/almExportData.ts`
+Contem todos os dados de referencia do ALM que estao hardcoded no HTML:
+- `ALM_MARCAS` - Lista de marcas com IDs e tipo (Carro/Moto)
+- `ALM_MODELOS` - Lista de modelos vinculados a marcas
+- `ALM_CORES` - Cores com IDs
+- `ALM_COMBUSTIVEIS` - Combustiveis com IDs
+- `ALM_CAMBIOS` - Cambios com IDs
+- `BRAND_MAP` - Mapeamento de nomes do sistema para nomes ALM
+- `COLOR_MAP` - Mapeamento de cores para IDs ALM
+- `FUEL_MAP` - Mapeamento de combustiveis
+- `CAMBIO_MAP` - Mapeamento de cambios
+- `TYPE_MAP` - Mapeamento de tipos
 
-## Parte 1: Mercado Livre (Implementação Completa)
+### 2. Novo arquivo: `src/lib/almExportUtils.ts`
+Funcoes de matching e construcao de payload:
+- `normStr()` - Normalizacao de strings (lowercase, remove acentos, etc.)
+- `matchBrand()` - Encontra marca ALM correspondente
+- `matchModel()` - Encontra modelo ALM correspondente
+- `matchColor()` - Encontra cor ALM correspondente
+- `matchFuel()` - Encontra combustivel ALM correspondente
+- `matchCambio()` - Encontra cambio ALM correspondente
+- `mapVehicle()` - Mapeia veiculo completo para formato ALM, retornando match level (ok/warn/err)
+- `buildPayload()` - Constroi o objeto final para exportacao
+- `generateJSON()` / `generateXML()` / `exportCSV()` - Funcoes de download dos arquivos
 
-### 1.1 Pré-requisitos (Ação do Usuário)
-Você precisará:
-1. Acessar: https://developers.mercadolivre.com.br/
-2. Criar uma aplicação (ou usar existente)
-3. Configurar redirect URI: `https://ahfoixzdnpswuqavbmgf.supabase.co/functions/v1/ml-oauth-callback`
-4. Obter: **Client ID** e **Client Secret**
+### 3. Novo arquivo: `src/components/inventory/ALMExportPage.tsx`
+Pagina completa de exportacao com:
+- **Header** com titulo e contagem de veiculos
+- **Barra de filtros** - Status (todos/disponiveis/vendidos), nivel de match (ok/warn/err), busca por texto
+- **Stats** - Contadores de prontos, atencao, problema (com dots coloridos)
+- **Painel de mapeamento** - Grid mostrando campos nao mapeados com selects para correcao manual (marcas, cores nao reconhecidas)
+- **Tabela principal** - Todas as colunas do HTML: foto, tipo, marca (sistema -> ALM), modelo (sistema -> ALM), versao, placa, ano/mod, km, cor -> ALM ID, combustivel -> ALM ID, cambio -> ALM ID, preco, status, match
+- **Barra de exportacao** - Botoes para Gerar JSON, Gerar XML, Pre-visualizar, Gerar CSV, com checkbox "incluir veiculos com atencao"
+- **Modal de preview** - Mostra JSON formatado dos primeiros 3 veiculos com botao de download
 
-### 1.2 Fluxo OAuth2 (Autenticação)
-| Etapa | Descrição |
-|-------|-----------|
-| 1 | Usuário clica em "Conectar Mercado Livre" |
-| 2 | Redirect para página de login do ML |
-| 3 | Após autorizar, ML retorna um código |
-| 4 | Edge function troca código por tokens |
-| 5 | Tokens salvos na tabela `mercadolibre_tokens` |
+### 4. Nova rota em `src/App.tsx`
+- Rota `/estoque/exportar-alm` apontando para `ALMExportPage`
 
-### 1.3 Sincronização de Veículos
+### 5. Botao na pagina de Estoque (`src/pages/Inventory.tsx`)
+- Adicionar botao "Exportar ALM" na area de acoes do gerente, ao lado dos botoes existentes (Mercado Livre, Importar XML, etc.)
+- Navega para `/estoque/exportar-alm`
 
-#### Criar Anúncio (Novo Veículo)
-- Trigger: Quando veículo é inserido no sistema
-- Ação: POST para `api.mercadolibre.com/items`
-- Resultado: Salvar `ml_item_id` no veículo
+## Detalhes Tecnicos
 
-#### Atualizar Anúncio
-- Trigger: Quando veículo é editado (preço, fotos, descrição)
-- Ação: PUT para `api.mercadolibre.com/items/{id}`
+### Dados
+- Os veiculos serao carregados do hook `useVehicles()` (dados reais do Supabase)
+- Os dados de referencia ALM (marcas, modelos, cores) ficam como constantes no codigo (exatamente como no HTML)
+- O mapeamento manual (overrides) sera armazenado em state local (useState)
 
-#### Encerrar Anúncio (Venda)
-- Trigger: Quando status muda para `vendido`
-- Ação: PUT `status: "closed"` + DELETE no ML
+### Exportacao
+- JSON: Blob download com `application/json`
+- XML: Construcao manual de XML string com escape de caracteres especiais
+- CSV: Separador `;`, headers das chaves do payload
 
-### 1.4 Componentes Técnicos
+### UI
+- Tabela com cores de status: verde (ok), amarelo (warn), vermelho (err)
+- Selects inline na tabela para correcao manual de modelos nao encontrados
+- Badges de tipo (Carro azul, Moto roxo)
+- Thumbnails das fotos na tabela
+- Responsivo com Tailwind, usando componentes UI existentes (Table, Badge, Button, Select, Dialog)
 
-**Tabelas (já existe parcial)**:
-- `mercadolibre_tokens` - Armazena tokens OAuth
-- `vehicles` - Campos ML já existem: `ml_item_id`, `ml_status`, `ml_permalink`
-
-**Secrets necessários**:
-- `ML_CLIENT_ID` - Client ID da aplicação
-- `ML_CLIENT_SECRET` - Client Secret da aplicação
-
-**Edge Functions a criar**:
-| Função | Propósito |
-|--------|-----------|
-| `ml-oauth-start` | Inicia fluxo OAuth (redirect para ML) |
-| `ml-oauth-callback` | Recebe código e troca por tokens |
-| `ml-sync-vehicle` | Cria/atualiza anúncio no ML |
-| `ml-close-vehicle` | Encerra anúncio quando vendido |
-| `ml-refresh-token` | Renova token expirado (cron) |
-
-**Database Triggers**:
-- `vehicle_insert` -> Chama `ml-sync-vehicle`
-- `vehicle_update` -> Chama `ml-sync-vehicle` (se dados relevantes mudaram)
-- `vehicle_status_vendido` -> Chama `ml-close-vehicle`
-
----
-
-## Parte 2: Napista (Verificação Necessária)
-
-### 2.1 Situação Atual
-A Napista não possui API pública documentada. As opções de integração são:
-
-| Método | Descrição |
-|--------|-----------|
-| **Via Parceiro** | Usar UsadosBR ou Revenda Mais que já integram |
-| **Via XML** | Gerar XML do estoque e enviar periodicamente |
-| **Email/Webhook** | Configurar e-mail de leads no painel Napista |
-
-### 2.2 Recomendação: XML Automatizado
-1. Criar edge function que gera XML do estoque
-2. Hospedar em URL pública
-3. Configurar Napista para consumir esse XML
-
-**Endpoint**: `https://ahfoixzdnpswuqavbmgf.supabase.co/functions/v1/napista-xml`
-
-### 2.3 Próximo Passo (Ação do Usuário)
-Verificar no painel da Napista:
-1. Existe opção de "Integração XML"?
-2. Qual formato de XML é aceito?
-3. Há frequência mínima de atualização?
-
----
-
-## Parte 3: Interface de Configuração
-
-### 3.1 Melhorar Dialog Mercado Livre
-- Adicionar botão "Conectar com Mercado Livre" (OAuth)
-- Mostrar status da conexão (conectado/desconectado)
-- Exibir nickname do usuário ML conectado
-- Toggle para ativar/desativar sincronização automática
-
-### 3.2 Adicionar Dialog Napista
-- Campo para URL do XML (se via parceiro)
-- Botão para gerar XML manualmente
-- Status da última sincronização
-
----
-
-## Sequência de Implementação
-
-### Fase 1: Configuração Base
-1. Adicionar secrets do Mercado Livre (Client ID/Secret)
-2. Criar edge function `ml-oauth-start`
-3. Criar edge function `ml-oauth-callback`
-4. Atualizar UI para iniciar conexão OAuth
-
-### Fase 2: Sincronização ML
-1. Criar edge function `ml-sync-vehicle`
-2. Criar edge function `ml-close-vehicle`
-3. Implementar database triggers
-4. Adicionar cron para refresh de token
-
-### Fase 3: Napista
-1. Criar edge function `napista-xml` (gera XML do estoque)
-2. Documentar configuração manual na Napista
-3. Opcionalmente: webhook para leads
-
-### Fase 4: Monitoramento
-1. Logs de sincronização
-2. Alertas de erro
-3. Dashboard de status das integrações
-
----
-
-## Detalhes Técnicos
-
-### Estrutura do Item no Mercado Livre (Veículos)
-```text
-{
-  "title": "Ford Ka 1.0 2020",
-  "category_id": "MLB1744",  // Carros, Motos e Outros > Carros
-  "price": 45000,
-  "currency_id": "BRL",
-  "available_quantity": 1,
-  "buying_mode": "buy_it_now",
-  "listing_type_id": "gold_special",
-  "condition": "used",
-  "pictures": [{"source": "url1"}, {"source": "url2"}],
-  "attributes": [
-    {"id": "BRAND", "value_name": "Ford"},
-    {"id": "MODEL", "value_name": "Ka"},
-    {"id": "VEHICLE_YEAR", "value_name": "2020"},
-    {"id": "KILOMETERS", "value_name": "45000 km"},
-    {"id": "FUEL_TYPE", "value_name": "Flex"},
-    {"id": "TRANSMISSION", "value_name": "Manual"}
-  ]
-}
-```
-
-### Formato XML Napista (Padrão)
-```text
-<?xml version="1.0" encoding="UTF-8"?>
-<veiculos>
-  <veiculo>
-    <codigo>123</codigo>
-    <marca>Ford</marca>
-    <modelo>Ka</modelo>
-    <ano>2020</ano>
-    <preco>45000</preco>
-    <km>45000</km>
-    <combustivel>Flex</combustivel>
-    <cambio>Manual</cambio>
-    <fotos>
-      <foto>url1</foto>
-      <foto>url2</foto>
-    </fotos>
-  </veiculo>
-</veiculos>
-```
-
----
-
-## Estimativa de Trabalho
-
-| Tarefa | Complexidade |
-|--------|--------------|
-| OAuth Mercado Livre | Alta |
-| Sync Create/Update ML | Alta |
-| Sync Venda (Close) ML | Média |
-| Cron Token Refresh | Baixa |
-| XML Napista | Média |
-| UI de Configuração | Média |
-
-**Total estimado**: 4-6 prompts para implementação completa
-
----
-
-## Ação Imediata Necessária
-
-Antes de começar a implementação, você precisa:
-
-1. **Mercado Livre**: Criar aplicação em https://developers.mercadolivre.com.br/
-   - Anotar Client ID e Client Secret
-   - Configurar redirect URI
-
-2. **Napista**: Verificar no painel:
-   - Se existe opção de integração XML
-   - Formato aceito
-   - URL para cadastrar o feed
-
-Quando tiver essas informações, podemos começar!
+### Fluxo
+1. Usuario clica "Exportar ALM" no estoque
+2. Abre pagina com todos os veiculos ja mapeados automaticamente
+3. Veiculos com problemas aparecem destacados para correcao manual
+4. Usuario ajusta mapeamentos se necessario
+5. Clica em Gerar JSON/XML/CSV para baixar o arquivo

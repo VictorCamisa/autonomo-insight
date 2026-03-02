@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Car, MoreHorizontal, Globe, EyeOff, Bike } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,10 +28,17 @@ import { useUpdateVehicle } from '@/hooks/useVehicles';
 interface VehicleTableProps {
   vehicles: Vehicle[];
   onVehicleClick: (vehicle: Vehicle) => void;
+  enabledPortals?: string[];
 }
 
-export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
+const PORTAL_CONFIG: Record<string, { label: string; bg: string; text: string; abbr: string }> = {
+  mercadolivre: { label: 'Mercado Livre', bg: 'bg-[#FFE600]', text: 'text-black', abbr: 'ML' },
+  napista: { label: 'Napista', bg: 'bg-[#1a1a2e]', text: 'text-white', abbr: 'NP' },
+};
+
+export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: VehicleTableProps) {
   const updateVehicle = useUpdateVehicle();
+  const [publishedMap, setPublishedMap] = useState<Record<string, string[]>>({});
 
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
@@ -73,6 +81,7 @@ export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
             <TableHead className="text-right">Custo</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-center">Site</TableHead>
+            {enabledPortals.length > 0 && <TableHead className="text-center">Portais</TableHead>}
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -156,6 +165,44 @@ export function VehicleTable({ vehicles, onVehicleClick }: VehicleTableProps) {
                   </TooltipContent>
                 </Tooltip>
               </TableCell>
+              {enabledPortals.length > 0 && (
+                <TableCell>
+                  <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {enabledPortals.map((portalId) => {
+                      const cfg = PORTAL_CONFIG[portalId];
+                      if (!cfg) return null;
+                      const isPublished = publishedMap[vehicle.id]?.includes(portalId);
+                      return (
+                        <Tooltip key={portalId}>
+                          <TooltipTrigger asChild>
+                            <button
+                              className={`w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold transition-all border-2 ${
+                                isPublished
+                                  ? `${cfg.bg} ${cfg.text} border-transparent ring-2 ring-green-500`
+                                  : `${cfg.bg} ${cfg.text} border-transparent opacity-40 hover:opacity-100`
+                              }`}
+                              onClick={() => {
+                                setPublishedMap((prev) => {
+                                  const current = prev[vehicle.id] || [];
+                                  const updated = isPublished
+                                    ? current.filter((p) => p !== portalId)
+                                    : [...current, portalId];
+                                  return { ...prev, [vehicle.id]: updated };
+                                });
+                              }}
+                            >
+                              {cfg.abbr}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {isPublished ? `Remover do ${cfg.label}` : `Publicar no ${cfg.label}`}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                </TableCell>
+              )}
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

@@ -328,21 +328,30 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean) {
     .filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'))
     .map(mv => mv.almPayload);
 
-  const xmlLines = ['<?xml version="1.0" encoding="UTF-8"?>', '<Veiculos>'];
+  const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const xmlLines = [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<pma_xml_export version="1.0">',
+    '  <database name="veiculos_db">',
+  ];
+
   data.forEach(v => {
-    xmlLines.push('  <Veiculo>');
+    xmlLines.push('    <table name="veiculos">');
     for (const [key, val] of Object.entries(v)) {
       if (Array.isArray(val)) {
-        xmlLines.push(`    <${key}>${val.join(',')}</${key}>`);
+        xmlLines.push(`      <column name="${esc(key)}">${esc(val.join(','))}</column>`);
       } else if (val !== null && val !== undefined) {
-        xmlLines.push(`    <${key}>${String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</${key}>`);
+        xmlLines.push(`      <column name="${esc(key)}">${esc(val)}</column>`);
       } else {
-        xmlLines.push(`    <${key}></${key}>`);
+        xmlLines.push(`      <column name="${esc(key)}"></column>`);
       }
     }
-    xmlLines.push('  </Veiculo>');
+    xmlLines.push('    </table>');
   });
-  xmlLines.push('</Veiculos>');
+
+  xmlLines.push('  </database>');
+  xmlLines.push('</pma_xml_export>');
 
   const blob = new Blob([xmlLines.join('\n')], { type: 'application/xml' });
   const a = document.createElement('a');

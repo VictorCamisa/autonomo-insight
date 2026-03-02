@@ -45,6 +45,7 @@ const PORTAL_CONFIG: Record<string, { label: string; bg: string; text: string; a
 export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: VehicleTableProps) {
   const updateVehicle = useUpdateVehicle();
   const [publishedMap, setPublishedMap] = useState<Record<string, string[]>>({});
+  const [iframeError, setIframeError] = useState(false);
   const [portalModalUrl, setPortalModalUrl] = useState<string | null>(null);
 
   const formatCurrency = (value: number | null) => {
@@ -229,20 +230,48 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
 
     </div>
 
-      <Dialog open={!!portalModalUrl} onOpenChange={(open) => { if (!open) setPortalModalUrl(null); }}>
+      <Dialog open={!!portalModalUrl} onOpenChange={(open) => { if (!open) { setPortalModalUrl(null); setIframeError(false); } }}>
         <DialogContent className="max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden flex flex-col">
           <DialogHeader className="p-4 pb-2">
             <DialogTitle>Portal de Anúncios</DialogTitle>
           </DialogHeader>
-          {portalModalUrl && (
+          {portalModalUrl && !iframeError ? (
             <iframe
               src={portalModalUrl}
               className="w-full border-0 flex-1"
               style={{ height: 'calc(85vh - 60px)' }}
               title="Portal"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
+              onError={() => setIframeError(true)}
+              onLoad={(e) => {
+                try {
+                  const iframe = e.target as HTMLIFrameElement;
+                  if (!iframe.contentDocument && !iframe.contentWindow) {
+                    setIframeError(true);
+                  }
+                } catch {
+                  setIframeError(true);
+                }
+              }}
             />
-          )}
+          ) : portalModalUrl ? (
+            <div className="flex flex-col items-center justify-center flex-1 gap-4 p-8">
+              <div className="text-center space-y-2">
+                <p className="text-muted-foreground">
+                  Não foi possível carregar o portal dentro do sistema devido a restrições de segurança do site externo.
+                </p>
+              </div>
+              <a
+                href={portalModalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Globe className="h-4 w-4" />
+                Abrir portal em nova guia
+              </a>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </>

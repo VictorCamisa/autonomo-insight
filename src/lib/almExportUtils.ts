@@ -72,61 +72,160 @@ export function normStr(s: string): string {
 
 export function matchBrand(brandStr: string, vehicleType?: string): ALMMarca | null {
   const norm = normStr(brandStr);
-  const mapped = BRAND_MAP[norm];
-  if (!mapped) return null;
-  const isMoto = (vehicleType || '').toLowerCase() === 'moto';
+  if (!norm) return null;
+  
+  // 1) Try explicit BRAND_MAP first
+  let almName = BRAND_MAP[norm];
+  
+  // 2) Fallback: direct match against ALM_MARCAS names (normalized)
+  if (!almName) {
+    const directMatch = ALM_MARCAS.find(m => normStr(m.nome) === norm);
+    if (directMatch) almName = directMatch.nome;
+  }
+  
+  // 3) Fallback: partial match (brand name contains or is contained)
+  if (!almName) {
+    const partialMatch = ALM_MARCAS.find(m => {
+      const n = normStr(m.nome);
+      return n.includes(norm) || norm.includes(n);
+    });
+    if (partialMatch) almName = partialMatch.nome;
+  }
+  
+  if (!almName) return null;
+  
+  const isMoto = normStr(vehicleType || '') === 'moto';
   if (isMoto) {
-    const motoBrand = ALM_MARCAS.find(m => m.nome === mapped && m.tipo === 'Moto');
+    const motoBrand = ALM_MARCAS.find(m => m.nome === almName && m.tipo === 'Moto');
     if (motoBrand) return motoBrand;
   }
-  return ALM_MARCAS.find(m => m.nome === mapped && m.tipo !== 'Moto') || ALM_MARCAS.find(m => m.nome === mapped) || null;
+  return ALM_MARCAS.find(m => m.nome === almName && m.tipo !== 'Moto') || ALM_MARCAS.find(m => m.nome === almName) || null;
 }
 
 export function matchModel(brandId: number, modelStr: string): ALMModelo | null {
   const norm = normStr(modelStr);
+  if (!norm) return null;
+  
   const models = _syncModelos.filter(m => m.marcaId === brandId);
   if (!models.length) return null;
-  let match = models.find(m => normStr(m.nome) === norm);
-  if (match) return match;
-  match = models.find(m => normStr(m.nome).includes(norm) || norm.includes(normStr(m.nome)));
-  return match || null;
+  
+  // Normalize all model names once
+  const normalized = models.map(m => ({ model: m, norm: normStr(m.nome) }));
+  
+  // 1) Exact match
+  let match = normalized.find(n => n.norm === norm);
+  if (match) return match.model;
+  
+  // 2) Input starts with ALM model name or vice versa
+  match = normalized.find(n => n.norm.startsWith(norm + ' ') || norm.startsWith(n.norm + ' '));
+  if (match) return match.model;
+  
+  // 3) Contains match (input is substring of model name, or model name is substring of input)
+  match = normalized.find(n => n.norm.includes(norm));
+  if (match) return match.model;
+  match = normalized.find(n => norm.includes(n.norm));
+  if (match) return match.model;
+  
+  // 4) First word match (e.g. "CG" matches "CG 160 FAN")
+  const firstWord = norm.split(' ')[0];
+  if (firstWord.length >= 2) {
+    match = normalized.find(n => n.norm.split(' ')[0] === firstWord);
+    if (match) return match.model;
+    // Also try if any ALM model starts with the first word
+    match = normalized.find(n => n.norm.startsWith(firstWord));
+    if (match) return match.model;
+  }
+  
+  return null;
 }
 
 export function matchColor(colorStr: string): ALMCor | null {
   const norm = normStr(colorStr);
+  if (!norm) return null;
+  
   const id = COLOR_MAP[norm];
   if (id) return ALM_CORES.find(c => c.id === id) || null;
+  
+  // Try partial matches
   for (const [k, v] of Object.entries(COLOR_MAP)) {
     if (norm.includes(k) || k.includes(norm)) return ALM_CORES.find(c => c.id === v) || null;
   }
+  
+  // Try direct match against ALM_CORES names
+  const directMatch = ALM_CORES.find(c => normStr(c.nome) === norm);
+  if (directMatch) return directMatch;
+  
+  // Partial match against ALM_CORES names
+  const partialMatch = ALM_CORES.find(c => {
+    const n = normStr(c.nome);
+    return n.includes(norm) || norm.includes(n);
+  });
+  if (partialMatch) return partialMatch;
+  
   return null;
 }
 
 export function matchFuel(fuelStr: string): ALMCombustivel | null {
   const norm = normStr(fuelStr);
+  if (!norm) return null;
+  
   const id = FUEL_MAP[norm];
   if (id) return ALM_COMBUSTIVEIS.find(c => c.id === id) || null;
+  
+  // Try partial/contains matches
   for (const [k, v] of Object.entries(FUEL_MAP)) {
-    if (norm.includes(k)) return ALM_COMBUSTIVEIS.find(c => c.id === v) || null;
+    if (norm.includes(k) || k.includes(norm)) return ALM_COMBUSTIVEIS.find(c => c.id === v) || null;
   }
+  
+  // Direct match against ALM names
+  const directMatch = ALM_COMBUSTIVEIS.find(c => normStr(c.nome) === norm);
+  if (directMatch) return directMatch;
+  
   return null;
 }
 
 export function matchCambio(trans: string): ALMCambio | null {
   const norm = normStr(trans);
+  if (!norm) return null;
+  
   const id = CAMBIO_MAP[norm];
   if (id) return ALM_CAMBIOS.find(c => c.id === id) || null;
+  
+  // Try partial matches
+  for (const [k, v] of Object.entries(CAMBIO_MAP)) {
+    if (norm.includes(k) || k.includes(norm)) return ALM_CAMBIOS.find(c => c.id === v) || null;
+  }
+  
+  // Direct match against ALM names
+  const directMatch = ALM_CAMBIOS.find(c => normStr(c.nome) === norm);
+  if (directMatch) return directMatch;
+  
   return null;
 }
 
 export function mapVehicle(v: Vehicle, overrides: Record<string, Record<string, string | number>> = {}): MappedVehicle {
   const ov = overrides[v.id] || {};
 
+  // If there's a direct modelId override, handle it separately
+  const modelIdOverride = ov.modelId as number | undefined;
+
   let brandMatch = matchBrand((ov.brand as string) || v.brand, (ov.vehicle_type as string) || v.vehicle_type);
-  let modelMatch = brandMatch ? matchModel(brandMatch.id, (ov.model as string) || v.model) : null;
+  let modelMatch: ALMModelo | null = null;
   
-  // Fallback: if model not found under carro brand, try moto brand
-  if (brandMatch && !modelMatch) {
+  // If we have a direct modelId override, find the model by ID
+  if (modelIdOverride && brandMatch) {
+    modelMatch = _syncModelos.find(m => m.id === modelIdOverride) || null;
+    // If found model belongs to a different brand, update brand match
+    if (modelMatch && modelMatch.marcaId !== brandMatch.id) {
+      const correctBrand = ALM_MARCAS.find(m => m.id === modelMatch!.marcaId);
+      if (correctBrand) brandMatch = correctBrand;
+    }
+  } else if (brandMatch) {
+    modelMatch = matchModel(brandMatch.id, (ov.model as string) || v.model);
+  }
+  
+  // Fallback: if model not found under current brand type, try alternative brand type
+  if (brandMatch && !modelMatch && !modelIdOverride) {
     const altBrand = ALM_MARCAS.find(m => m.nome === brandMatch!.nome && m.tipo !== brandMatch!.tipo);
     if (altBrand) {
       const altModel = matchModel(altBrand.id, (ov.model as string) || v.model);
@@ -149,12 +248,13 @@ export function mapVehicle(v: Vehicle, overrides: Record<string, Record<string, 
       issues.push('Marca sem modelos no ALM');
     }
   }
+  if (!colorMatch) issues.push('Cor não mapeada');
   if (!fuelMatch) issues.push('Combustível não mapeado');
   if (!cambioMatch) issues.push('Câmbio não mapeado');
   if (!v.sale_price) issues.push('Preço de venda em branco');
 
   let matchLevel: MatchLevel = 'ok';
-  if (issues.some(i => i.includes('Marca') || i.includes('Preço'))) matchLevel = 'err';
+  if (issues.some(i => i.includes('Marca não') || i.includes('Preço'))) matchLevel = 'err';
   else if (issues.length > 0) matchLevel = 'warn';
 
   return {

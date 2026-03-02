@@ -227,34 +227,20 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
         </TableBody>
       </Table>
 
-      <Dialog open={!!portalModalUrl} onOpenChange={(open) => !open && setPortalModalUrl(null)}>
-        <DialogContent className="max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden">
-          <DialogHeader className="p-4 pb-2">
-            <DialogTitle>Portal de Anúncios</DialogTitle>
-          </DialogHeader>
-          {portalModalUrl && (
-            <iframe
-              src={portalModalUrl}
-              className="w-full flex-1 border-0"
-              style={{ height: 'calc(85vh - 60px)' }}
-              title="Portal"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
 
-      <Dialog open={!!portalModalUrl} onOpenChange={(open) => !open && setPortalModalUrl(null)}>
-        <DialogContent className="max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden">
+      <Dialog open={!!portalModalUrl} onOpenChange={(open) => { if (!open) setPortalModalUrl(null); }}>
+        <DialogContent className="max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden flex flex-col">
           <DialogHeader className="p-4 pb-2">
             <DialogTitle>Portal de Anúncios</DialogTitle>
           </DialogHeader>
           {portalModalUrl && (
             <iframe
               src={portalModalUrl}
-              className="w-full flex-1 border-0"
+              className="w-full border-0 flex-1"
               style={{ height: 'calc(85vh - 60px)' }}
               title="Portal"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
             />
           )}
         </DialogContent>

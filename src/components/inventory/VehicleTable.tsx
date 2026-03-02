@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { Car, MoreHorizontal, Globe, EyeOff, Bike } from 'lucide-react';
+import { Car, MoreHorizontal, Globe, EyeOff, Bike, X } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,6 +45,7 @@ const PORTAL_CONFIG: Record<string, { label: string; bg: string; text: string; a
 export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: VehicleTableProps) {
   const updateVehicle = useUpdateVehicle();
   const [publishedMap, setPublishedMap] = useState<Record<string, string[]>>({});
+  const [portalModalUrl, setPortalModalUrl] = useState<string | null>(null);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
@@ -68,6 +75,7 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
   }
 
   return (
+    <>
     <div className="rounded-md border">
       <Table>
         <TableHeader>
@@ -182,7 +190,7 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
                                   : `${cfg.bg} ${cfg.text} border-transparent opacity-40 hover:opacity-100`
                               }`}
                               onClick={() => {
-                                window.open('http://amodolo82-004-site5.jtempurl.com/index.html#!/vehiclead/2', '_blank');
+                                setPortalModalUrl('http://amodolo82-004-site5.jtempurl.com/index.html#!/vehiclead/2');
                               }}
                             >
                               {cfg.abbr}
@@ -218,6 +226,39 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
           ))}
         </TableBody>
       </Table>
+
+      <Dialog open={!!portalModalUrl} onOpenChange={(open) => !open && setPortalModalUrl(null)}>
+        <DialogContent className="max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2">
+            <DialogTitle>Portal de Anúncios</DialogTitle>
+          </DialogHeader>
+          {portalModalUrl && (
+            <iframe
+              src={portalModalUrl}
+              className="w-full flex-1 border-0"
+              style={{ height: 'calc(85vh - 60px)' }}
+              title="Portal"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+
+      <Dialog open={!!portalModalUrl} onOpenChange={(open) => !open && setPortalModalUrl(null)}>
+        <DialogContent className="max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2">
+            <DialogTitle>Portal de Anúncios</DialogTitle>
+          </DialogHeader>
+          {portalModalUrl && (
+            <iframe
+              src={portalModalUrl}
+              className="w-full flex-1 border-0"
+              style={{ height: 'calc(85vh - 60px)' }}
+              title="Portal"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

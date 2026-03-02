@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Car, MoreHorizontal, Globe, EyeOff, Bike, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Car, MoreHorizontal, Globe, EyeOff, Bike } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -46,7 +46,19 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
   const updateVehicle = useUpdateVehicle();
   const [publishedMap, setPublishedMap] = useState<Record<string, string[]>>({});
   const [iframeError, setIframeError] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [showIframeFallback, setShowIframeFallback] = useState(false);
   const [portalModalUrl, setPortalModalUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!portalModalUrl || iframeError || iframeLoaded) return;
+
+    const timeout = window.setTimeout(() => {
+      setShowIframeFallback(true);
+    }, 2200);
+
+    return () => window.clearTimeout(timeout);
+  }, [portalModalUrl, iframeError, iframeLoaded]);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
@@ -191,6 +203,9 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
                                   : `${cfg.bg} ${cfg.text} border-transparent opacity-40 hover:opacity-100`
                               }`}
                               onClick={() => {
+                                setIframeError(false);
+                                setIframeLoaded(false);
+                                setShowIframeFallback(false);
                                 setPortalModalUrl('http://amodolo82-004-site5.jtempurl.com/index.html#!/vehiclead/2');
                               }}
                             >
@@ -230,46 +245,49 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
 
     </div>
 
-      <Dialog open={!!portalModalUrl} onOpenChange={(open) => { if (!open) { setPortalModalUrl(null); setIframeError(false); } }}>
+      <Dialog
+        open={!!portalModalUrl}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPortalModalUrl(null);
+            setIframeError(false);
+            setIframeLoaded(false);
+            setShowIframeFallback(false);
+          }
+        }}
+      >
         <DialogContent className="max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden flex flex-col">
           <DialogHeader className="p-4 pb-2">
             <DialogTitle>Portal de Anúncios</DialogTitle>
           </DialogHeader>
-          {portalModalUrl && !iframeError ? (
+
+          {portalModalUrl && (
+            <div className="px-4 pb-3 flex items-center justify-between gap-2 border-b">
+              <p className="text-xs text-muted-foreground">Se a tela ficar em branco, abra no portal externo.</p>
+              <Button size="sm" asChild>
+                <a href={portalModalUrl} target="_self" rel="noreferrer">Abrir na mesma guia</a>
+              </Button>
+            </div>
+          )}
+
+          {portalModalUrl && !iframeError && !showIframeFallback ? (
             <iframe
               src={portalModalUrl}
               className="w-full border-0 flex-1"
-              style={{ height: 'calc(85vh - 60px)' }}
+              style={{ height: 'calc(85vh - 112px)' }}
               title="Portal"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
               onError={() => setIframeError(true)}
-              onLoad={(e) => {
-                try {
-                  const iframe = e.target as HTMLIFrameElement;
-                  if (!iframe.contentDocument && !iframe.contentWindow) {
-                    setIframeError(true);
-                  }
-                } catch {
-                  setIframeError(true);
-                }
-              }}
+              onLoad={() => setIframeLoaded(true)}
             />
           ) : portalModalUrl ? (
             <div className="flex flex-col items-center justify-center flex-1 gap-4 p-8">
-              <div className="text-center space-y-2">
-                <p className="text-muted-foreground">
-                  Não foi possível carregar o portal dentro do sistema devido a restrições de segurança do site externo.
-                </p>
-              </div>
-              <a
-                href={portalModalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                <Globe className="h-4 w-4" />
-                Abrir portal em nova guia
-              </a>
+              <p className="text-center text-muted-foreground">
+                O portal bloqueou a abertura interna por segurança (iframe).
+              </p>
+              <Button asChild>
+                <a href={portalModalUrl} target="_self" rel="noreferrer">Abrir na mesma guia</a>
+              </Button>
             </div>
           ) : null}
         </DialogContent>

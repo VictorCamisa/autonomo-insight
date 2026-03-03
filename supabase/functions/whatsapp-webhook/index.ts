@@ -1493,20 +1493,69 @@ Se for a PRIMEIRA mensagem do cliente (ele disse apenas "oi", "olá", "bom dia",
       profissao: 'Profissão',
       renda: 'Renda',
     };
-    
+
+    // ===== CHECK WHAT DATA IS ALREADY COLLECTED =====
+    // Fetch existing lead data to avoid re-asking questions
+    let alreadyCollected: Record<string, string> = {};
+    if (leadId) {
+      const { data: existingLeadData } = await supabase
+        .from('leads')
+        .select('name, phone, vehicle_interest, source, qualification_data')
+        .eq('id', leadId)
+        .single();
+      
+      if (existingLeadData) {
+        if (existingLeadData.name) alreadyCollected['nome'] = existingLeadData.name;
+        if (existingLeadData.phone) alreadyCollected['telefone'] = existingLeadData.phone;
+        if (existingLeadData.vehicle_interest) alreadyCollected['veiculo_interesse'] = existingLeadData.vehicle_interest;
+        if (existingLeadData.source && existingLeadData.source !== 'whatsapp') alreadyCollected['origem'] = existingLeadData.source;
+        
+        const qd = (existingLeadData.qualification_data as Record<string, any>) || {};
+        if (qd.forma_pagamento) alreadyCollected['forma_pagamento'] = qd.forma_pagamento;
+        if (qd.orcamento) alreadyCollected['orcamento'] = String(qd.orcamento);
+        if (qd.entrada) alreadyCollected['entrada'] = String(qd.entrada);
+        if (qd.parcela) alreadyCollected['parcela'] = String(qd.parcela);
+        if (qd.tem_troca !== undefined) alreadyCollected['tem_troca'] = qd.tem_troca ? 'Sim' : 'Não';
+        if (qd.veiculo_troca) alreadyCollected['veiculo_troca'] = qd.veiculo_troca;
+        if (qd.nome_limpo !== undefined) alreadyCollected['nome_limpo'] = qd.nome_limpo ? 'Sim' : 'Não';
+        if (qd.cpf) alreadyCollected['cpf'] = qd.cpf;
+      }
+    }
+
+    // Split required fields into already collected vs still needed
+    const collectedRequired = requiredFields.filter((f: string) => alreadyCollected[f]);
+    const pendingRequired = requiredFields.filter((f: string) => !alreadyCollected[f]);
+    const pendingOptional = optionalFields.filter((f: string) => !alreadyCollected[f]);
+
     systemPrompt += `
 
 ===== 🎯 QUALIFICAÇÃO ${currentQualLevel} =====
-Seu objetivo é coletar as seguintes informações de forma NATURAL na conversa:
-
-📌 OBRIGATÓRIOS:
-${requiredFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
+Seu objetivo é coletar as informações PENDENTES de forma NATURAL na conversa.
 `;
 
-    if (optionalFields.length > 0) {
+    // Show what's already collected so AI doesn't re-ask
+    if (collectedRequired.length > 0) {
+      systemPrompt += `
+✅ JÁ COLETADO (NÃO pergunte de novo!):
+${collectedRequired.map((f: string) => `- ${fieldLabels[f] || f}: ${alreadyCollected[f]}`).join('\n')}
+`;
+    }
+
+    if (pendingRequired.length > 0) {
+      systemPrompt += `
+📌 FALTA COLETAR:
+${pendingRequired.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
+`;
+    } else {
+      systemPrompt += `
+✅ Todos os campos obrigatórios já foram coletados!
+`;
+    }
+
+    if (pendingOptional.length > 0) {
       systemPrompt += `
 ⭐ BÔNUS (se conseguir):
-${optionalFields.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
+${pendingOptional.map((f: string) => `- ${fieldLabels[f] || f}`).join('\n')}
 `;
     }
 
@@ -2609,9 +2658,10 @@ async function detectLeadOrigin(
   source: 'whatsapp' | 'facebook' | 'instagram';
   meta_campaign_id: string | null;
   campaign_name: string | null;
+  extracted_vehicle: string | null;
 }> {
   // Default: organic WhatsApp
-  const defaultOrigin = { source: 'whatsapp' as const, meta_campaign_id: null, campaign_name: null };
+  const defaultOrigin = { source: 'whatsapp' as const, meta_campaign_id: null, campaign_name: null, extracted_vehicle: null };
   
   if (!firstMessage) {
     return defaultOrigin;
@@ -2673,6 +2723,26 @@ async function detectLeadOrigin(
 
   console.log('[Lead Origin] Extracted car name from message:', extractedCarName);
 
+  // Try to match extracted car name to a real vehicle in stock
+  let confirmedVehicleName: string | null = null;
+  if (extractedCarName) {
+    const { data: matchingVehicles } = await supabase
+      .from('vehicles')
+      .select('brand, model')
+      .eq('status', 'disponivel')
+      .ilike('model', `%${extractedCarName}%`)
+      .limit(1);
+    
+    if (matchingVehicles && matchingVehicles.length > 0) {
+      confirmedVehicleName = `${matchingVehicles[0].brand} ${matchingVehicles[0].model}`.trim();
+      console.log('[Lead Origin] Confirmed vehicle from ad message:', confirmedVehicleName);
+    } else {
+      // Use raw extracted name even if not in stock
+      confirmedVehicleName = extractedCarName;
+      console.log('[Lead Origin] Vehicle from ad not in stock, using raw name:', extractedCarName);
+    }
+  }
+
   // Only try to link campaign if we extracted a car name
   if (extractedCarName) {
     // Search for active campaign that contains the car name
@@ -2689,6 +2759,7 @@ async function detectLeadOrigin(
         source: defaultSource,
         meta_campaign_id: matchedCampaign.id,
         campaign_name: matchedCampaign.name,
+        extracted_vehicle: confirmedVehicleName,
       };
     } else {
       console.log('[Lead Origin] No campaign found matching car name:', extractedCarName);
@@ -2697,7 +2768,7 @@ async function detectLeadOrigin(
 
   // No matching campaign found, just set source without campaign link
   console.log('[Lead Origin] Setting source as', defaultSource, 'without campaign link');
-  return { source: defaultSource, meta_campaign_id: null, campaign_name: null };
+  return { source: defaultSource, meta_campaign_id: null, campaign_name: null, extracted_vehicle: confirmedVehicleName };
 }
 
 // Create lead - Q0 stage (no salesperson assigned yet, happens at Q1)
@@ -2709,9 +2780,10 @@ async function createLeadWithRoundRobin(
     source: 'whatsapp' | 'facebook' | 'instagram';
     meta_campaign_id: string | null;
     campaign_name: string | null;
-  } = { source: 'whatsapp', meta_campaign_id: null, campaign_name: null }
+    extracted_vehicle: string | null;
+  } = { source: 'whatsapp', meta_campaign_id: null, campaign_name: null, extracted_vehicle: null }
 ): Promise<string | null> {
-  console.log('[Lead Creation Q0] Creating lead with origin:', origin.source, 'campaign:', origin.campaign_name || 'none');
+  console.log('[Lead Creation Q0] Creating lead with origin:', origin.source, 'campaign:', origin.campaign_name || 'none', 'vehicle:', origin.extracted_vehicle || 'none');
 
   // Q0: Lead created with name + phone - DO NOT assign salesperson yet
   // Salesperson will be assigned at Q1 (when we confirm name + phone in conversation)
@@ -2727,6 +2799,7 @@ async function createLeadWithRoundRobin(
       assigned_to: null, // NOT assigned until Q1
       qualification_status: 'nao_qualificado',
       meta_campaign_id: origin.meta_campaign_id,
+      vehicle_interest: origin.extracted_vehicle || null, // Pre-fill from ad message
     })
     .select()
     .single();
@@ -2763,6 +2836,7 @@ async function createLeadWithRoundRobin(
     qualification_level: 'q0', // Start at Q0
     q1_reached_at: null,
     q2_reached_at: null,
+    vehicle_interest: origin.extracted_vehicle || null, // Pre-fill from ad
   });
 
   if (qualError) {

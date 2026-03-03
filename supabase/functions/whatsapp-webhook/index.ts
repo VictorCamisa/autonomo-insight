@@ -1374,62 +1374,15 @@ async function processWithAIAgent(
   // Build system prompt dynamically from database configuration
   let systemPrompt = agent.system_prompt || 'Você é um assistente virtual prestativo.';
   
-  // ===== ANTI-HALLUCINATION GUARDRAILS (CRITICAL) =====
+  // ===== REGRAS ANTI-ALUCINAÇÃO (COMPACTAS) =====
   const antiHallucinationRules = `
-
-===== ⛔ REGRAS OBRIGATÓRIAS - FALHAR AQUI É INACEITÁVEL =====
-
-🧠 ANTES DE RESPONDER SOBRE QUALQUER VEÍCULO, FAÇA ISSO:
-
-1. LEIA a seção "VEÍCULOS SUGERIDOS" que aparece mais abaixo neste prompt
-2. PROCURE o modelo E o ano que o cliente mencionou
-3. RESPONDA baseado SOMENTE no que está na lista
-
-📋 REGRA DE OURO:
-   SE o veículo (modelo+ano) ESTÁ NA LISTA → "Sim! Temos!" + dados exatos
-   SE o veículo NÃO ESTÁ NA LISTA → "Esse modelo/ano não está no estoque"
-
-❌ ERROS GRAVES (NUNCA FAÇA ISSO):
-   - Dizer "não temos" E depois sugerir O MESMO carro
-   - Dizer "foi vendido" sem ter essa informação
-   - Dizer "não está disponível" para um carro que ESTÁ na lista
-   - Inventar preços, anos ou características
-
-===== 💰 REGRAS DE BUSCA POR PREÇO (CRÍTICO!) =====
-
-Quando o cliente perguntar por FAIXA DE PREÇO (ex: "até 40 mil", "carro de 30 mil"):
-
-1. OLHE a lista de veículos fornecida - eles JÁ ESTÃO filtrados por preço!
-2. SE TEM veículos na lista dentro do orçamento:
-   ✅ "Temos sim opções nessa faixa! Por exemplo: [citar 2-3 veículos com preço]"
-   
-3. SE NÃO TEM veículos no orçamento mas tem opções próximas:
-   ✅ "Nessa faixa exata não temos no momento, mas temos opções a partir de R$ [preço do mais barato]. Posso te mostrar?"
-
-4. NUNCA diga "não temos nessa faixa" se a lista mostra veículos dentro do orçamento!
-
-📌 EXEMPLO CORRETO:
-Cliente: "Tem algum carro até 40 mil?"
-Lista mostra: Cielo R$ 22.990, Picanto R$ 25.990, C3 R$ 29.990
-✅ CORRETO: "Temos sim! Temos o Cielo por R$ 22.990, Picanto por R$ 25.990, C3 por R$ 29.990... Quer saber mais de algum?"
-
-===== EXEMPLOS DE RESPOSTAS =====
-
-SITUAÇÃO 1: Cliente pede "Gol 2015" e na lista tem "Volkswagen Gol 2015 | R$ 45.990"
-✅ CORRETO: "Temos sim o Gol 2015! Está por R$ 45.990. Quer saber mais?"
-❌ ERRADO: "O Gol 2015 não está disponível. Mas temos o Gol 2015 por R$ 45.990"
-
-SITUAÇÃO 2: Cliente pede "Civic 2020" e na lista NÃO tem Civic 2020
-✅ CORRETO: "O Civic 2020 não está no estoque no momento. Temos outros modelos como..."
-❌ ERRADO: "O Civic 2020 foi vendido" (você não sabe se foi vendido!)
-
-SITUAÇÃO 3: Cliente pergunta "Já vendeu o Polo?"
-- Primeiro PROCURE "Polo" na lista
-- SE ENCONTRAR: "Não, o Polo ainda está disponível!"
-- SE NÃO ENCONTRAR: "O Polo não está no estoque no momento"
-- ❌ NUNCA diga "sim, foi vendido" só porque não achou na lista!
-
-===== FIM DAS REGRAS =====
+⛔ REGRAS OBRIGATÓRIAS:
+- Responda APENAS com dados da lista "VEÍCULOS SUGERIDOS" abaixo
+- Veículo NA LISTA → confirme com dados exatos. NÃO NA LISTA → diga que não está no estoque
+- NUNCA invente preços, anos, cores ou diga que foi "vendido"
+- Busca por preço: liste os veículos da lista que cabem no orçamento
+- Seja BREVE: máximo 2-3 frases + lista quando necessário. NÃO repita regras na resposta
+- NUNCA mande mais de 1 mensagem por vez. Responda tudo em UMA mensagem curta
 `;
 
   systemPrompt = antiHallucinationRules + systemPrompt;
@@ -1458,30 +1411,15 @@ SITUAÇÃO 3: Cliente pergunta "Já vendeu o Polo?"
 
   systemPrompt += `
 
-===== IDENTIDADE =====
-- Você é ${displayName}. NUNCA se apresente com outro nome.
-- ${genderLanguage}
-- ${toneDescription}
+IDENTIDADE: Você é ${displayName}. ${genderLanguage}. ${toneDescription}.
+LOJA: Av Major Joaquim Monteiro Patto, 25, Chácara do Visconde - Taubaté/SP. Tel: (12) 98897-3547. Seg-Sex 9h-18h, Sáb 9h-13h.
 
-===== 📍 INFORMAÇÕES DA LOJA =====
-- Endereço: Avenida Major Joaquim Monteiro Patto, 25, Chácara do Visconde - Taubaté/SP, CEP 12050-620
-- Telefone: (12) 98897-3547
-- Horário: Segunda a Sexta das 9h às 18h, Sábados das 9h às 13h
-
-⚠️ Quando o cliente perguntar "onde fica a loja", "qual o endereço", "onde vocês ficam", etc:
-   → Responda com o endereço COMPLETO acima
-   → NUNCA use placeholders como "[inserir endereço]" ou "[endereço da loja]"
+⚠️ REGRA DE BREVIDADE: Responda em NO MÁXIMO 3 frases curtas (exceto quando listar veículos). Seja direta e objetiva. UMA mensagem por vez. Não repita informações que já foram ditas.
 `;
 
   // Add communication rules from special_instructions
   if (specialInstructions.be_brief) {
     systemPrompt += `\n- Seja BREVE e DIRETA - máximo 2-3 frases por resposta`;
-  }
-  if (specialInstructions.use_emojis) {
-    systemPrompt += `\n- Use emojis para tornar a conversa mais amigável`;
-  }
-  if (specialInstructions.always_confirm) {
-    systemPrompt += `\n- Sempre confirme o que o cliente disse antes de responder`;
   }
 
   // Add welcome message if configured
@@ -1498,305 +1436,39 @@ Se for a PRIMEIRA mensagem do cliente (ele disse apenas "oi", "olá", "bom dia",
 
   // Add special instructions for photos and year matching
   if (specialInstructions.year_matching_instructions) {
-    systemPrompt += `
-
-===== 🚗 REGRA DE ANO DO VEÍCULO =====
-${specialInstructions.year_matching_instructions}
-`;
+    systemPrompt += `\n🚗 REGRA DE ANO: ${specialInstructions.year_matching_instructions}`;
   } else {
-    // Default year matching rule - REWRITTEN TO PREVENT HALLUCINATIONS
-    systemPrompt += `
-
-===== 🚗 REGRA DE ANO DO VEÍCULO (LEIA COM ATENÇÃO!) =====
-
-🔴 PASSO A PASSO OBRIGATÓRIO:
-
-1️⃣ PRIMEIRO: Procure na lista "VEÍCULOS DISPONÍVEIS" se existe EXATAMENTE o modelo+ano pedido
-   - Exemplo: Cliente pediu "Gol 2015" → Procure "Gol" com ano "2015" na lista
-
-2️⃣ SE ENCONTRAR o modelo+ano EXATO:
-   ✅ Responda: "Sim! Temos o [modelo] [ano] por [preço exato da lista]!"
-   ❌ NÃO diga "não temos" se o carro ESTÁ na lista!
-
-3️⃣ SOMENTE SE NÃO ENCONTRAR o ano exato:
-   - Procure o mesmo modelo em anos PRÓXIMOS (±2 anos)
-   - Responda: "O [modelo] [ano pedido] não está no estoque, mas temos o [modelo] [ano disponível]!"
-
-⚠️ ERRO GRAVE A EVITAR:
-   - Cliente: "Quero saber sobre o Gol 2015"
-   - Na lista: "Volkswagen Gol 2015 | R$ 45.990"
-   - ❌ ERRADO: "O Gol 2015 não está disponível. Mas temos o Gol 2015 por R$ 45.990"
-   - ✅ CORRETO: "Sim! Temos o Gol 2015 por R$ 45.990! Quer saber mais detalhes?"
-`;
+    systemPrompt += `\n🚗 ANO: Procure modelo+ano exato na lista. Se não achar, sugira anos próximos (±2).`;
   }
 
-  // ===== REGRA ESPECIAL PARA BUSCA POR PREÇO (pergunta aberta) =====
+  // ===== CONTEXTO DE BUSCA POR PREÇO/CATEGORIA =====
   if (ragQueryInfo && (ragQueryInfo.max_price || ragQueryInfo.total_vehicles_in_budget)) {
     const totalInBudget = ragQueryInfo.total_vehicles_in_budget || relevantVehicles.length;
     const shownCount = ragQueryInfo.shown_vehicles || relevantVehicles.length;
     const maxPrice = ragQueryInfo.max_price || 0;
     const requestedCat = ragQueryInfo.requested_category;
-    const totalInCategory = ragQueryInfo.total_in_category;
     
-    // Analisar categorias de veículos disponíveis para sugerir refinamento
-    // USAR a função getVehicleCategory centralizada
-    const vehicleCategories: Record<string, number> = {};
-    const vehicleBrands: Record<string, number> = {};
-    for (const v of relevantVehicles) {
-      // Usar a função centralizada - agora está disponível no escopo
-      const category = v.vehicle_category || getVehicleCategory(v.model || '', v.version || '');
-      vehicleCategories[category] = (vehicleCategories[category] || 0) + 1;
-      
-      const brand = v.brand || 'Outro';
-      vehicleBrands[brand] = (vehicleBrands[brand] || 0) + 1;
-    }
+    systemPrompt += `\n💰 BUSCA: ${requestedCat ? requestedCat + 's ' : ''}até R$ ${maxPrice.toLocaleString('pt-BR')} (${totalInBudget} no orçamento, ${shownCount} listados). Liste todos da lista com marca, modelo, ano e preço.`;
     
-    // ===== BUSCA ESPECÍFICA POR CATEGORIA (ex: "sedans até 100 mil") =====
-    if (requestedCat) {
-      if (ragQueryInfo.no_vehicles_in_category) {
-        // Não encontrou veículos dessa categoria no orçamento
-        systemPrompt += `
-
-===== ⚠️ SEM ${requestedCat.toUpperCase()}S DISPONÍVEIS NESSA FAIXA =====
-
-O cliente pediu ${requestedCat}s até R$ ${maxPrice.toLocaleString('pt-BR')}.
-
-📊 RESULTADO:
-   - Total de veículos no orçamento (TODAS categorias): ${totalInBudget}
-   - ${requestedCat}s disponíveis nessa faixa: 0
-
-⚠️ COMO RESPONDER:
-1. Explique que não temos ${requestedCat}s nessa faixa específica
-2. Ofereça ALTERNATIVAS - outras categorias que temos no orçamento
-3. Pergunte se quer ver outras categorias
-
-📝 EXEMPLO:
-"No momento não temos ${requestedCat}s até R$ ${maxPrice.toLocaleString('pt-BR')} 😅
-
-Mas temos outras opções ótimas nessa faixa! Você toparia ver um Hatch, SUV ou Picape?"
-`;
-      } else {
-        // Encontrou veículos da categoria - LISTAR TODOS
-        systemPrompt += `
-
-===== 🎯 BUSCA: ${requestedCat.toUpperCase()}S ATÉ R$ ${maxPrice.toLocaleString('pt-BR')} =====
-
-O cliente pediu especificamente ${requestedCat}s.
-
-📊 RESULTADO:
-   - ${requestedCat}s disponíveis nessa faixa: ${totalInCategory || shownCount}
-   - Listados abaixo: ${shownCount}
-
-⚠️ REGRA CRÍTICA - LISTAR APENAS ${requestedCat.toUpperCase()}S:
-1. A lista abaixo JÁ ESTÁ FILTRADA para mostrar apenas ${requestedCat}s
-2. Liste TODOS os veículos da lista - são especificamente o que o cliente pediu!
-3. Use formato de LISTA NUMERADA com marca, modelo, versão, ano e preço
-4. NÃO inclua veículos de outras categorias!
-
-📝 FORMATO DE RESPOSTA:
-"Aqui estão os ${requestedCat}s até R$ ${maxPrice.toLocaleString('pt-BR')}! 🚗
-
-1. *Marca Modelo Versão Ano* - R$ X.XXX
-2. *Marca Modelo Versão Ano* - R$ X.XXX
-(continue para todos)
-
-Algum te interessou? Posso mandar mais detalhes e fotos!"
-
-⚠️ IMPORTANTE: Não repita que "não temos mais opções" se a lista já contém o que há!
-`;
-      }
+    if (ragQueryInfo.no_vehicles_in_category) {
+      systemPrompt += ` Não temos ${requestedCat}s nessa faixa. Ofereça alternativas.`;
     }
-    // Se tem MUITAS opções (> 15) E não especificou categoria, sugerir refinamento
-    else if (totalInBudget > 15) {
-      const categoriesAvailable = Object.entries(vehicleCategories)
-        .filter(([_, count]) => count >= 1)
-        .map(([cat, count]) => `${cat} (${count})`)
-        .join(', ');
-      
-      const topBrands = Object.entries(vehicleBrands)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([brand, count]) => `${brand} (${count})`)
-        .join(', ');
-      
-      systemPrompt += `
-
-===== 💰 BUSCA POR FAIXA DE PREÇO - MUITAS OPÇÕES! =====
-
-O cliente pediu veículos até R$ ${maxPrice.toLocaleString('pt-BR')}.
-
-📊 ESTATÍSTICAS:
-   - Total de veículos disponíveis nesta faixa: ${totalInBudget} (MUITOS!)
-   - Listamos os ${shownCount} principais abaixo
-
-🎯 ESTRATÉGIA DE REFINAMENTO:
-Como são MUITAS opções, faça uma pergunta para REFINAR a busca!
-
-📝 PERGUNTAS DE REFINAMENTO (escolha UMA):
-1. "Temos ${totalInBudget} opções até R$ ${maxPrice.toLocaleString('pt-BR')}! 🚗 Pra ajudar melhor, você prefere: SUV, Sedan, Hatch ou Picape?"
-2. "Opa, várias opções! Tá procurando carro pra família, trabalho ou uso no dia-a-dia?"
-3. "São várias opções boas! Me conta: automático ou manual? Isso ajuda a filtrar!"
-
-📋 CATEGORIAS DISPONÍVEIS:
-${categoriesAvailable}
-
-📋 MARCAS COM MAIS OPÇÕES:
-${topBrands}
-
-⚠️ REGRAS:
-1. Se o cliente pedir ESPECIFICAMENTE para ver todos, liste os ${shownCount} principais
-2. Se o cliente responder com uma categoria (ex: "SUV"), filtre e mostre apenas SUVs da lista
-3. Se o cliente responder com marca (ex: "Chevrolet"), filtre e mostre apenas dessa marca
-4. SEMPRE mencione que temos ${totalInBudget} opções no total
-
-📝 EXEMPLO DE RESPOSTA:
-"Temos ${totalInBudget} opções até R$ ${maxPrice.toLocaleString('pt-BR')}! 🚗
-
-Pra te ajudar melhor, me conta: você prefere um SUV, Sedan, Hatch ou Picape?"
-`;
-    } else {
-      // Menos de 15 opções - lista todos
-      systemPrompt += `
-
-===== 💰 BUSCA POR FAIXA DE PREÇO =====
-
-O cliente pediu veículos até R$ ${maxPrice.toLocaleString('pt-BR')}.
-
-📊 ESTATÍSTICAS:
-   - Total de veículos disponíveis nesta faixa: ${totalInBudget}
-   - Veículos listados abaixo: ${shownCount}
-
-⚠️ REGRA CRÍTICA PARA BUSCA POR PREÇO:
-1. Liste TODOS os veículos que estão na lista abaixo (são poucos, cabe listar!)
-2. NÃO resuma dizendo "temos X opções" - LISTE CADA UM com marca, modelo, ano e preço
-3. Use formato de LISTA NUMERADA:
-   1. *Marca Modelo Ano* - R$ X.XXX
-   2. *Marca Modelo Ano* - R$ X.XXX
-   (continue para todos)
-
-4. Se existirem mais veículos além dos listados:
-   → Mencione: "Esses são os principais! Temos mais ${totalInBudget > shownCount ? totalInBudget - shownCount : 0} opções. Quer ver mais?"
-
-5. ORGANIZE por faixa de preço:
-   → "Mais próximos do seu orçamento:" (os mais caros da lista)
-   → "Opções mais econômicas:" (os mais baratos)
-
-📝 EXEMPLO DE RESPOSTA CORRETA:
-"Até R$ ${maxPrice.toLocaleString('pt-BR')}, temos essas opções! 🚗
-
-*Próximos do seu orçamento:*
-1. *Chevrolet Onix 2023* - R$ 77.990
-2. *Honda Civic 2015* - R$ 74.990
-
-*Opções mais econômicas:*
-3. *Ford Ka 2021* - R$ 54.990
-4. *Volkswagen Gol 2021* - R$ 50.990
-
-Qual te interessa? Posso mandar mais detalhes!"
-`;
+    if (totalInBudget > 15) {
+      systemPrompt += ` São muitas opções. Pergunte preferência (SUV/Sedan/Hatch/Picape) antes de listar tudo.`;
     }
   }
 
-  // Se não encontrou nada no orçamento solicitado
   if (ragQueryInfo && ragQueryInfo.no_vehicles_in_budget) {
-    systemPrompt += `
-
-===== ⚠️ ORÇAMENTO FORA DO ESTOQUE =====
-O cliente pediu veículos até R$ ${ragQueryInfo.max_price_requested?.toLocaleString('pt-BR')}, mas nosso estoque começa em preços mais altos.
-
-⚠️ COMO RESPONDER:
-1. Explique com GENTILEZA que nessa faixa específica não temos opções no momento
-2. Mostre as opções MAIS BARATAS disponíveis como alternativa
-3. Pergunte se ele pode considerar um valor um pouco maior
-
-📝 EXEMPLO:
-"Nessa faixa até R$ ${ragQueryInfo.max_price_requested?.toLocaleString('pt-BR')} não temos opções no momento 😅
-
-Mas olha nossas opções mais acessíveis:
-1. *Cherry Cielo 2012* - R$ 22.990
-2. *Kia Picanto 2008* - R$ 25.990
-3. *Peugeot 307 2010* - R$ 27.990
-
-Dá pra considerar uma dessas?"
-`;
+    systemPrompt += `\n⚠️ Nenhum veículo até R$ ${ragQueryInfo.max_price_requested?.toLocaleString('pt-BR')}. Mostre os mais baratos da lista como alternativa.`;
   }
 
   if (specialInstructions.photo_instructions) {
-    systemPrompt += `
-
-===== REGRA DE FOTOS =====
-${specialInstructions.photo_instructions}
-`;
+    systemPrompt += `\n📸 FOTOS: ${specialInstructions.photo_instructions}`;
   } else {
-    // Default photo instructions - UPDATED for natural conversation flow
     systemPrompt += `
-
-===== 📸 REGRA CRÍTICA DE FOTOS =====
-
-⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA: NUNCA envie foto de um veículo diferente do pedido! ⚠️⚠️⚠️
-
-🚨 ERRO GRAVÍSSIMO A EVITAR:
-   Cliente pergunta sobre: Chevrolet Tracker 2015
-   ❌ NUNCA use fotos de: Jeep Renegade, Onix, ou QUALQUER outro carro
-   ✅ APENAS use fotos que estejam ABAIXO da linha "Chevrolet Tracker 2015"
-
-📸 COMO ENCONTRAR FOTOS:
-1. Identifique o veículo EXATO que o cliente está perguntando (marca + modelo + ano)
-2. Na lista de veículos, encontre a linha correspondente
-3. As fotos disponíveis aparecem LOGO ABAIXO, na seção "📸 FOTOS DISPONÍVEIS:"
-4. Se aparecer "⚠️ SEM FOTO", significa que NÃO temos fotos deste veículo
-
-📸 CATEGORIAS DE FOTOS:
-   - foto_principal: foto de capa/destaque
-   - foto_painel: painel/instrumentos  
-   - foto_bancos: bancos dianteiros/interior
-   - foto_banco_traseiro: banco traseiro
-   - foto_motor: motor do veículo
-   - foto_frente: vista frontal externa
-   - foto_traseira: vista traseira externa
-   - foto_lateral_esq/foto_lateral_dir: vistas laterais
-
-===== ⚠️⚠️⚠️ REGRA ABSOLUTAMENTE CRÍTICA DE ENVIO DE FOTOS ⚠️⚠️⚠️ =====
-
-🚫🚫🚫 NUNCA, JAMAIS, EM HIPÓTESE ALGUMA escreva:
-   ❌ "Sim! Aqui estão as fotos:"
-   ❌ "Vou te mandar as fotos"
-   ❌ "Segue a foto do..."
-   ❌ "[ENVIAR_FOTO: URL]" (a tag NÃO pode aparecer como texto!)
-
-✅✅✅ FORMATO OBRIGATÓRIO:
-   - Escreva uma frase NATURAL e CURTA
-   - Depois pule linha e coloque APENAS a(s) tag(s)
-   - SEM texto antes/depois/junto da tag!
-
-📝 EXEMPLOS CORRETOS:
-
-Cliente: "Tem foto do carro?"
-✅ CORRETO:
-Claro, deixa eu te mostrar!
-
-[ENVIAR_FOTO: https://url-da-foto.jpg]
-
-Cliente: "Me manda umas fotos por favor"
-✅ CORRETO:
-Com certeza! Olha só como ele está lindo 😍
-
-[ENVIAR_FOTO: https://url1.jpg]
-[ENVIAR_FOTO: https://url2.jpg]
-[ENVIAR_FOTO: https://url3.jpg]
-
-📝 EXEMPLOS ERRADOS (NUNCA FAÇA):
-
-❌ ERRADO: "Sim! Aqui estão as fotos da BMW X1 2022: [ENVIAR_FOTO: url]"
-❌ ERRADO: "Vou te enviar as fotos agora [ENVIAR_FOTO: url]"
-❌ ERRADO: "[ENVIAR_FOTO: url] Essa é a foto do painel"
-
-⚠️ A tag [ENVIAR_FOTO:] será REMOVIDA e a foto enviada SEPARADAMENTE.
-   Se você colocar texto junto, o cliente verá o texto SEM a foto junto!
-
-Quando NÃO TEM foto:
-"Infelizmente ainda não temos foto dos bancos do Tracker 2015 no sistema. Posso te mostrar pessoalmente na loja!"
-`;
+📸 FOTOS: Use APENAS fotos do veículo que o cliente pediu (listadas na seção FOTOS DISPONÍVEIS).
+- Formato: frase curta + nova linha + [ENVIAR_FOTO: URL_EXATA_DA_LISTA]
+- Sem foto? Diga que pode mostrar na loja. NUNCA use foto de outro veículo!`;
   }
 
   // Add data collection tags based on current qualification level
@@ -2567,9 +2239,9 @@ async function callOpenAI(agent: any, systemPrompt: string, messages: any[]): Pr
         { role: 'system', content: systemPrompt },
         ...messages,
       ],
-      // ANTI-HALLUCINATION: Temperature mais baixa para respostas precisas
-      temperature: Math.min(agent.temperature || 0.35, 0.35),
-      max_tokens: agent.max_tokens || 1024,
+      // ANTI-HALLUCINATION: Temperature baixa para respostas precisas
+      temperature: Math.min(agent.temperature || 0.25, 0.30),
+      max_tokens: Math.min(agent.max_tokens || 512, 512),
     }),
   });
 
@@ -2663,79 +2335,32 @@ async function sendWhatsAppMessage(instanceName: string, remoteJid: string, mess
 }
 
 // Send text in chunks (multiple messages) with natural delay
+// OTIMIZADO: Agora envia como mensagem única sempre que possível (max 2 mensagens)
 async function sendTextInChunks(instanceName: string, targetJid: string, text: string): Promise<void> {
-  // Random delay between 2-4 seconds to feel more human
-  const getHumanDelay = () => 2000 + Math.random() * 2000;
-  
-  // First, split by double line breaks
-  const rawParagraphs = text
-    .split(/\n\n+/)
-    .map((p: string) => p.trim())
-    .filter((p: string) => p.length > 0);
-  
-  // Merge short paragraphs (labels like "*Bancos:*") with the next one
-  const paragraphs: string[] = [];
-  let pendingLabel = '';
-  
-  for (let i = 0; i < rawParagraphs.length; i++) {
-    const p = rawParagraphs[i];
-    
-    // If paragraph is very short (label-like), merge with next
-    // e.g., "*Bancos:*" alone should be merged with what follows
-    if (p.length < 40 && (p.startsWith('*') || p.startsWith('•') || p.startsWith('-') || p.endsWith(':'))) {
-      pendingLabel += (pendingLabel ? '\n' : '') + p;
-    } else if (pendingLabel) {
-      // Merge pending label with current paragraph
-      paragraphs.push(pendingLabel + '\n' + p);
-      pendingLabel = '';
-    } else {
-      paragraphs.push(p);
-    }
-  }
-  
-  // If there's a trailing label without content, add it
-  if (pendingLabel) {
-    paragraphs.push(pendingLabel);
-  }
-  
-  if (paragraphs.length > 1) {
-    console.log('[AI Agent] Sending', paragraphs.length, 'separate messages (merged short labels)');
-    for (let i = 0; i < paragraphs.length; i++) {
-      await sendWhatsAppMessage(instanceName, targetJid, paragraphs[i]);
-      if (i < paragraphs.length - 1) {
-        const delay = getHumanDelay();
-        console.log('[AI Agent] Waiting', Math.round(delay), 'ms before next message');
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  } else if (text.length > 600) {
-    // Only split very long messages (increased threshold)
-    const sentences = text.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim());
-    const chunks: string[] = [];
-    let currentChunk = '';
-    
-    for (const sentence of sentences) {
-      if (currentChunk.length + sentence.length > 500) {
-        if (currentChunk) chunks.push(currentChunk.trim());
-        currentChunk = sentence;
-      } else {
-        currentChunk += (currentChunk ? ' ' : '') + sentence;
-      }
-    }
-    if (currentChunk) chunks.push(currentChunk.trim());
-    
-    console.log('[AI Agent] Split long message into', chunks.length, 'chunks');
-    for (let i = 0; i < chunks.length; i++) {
-      await sendWhatsAppMessage(instanceName, targetJid, chunks[i]);
-      if (i < chunks.length - 1) {
-        const delay = getHumanDelay();
-        console.log('[AI Agent] Waiting', Math.round(delay), 'ms before next message');
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  } else {
-    // Send as single message
+  // Se o texto cabe em uma mensagem (< 1500 chars), envia direto
+  if (text.length <= 1500) {
     await sendWhatsAppMessage(instanceName, targetJid, text);
+    return;
+  }
+  
+  // Para textos muito longos, dividir em no MÁXIMO 2 partes
+  const midPoint = Math.floor(text.length / 2);
+  // Encontrar quebra de parágrafo mais próxima do meio
+  let splitAt = text.indexOf('\n\n', midPoint - 200);
+  if (splitAt === -1 || splitAt > midPoint + 200) {
+    // Fallback: quebrar na sentença mais próxima
+    splitAt = text.lastIndexOf('. ', midPoint);
+    if (splitAt === -1) splitAt = midPoint;
+    else splitAt += 2;
+  }
+  
+  const part1 = text.substring(0, splitAt).trim();
+  const part2 = text.substring(splitAt).trim();
+  
+  await sendWhatsAppMessage(instanceName, targetJid, part1);
+  if (part2) {
+    await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1500));
+    await sendWhatsAppMessage(instanceName, targetJid, part2);
   }
 }
 
@@ -3291,8 +2916,8 @@ async function extractAndSaveQualificationData(
       const { data: matchingVehicles } = await supabase
         .from('vehicles')
         .select('id, brand, model, status')
-        .or(`model.ilike.%${interestLower}%,brand.ilike.%${interestLower}%`)
-        .eq('status', 'Disponível')
+      .or(`model.ilike.%${interestLower}%,brand.ilike.%${interestLower}%`)
+        .eq('status', 'disponivel')
         .limit(5);
       
       if (matchingVehicles && matchingVehicles.length > 0) {

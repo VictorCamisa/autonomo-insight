@@ -12,7 +12,7 @@ export function useNegotiations() {
         .from('negotiations')
         .select(`
           *,
-          lead:leads(id, name, phone, email, source),
+          lead:leads(id, name, phone, email, source, first_response_at),
           vehicle:vehicles(id, brand, model, year_model, plate, sale_price),
           salesperson:profiles!negotiations_salesperson_id_fkey(full_name),
           customer:customers(id, name, phone, email)
@@ -40,7 +40,7 @@ export function useLeadNegotiations(leadId: string) {
         .from('negotiations')
         .select(`
           *,
-          lead:leads(id, name, phone, email, source),
+          lead:leads(id, name, phone, email, source, first_response_at),
           vehicle:vehicles(id, brand, model, year_model, plate, sale_price),
           salesperson:profiles!negotiations_salesperson_id_fkey(full_name),
           customer:customers(id, name, phone, email)
@@ -67,7 +67,7 @@ export function useNegotiation(id: string) {
         .from('negotiations')
         .select(`
           *,
-          lead:leads(id, name, phone, email, source),
+          lead:leads(id, name, phone, email, source, first_response_at),
           vehicle:vehicles(id, brand, model, year_model, plate, sale_price)
         `)
         .eq('id', id)

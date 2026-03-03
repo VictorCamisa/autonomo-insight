@@ -1,9 +1,12 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { UserCircle, User2, Pencil, Trash2, Search } from 'lucide-react';
+import { UserCircle, User2, Pencil, Trash2, Search, Filter, CalendarDays } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { subDays, subWeeks, subMonths, isAfter } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeads, useCreateLead } from '@/hooks/useLeads';
 import { useNegotiations, useCreateNegotiation, useUpdateNegotiation, useDeleteNegotiation } from '@/hooks/useNegotiations';
@@ -50,30 +53,64 @@ export default function CRMHome() {
   const [deleteNegotiationOpen, setDeleteNegotiationOpen] = useState(false);
   const [negotiationToDelete, setNegotiationToDelete] = useState<Negotiation | null>(null);
 
-  // Search state
+  // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const [periodFilter, setPeriodFilter] = useState<string>('all');
+  const [responseFilter, setResponseFilter] = useState<string>('all');
 
   const isManager = role === 'gerente';
 
-  // Filter negotiations by search
+  // Filter negotiations by search, period, and response
   const filteredNegotiations = useMemo(() => {
-    if (!searchQuery.trim()) return negotiations;
-    
-    const query = searchQuery.toLowerCase();
-    return negotiations.filter((neg) => {
-      const leadName = neg.lead?.name?.toLowerCase() || '';
-      const leadPhone = neg.lead?.phone?.toLowerCase() || '';
-      const vehicleInfo = neg.vehicle ? `${neg.vehicle.brand} ${neg.vehicle.model}`.toLowerCase() : '';
-      const salespersonName = neg.salesperson?.full_name?.toLowerCase() || '';
-      
-      return (
-        leadName.includes(query) ||
-        leadPhone.includes(query) ||
-        vehicleInfo.includes(query) ||
-        salespersonName.includes(query)
-      );
-    });
-  }, [negotiations, searchQuery]);
+    let filtered = negotiations;
+
+    // Period filter
+    if (periodFilter !== 'all') {
+      const now = new Date();
+      let cutoffDate: Date;
+      switch (periodFilter) {
+        case '7d': cutoffDate = subDays(now, 7); break;
+        case '14d': cutoffDate = subWeeks(now, 2); break;
+        case '30d': cutoffDate = subMonths(now, 1); break;
+        case '90d': cutoffDate = subMonths(now, 3); break;
+        default: cutoffDate = new Date(0);
+      }
+      filtered = filtered.filter(neg => isAfter(new Date(neg.created_at), cutoffDate));
+    }
+
+    // Response filter
+    if (responseFilter === 'sem_resposta') {
+      // Leads where only the AI spoke (lead never responded — no salesperson interaction, qualification not advanced)
+      filtered = filtered.filter(neg => {
+        const lead = neg.lead;
+        if (!lead) return false;
+        // Lead sem first_response_at = nunca respondeu ao vendedor
+        return !lead.first_response_at;
+      });
+    } else if (responseFilter === 'com_resposta') {
+      filtered = filtered.filter(neg => neg.lead?.first_response_at);
+    }
+
+    // Text search
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((neg) => {
+        const leadName = neg.lead?.name?.toLowerCase() || '';
+        const leadPhone = neg.lead?.phone?.toLowerCase() || '';
+        const vehicleInfo = neg.vehicle ? `${neg.vehicle.brand} ${neg.vehicle.model}`.toLowerCase() : '';
+        const salespersonName = neg.salesperson?.full_name?.toLowerCase() || '';
+        
+        return (
+          leadName.includes(query) ||
+          leadPhone.includes(query) ||
+          vehicleInfo.includes(query) ||
+          salespersonName.includes(query)
+        );
+      });
+    }
+
+    return filtered;
+  }, [negotiations, searchQuery, periodFilter, responseFilter]);
 
   const handleCreateLead = async (data: Record<string, unknown>) => {
     await createLead.mutateAsync({
@@ -177,7 +214,7 @@ export default function CRMHome() {
 
   return (
     <div className="space-y-4">
-      {/* Header with Search and Qualification Level */}
+      {/* Header with Search and Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -188,8 +225,58 @@ export default function CRMHome() {
             className="pl-9"
           />
         </div>
+
+        <Select value={periodFilter} onValueChange={setPeriodFilter}>
+          <SelectTrigger className="w-[170px]">
+            <CalendarDays className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Período" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todo período</SelectItem>
+            <SelectItem value="7d">Últimos 7 dias</SelectItem>
+            <SelectItem value="14d">Últimas 2 semanas</SelectItem>
+            <SelectItem value="30d">Último mês</SelectItem>
+            <SelectItem value="90d">Últimos 3 meses</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={responseFilter} onValueChange={setResponseFilter}>
+          <SelectTrigger className="w-[180px]">
+            <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Resposta" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os leads</SelectItem>
+            <SelectItem value="sem_resposta">Sem resposta</SelectItem>
+            <SelectItem value="com_resposta">Com resposta</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {(periodFilter !== 'all' || responseFilter !== 'all') && (
+          <Button variant="ghost" size="sm" onClick={() => { setPeriodFilter('all'); setResponseFilter('all'); }}>
+            Limpar filtros
+          </Button>
+        )}
+
         <QualificationLevelSelector />
       </div>
+
+      {/* Active filters summary */}
+      {(periodFilter !== 'all' || responseFilter !== 'all' || searchQuery) && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Mostrando {filteredNegotiations.length} de {negotiations.length} negociações</span>
+          {periodFilter !== 'all' && (
+            <Badge variant="secondary">
+              {periodFilter === '7d' ? '7 dias' : periodFilter === '14d' ? '2 semanas' : periodFilter === '30d' ? '1 mês' : '3 meses'}
+            </Badge>
+          )}
+          {responseFilter !== 'all' && (
+            <Badge variant="secondary">
+              {responseFilter === 'sem_resposta' ? 'Sem resposta' : 'Com resposta'}
+            </Badge>
+          )}
+        </div>
+      )}
 
       {/* Pipeline */}
       {isLoading ? (

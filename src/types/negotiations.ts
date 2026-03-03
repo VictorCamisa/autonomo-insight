@@ -31,6 +31,7 @@ export interface Negotiation {
     phone: string;
     email: string | null;
     source: string;
+    first_response_at: string | null;
   };
   vehicle?: {
     id: string;

@@ -1361,14 +1361,13 @@ async function processWithAIAgent(
       }
     }
     
-    // Se não encontrou no histórico, usar prioridade: veículo de interesse do lead -> histórico
-    if (!activeVehicle && preferredLeadVehicle) {
-      activeVehicle = preferredLeadVehicle;
-      console.log('[Active Vehicle] Using preferred lead vehicle:', activeVehicle.brand, activeVehicle.model);
-    } else if (!activeVehicle && vehiclesFromHistory.length > 0) {
+    // Se não encontrou no histórico, usar o primeiro do histórico (mais contextual)
+    // NÃO usar preferredLeadVehicle como fallback — o lead pode estar falando de outro veículo agora
+    if (!activeVehicle && vehiclesFromHistory.length > 0) {
       activeVehicle = vehiclesFromHistory[0];
       console.log('[Active Vehicle] Using first from history:', activeVehicle.brand, activeVehicle.model);
     }
+    // preferredLeadVehicle já está no contexto (PASSO 6) mas NÃO é forçado como ativo
   }
   
   // ===== PASSO 8: CORTAR VEÍCULOS PARA MÁXIMO 5 (evitar sobrecarga) =====

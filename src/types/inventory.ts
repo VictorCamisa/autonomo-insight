@@ -38,6 +38,8 @@ export interface Vehicle {
   updated_at: string;
   mercadolibre_id: string | null;
   images: string[] | null;
+  portal_ml: boolean;
+  portal_np: boolean;
 }
 
 export interface VehicleCost {

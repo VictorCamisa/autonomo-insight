@@ -3093,6 +3093,27 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_settings: {
+        Row: {
+          id: string
+          is_enabled: boolean
+          portal_key: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          is_enabled?: boolean
+          portal_key: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          is_enabled?: boolean
+          portal_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -4269,6 +4290,8 @@ export type Database = {
           model: string
           notes: string | null
           plate: string | null
+          portal_ml: boolean
+          portal_np: boolean
           purchase_date: string | null
           purchase_price: number | null
           purchase_source: string | null
@@ -4314,6 +4337,8 @@ export type Database = {
           model: string
           notes?: string | null
           plate?: string | null
+          portal_ml?: boolean
+          portal_np?: boolean
           purchase_date?: string | null
           purchase_price?: number | null
           purchase_source?: string | null
@@ -4359,6 +4384,8 @@ export type Database = {
           model?: string
           notes?: string | null
           plate?: string | null
+          portal_ml?: boolean
+          portal_np?: boolean
           purchase_date?: string | null
           purchase_price?: number | null
           purchase_source?: string | null

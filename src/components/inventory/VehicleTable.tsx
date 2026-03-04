@@ -1,11 +1,4 @@
-import { useEffect, useState } from 'react';
 import { Car, MoreHorizontal, Globe, EyeOff, Bike } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +23,7 @@ import {
 import type { Vehicle, VehicleType } from '@/types/inventory';
 import { vehicleStatusLabels, vehicleStatusColors, fuelTypeLabels } from '@/types/inventory';
 import { useUpdateVehicle } from '@/hooks/useVehicles';
+import { useToggleVehiclePortal } from '@/hooks/usePortalSettings';
 
 interface VehicleTableProps {
   vehicles: Vehicle[];
@@ -37,28 +31,14 @@ interface VehicleTableProps {
   enabledPortals?: string[];
 }
 
-const PORTAL_CONFIG: Record<string, { label: string; bg: string; text: string; abbr: string }> = {
-  mercadolivre: { label: 'Mercado Livre', bg: 'bg-[#FFE600]', text: 'text-black', abbr: 'ML' },
-  napista: { label: 'Napista', bg: 'bg-[#1a1a2e]', text: 'text-white', abbr: 'NP' },
+const PORTAL_CONFIG: Record<string, { label: string; bg: string; text: string; abbr: string; field: 'portal_ml' | 'portal_np' }> = {
+  mercadolivre: { label: 'Mercado Livre', bg: 'bg-[#FFE600]', text: 'text-black', abbr: 'ML', field: 'portal_ml' },
+  napista: { label: 'Napista', bg: 'bg-[#1a1a2e]', text: 'text-white', abbr: 'NP', field: 'portal_np' },
 };
 
 export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: VehicleTableProps) {
   const updateVehicle = useUpdateVehicle();
-  const [publishedMap, setPublishedMap] = useState<Record<string, string[]>>({});
-  const [iframeError, setIframeError] = useState(false);
-  const [iframeLoaded, setIframeLoaded] = useState(false);
-  const [showIframeFallback, setShowIframeFallback] = useState(false);
-  const [portalModalUrl, setPortalModalUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!portalModalUrl || iframeError || iframeLoaded) return;
-
-    const timeout = window.setTimeout(() => {
-      setShowIframeFallback(true);
-    }, 2200);
-
-    return () => window.clearTimeout(timeout);
-  }, [portalModalUrl, iframeError, iframeLoaded]);
+  const toggleVehiclePortal = useToggleVehiclePortal();
 
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
@@ -88,7 +68,6 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
   }
 
   return (
-    <>
     <div className="rounded-md border">
       <Table>
         <TableHeader>
@@ -188,32 +167,33 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
               </TableCell>
               {enabledPortals.length > 0 && (
                 <TableCell>
-                  <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
                     {enabledPortals.map((portalId) => {
                       const cfg = PORTAL_CONFIG[portalId];
                       if (!cfg) return null;
-                      const isPublished = publishedMap[vehicle.id]?.includes(portalId);
+                      const isActive = vehicle[cfg.field];
                       return (
                         <Tooltip key={portalId}>
                           <TooltipTrigger asChild>
                             <button
                               className={`w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold transition-all border-2 ${
-                                isPublished
+                                isActive
                                   ? `${cfg.bg} ${cfg.text} border-transparent ring-2 ring-green-500`
-                                  : `${cfg.bg} ${cfg.text} border-transparent opacity-40 hover:opacity-100`
+                                  : `${cfg.bg} ${cfg.text} border-transparent opacity-30 hover:opacity-80`
                               }`}
                               onClick={() => {
-                                setIframeError(false);
-                                setIframeLoaded(false);
-                                setShowIframeFallback(false);
-                                setPortalModalUrl('http://amodolo82-004-site5.jtempurl.com/index.html#!/vehiclead/2');
+                                toggleVehiclePortal.mutate({
+                                  vehicleId: vehicle.id,
+                                  field: cfg.field,
+                                  value: !isActive,
+                                });
                               }}
                             >
                               {cfg.abbr}
                             </button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {isPublished ? `Remover do ${cfg.label}` : `Publicar no ${cfg.label}`}
+                            {isActive ? `Desmarcar ${cfg.label}` : `Marcar ${cfg.label}`}
                           </TooltipContent>
                         </Tooltip>
                       );
@@ -242,56 +222,6 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
           ))}
         </TableBody>
       </Table>
-
     </div>
-
-      <Dialog
-        open={!!portalModalUrl}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPortalModalUrl(null);
-            setIframeError(false);
-            setIframeLoaded(false);
-            setShowIframeFallback(false);
-          }
-        }}
-      >
-        <DialogContent className="max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden flex flex-col">
-          <DialogHeader className="p-4 pb-2">
-            <DialogTitle>Portal de Anúncios</DialogTitle>
-          </DialogHeader>
-
-          {portalModalUrl && (
-            <div className="px-4 pb-3 flex items-center justify-between gap-2 border-b">
-              <p className="text-xs text-muted-foreground">Se a tela ficar em branco, abra no portal externo.</p>
-              <Button size="sm" asChild>
-                <a href={portalModalUrl} target="_self" rel="noreferrer">Abrir na mesma guia</a>
-              </Button>
-            </div>
-          )}
-
-          {portalModalUrl && !iframeError && !showIframeFallback ? (
-            <iframe
-              src={portalModalUrl}
-              className="w-full border-0 flex-1"
-              style={{ height: 'calc(85vh - 112px)' }}
-              title="Portal"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
-              onError={() => setIframeError(true)}
-              onLoad={() => setIframeLoaded(true)}
-            />
-          ) : portalModalUrl ? (
-            <div className="flex flex-col items-center justify-center flex-1 gap-4 p-8">
-              <p className="text-center text-muted-foreground">
-                O portal bloqueou a abertura interna por segurança (iframe).
-              </p>
-              <Button asChild>
-                <a href={portalModalUrl} target="_self" rel="noreferrer">Abrir na mesma guia</a>
-              </Button>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-    </>
   );
 }

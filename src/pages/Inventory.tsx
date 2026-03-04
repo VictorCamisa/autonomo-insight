@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Eye, Bike, Settings2, Check } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Eye, Bike, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { BentoCard } from '@/components/ui/bento-card';
 import { useVehicles, useAllVehicleDRE, useCreateVehicle, useBulkUpdateVehiclesVisibility } from '@/hooks/useVehicles';
+import { usePortalSettings, useTogglePortalSetting } from '@/hooks/usePortalSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { Vehicle, VehicleStatus, VehicleDRE, VehicleType } from '@/types/inventory';
 import { vehicleStatusLabels, vehicleTypeLabels } from '@/types/inventory';
@@ -36,7 +37,6 @@ type ViewMode = 'grid' | 'table' | 'dre';
 
 export default function Inventory() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [enabledPortals, setEnabledPortals] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('disponivel');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<VehicleType | 'all'>('all');
@@ -46,10 +46,13 @@ export default function Inventory() {
 
   const { data: vehicles, isLoading } = useVehicles();
   const { data: dreData, isLoading: dreLoading } = useAllVehicleDRE();
+  const { data: portalSettings } = usePortalSettings();
+  const togglePortal = useTogglePortalSetting();
   const createVehicle = useCreateVehicle();
   const bulkUpdateVisibility = useBulkUpdateVehiclesVisibility();
 
   const isManager = role === 'gerente';
+  const enabledPortalKeys = (portalSettings || []).filter(p => p.is_enabled).map(p => p.portal_key);
 
   const filteredVehicles = vehicles?.filter((vehicle) => {
     const matchesSearch =
@@ -132,18 +135,16 @@ export default function Inventory() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="lg" className="border-primary/50">
                   <Settings2 className="h-4 w-4 mr-2" />
-                  Portais {enabledPortals.length > 0 && `(${enabledPortals.length})`}
+                  Portais {enabledPortalKeys.length > 0 && `(${enabledPortalKeys.length})`}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Integrar com portais</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem
-                  checked={enabledPortals.includes('mercadolivre')}
+                  checked={enabledPortalKeys.includes('mercadolivre')}
                   onCheckedChange={(checked) => {
-                    setEnabledPortals(prev =>
-                      checked ? [...prev, 'mercadolivre'] : prev.filter(p => p !== 'mercadolivre')
-                    );
+                    togglePortal.mutate({ portalKey: 'mercadolivre', isEnabled: !!checked });
                   }}
                 >
                   <span className="flex items-center gap-2">
@@ -152,11 +153,9 @@ export default function Inventory() {
                   </span>
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem
-                  checked={enabledPortals.includes('napista')}
+                  checked={enabledPortalKeys.includes('napista')}
                   onCheckedChange={(checked) => {
-                    setEnabledPortals(prev =>
-                      checked ? [...prev, 'napista'] : prev.filter(p => p !== 'napista')
-                    );
+                    togglePortal.mutate({ portalKey: 'napista', isEnabled: !!checked });
                   }}
                 >
                   <span className="flex items-center gap-2">
@@ -307,7 +306,7 @@ export default function Inventory() {
         <VehicleTable 
           vehicles={filteredVehicles} 
           onVehicleClick={handleVehicleClick}
-          enabledPortals={enabledPortals}
+          enabledPortals={enabledPortalKeys}
         />
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

@@ -182,11 +182,7 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
                                   : `${cfg.bg} ${cfg.text} border-transparent opacity-30 hover:opacity-80`
                               }`}
                               onClick={() => {
-                                toggleVehiclePortal.mutate({
-                                  vehicleId: vehicle.id,
-                                  field: cfg.field,
-                                  value: !isActive,
-                                });
+                                window.open('http://amodolo82-004-site5.jtempurl.com/index.html#!/vehiclead/2', '_blank');
                               }}
                             >
                               {cfg.abbr}

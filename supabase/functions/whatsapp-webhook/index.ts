@@ -895,6 +895,41 @@ async function processWithAIAgent(
   const uniqueModels: string[] = [...new Set(modelList)].filter((m: string) => m && m.length > 1);
   const uniqueBrands: string[] = [...new Set(brandList)].filter((b: string) => b && b.length > 1);
 
+  // ===== PASSO EXTRA: priorizar veículo de interesse já salvo no lead =====
+  // Evita falso negativo do tipo "não temos Prisma" quando o Prisma está disponível.
+  let preferredLeadVehicle: any = null;
+  if (leadId) {
+    const { data: leadForVehicleInterest } = await supabase
+      .from('leads')
+      .select('vehicle_interest')
+      .eq('id', leadId)
+      .single();
+
+    const leadVehicleInterest = leadForVehicleInterest?.vehicle_interest?.trim();
+    if (leadVehicleInterest) {
+      const interestWithoutYear = leadVehicleInterest.replace(/\b(19|20)\d{2}\b/g, '').trim();
+
+      const tryTerms = [leadVehicleInterest, interestWithoutYear]
+        .map((t: string) => t?.trim())
+        .filter((t: string) => !!t && t.length > 1);
+
+      for (const term of tryTerms) {
+        const { data: preferredMatch } = await supabase
+          .from('vehicles')
+          .select('id, brand, model, version, year_fabrication, year_model, sale_price, km, color, fuel_type, transmission, notes, images')
+          .eq('status', 'disponivel')
+          .or(`model.ilike.%${term}%,brand.ilike.%${term}%`)
+          .limit(1);
+
+        if (preferredMatch && preferredMatch.length > 0) {
+          preferredLeadVehicle = { ...preferredMatch[0], similarity: 0.99, from_lead_interest: true };
+          console.log('[RAG] Preferred lead vehicle injected:', preferredLeadVehicle.brand, preferredLeadVehicle.model, '| interest:', leadVehicleInterest);
+          break;
+        }
+      }
+    }
+  }
+
   // ===== PASSO EXTRA: Buscar veículos mencionados no histórico da conversa =====
   // Isso garante que quando o cliente pergunta "foto do painel", pegamos o veículo que estava discutindo
   let vehiclesFromHistory: any[] = [];
@@ -1278,8 +1313,16 @@ async function processWithAIAgent(
     }
   }
   
-  // ===== PASSO 6: Mesclar veículos do histórico (prioridade máxima) =====
-  // Adicionar veículos do histórico no INÍCIO para que a IA os veja primeiro
+  // ===== PASSO 6: Mesclar veículos do histórico e veículo de interesse do lead =====
+  // Priorizar veículo de interesse salvo + veículos do histórico no INÍCIO
+  if (preferredLeadVehicle) {
+    const alreadyHasPreferred = relevantVehicles.some((v: any) => v.id === preferredLeadVehicle.id);
+    if (!alreadyHasPreferred) {
+      relevantVehicles = [preferredLeadVehicle, ...relevantVehicles];
+      console.log('[RAG] Added preferred lead vehicle to context');
+    }
+  }
+
   if (vehiclesFromHistory.length > 0) {
     const existingIds = new Set(relevantVehicles.map((v: any) => v.id));
     const newFromHistory = vehiclesFromHistory.filter((v: any) => !existingIds.has(v.id));
@@ -1318,8 +1361,11 @@ async function processWithAIAgent(
       }
     }
     
-    // Se não encontrou no histórico mas temos veículo do histórico com alta relevância, usar ele
-    if (!activeVehicle && vehiclesFromHistory.length > 0) {
+    // Se não encontrou no histórico, usar prioridade: veículo de interesse do lead -> histórico
+    if (!activeVehicle && preferredLeadVehicle) {
+      activeVehicle = preferredLeadVehicle;
+      console.log('[Active Vehicle] Using preferred lead vehicle:', activeVehicle.brand, activeVehicle.model);
+    } else if (!activeVehicle && vehiclesFromHistory.length > 0) {
       activeVehicle = vehiclesFromHistory[0];
       console.log('[Active Vehicle] Using first from history:', activeVehicle.brand, activeVehicle.model);
     }
@@ -1378,7 +1424,7 @@ async function processWithAIAgent(
   const antiHallucinationRules = `
 ⛔ REGRAS OBRIGATÓRIAS:
 - Responda APENAS com dados da lista "VEÍCULOS SUGERIDOS" abaixo
-- Veículo NA LISTA → confirme com dados exatos. NÃO NA LISTA → diga que não está no estoque
+- Veículo NA LISTA → confirme com dados exatos. NÃO NA LISTA → diga que não apareceu na lista atual e ofereça alternativas/consulta, sem afirmar indisponibilidade absoluta
 - NUNCA invente preços, anos, cores ou diga que foi "vendido"
 - Busca por preço: liste os veículos da lista que cabem no orçamento
 - Seja BREVE: máximo 2-3 frases + lista quando necessário. NÃO repita regras na resposta

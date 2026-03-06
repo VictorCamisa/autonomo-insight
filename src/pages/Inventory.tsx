@@ -55,6 +55,18 @@ export default function Inventory() {
 
   const isManager = role === 'gerente';
   const enabledPortalKeys = (portalSettings || []).filter(p => p.is_enabled).map(p => p.portal_key);
+  const [almModelosLoaded, setAlmModelosLoaded] = useState(false);
+
+  useEffect(() => {
+    getALMModelos().then(m => { setModelos(m); setAlmModelosLoaded(true); });
+  }, []);
+
+  const handleExportXML = (allStatuses: boolean) => {
+    if (!vehicles?.length) { toast.error('Nenhum veículo para exportar'); return; }
+    const mapped = vehicles.map(v => mapVehicle(v));
+    generateXML(mapped, true, allStatuses);
+    toast.success(`XML exportado com ${allStatuses ? 'todos os veículos' : 'veículos disponíveis'}`);
+  };
 
   const filteredVehicles = vehicles?.filter((vehicle) => {
     const matchesSearch =

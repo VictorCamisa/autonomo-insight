@@ -316,8 +316,27 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
     }
 
     const aiData = await aiResponse.json();
-    const responseMessage = aiData.message || '';
-    const photos: Array<{ url: string; caption: string }> = aiData.photos || [];
+    const responseMessage = aiData.message ?? aiData.response ?? '';
+
+    const rawPhotos = aiData.photos ?? aiData.images ?? [];
+    const photos: Array<{ url: string; caption: string }> = Array.isArray(rawPhotos)
+      ? rawPhotos
+          .map((photo: unknown) => {
+            if (typeof photo === 'string') {
+              return { url: photo, caption: '' };
+            }
+
+            if (photo && typeof photo === 'object' && 'url' in photo) {
+              const parsed = photo as { url?: string; caption?: string };
+              if (parsed.url) {
+                return { url: parsed.url, caption: parsed.caption || '' };
+              }
+            }
+
+            return null;
+          })
+          .filter((photo): photo is { url: string; caption: string } => photo !== null)
+      : [];
 
     if (!responseMessage && photos.length === 0) {
       console.log('No response from AI');

@@ -136,23 +136,57 @@ serve(async (req) => {
     }
 
     // =============================================
-    // SESSION & CONTEXT
+    // SESSION & CONTEXT (uses ai_agent_conversations + ai_agent_messages)
     // =============================================
-    const sessionKey = lead_id || phone || crypto.randomUUID();
+    const sessionId = `whatsapp_${phone || lead_id || crypto.randomUUID()}`;
     const SESSION_GAP_HOURS = 4;
     const sessionCutoff = new Date(Date.now() - SESSION_GAP_HOURS * 60 * 60 * 1000).toISOString();
 
-    // Check for session gap
-    const { data: lastMsgCheck } = await supabase
-      .from('ai_agent_messages')
-      .select('created_at')
+    // Find or create conversation
+    let conversationId: string;
+    const { data: existingConv } = await supabase
+      .from('ai_agent_conversations')
+      .select('id, updated_at')
       .eq('agent_id', agent_id)
-      .eq('conversation_id', sessionKey)
+      .eq('session_id', sessionId)
+      .eq('status', 'active')
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(1)
+      .maybeSingle();
 
-    const isNewSession = !lastMsgCheck || lastMsgCheck.length === 0 ||
-      new Date(lastMsgCheck[0].created_at).getTime() < new Date(sessionCutoff).getTime();
+    const isNewSession = !existingConv ||
+      new Date(existingConv.updated_at).getTime() < new Date(sessionCutoff).getTime();
+
+    if (isNewSession && existingConv) {
+      // Close old conversation, create new one
+      await supabase.from('ai_agent_conversations').update({ status: 'closed' }).eq('id', existingConv.id);
+    }
+
+    if (isNewSession || !existingConv) {
+      console.log('[ai-agent-chat] Creating NEW conversation (gap > 4h or first contact)');
+      const { data: newConv, error: convError } = await supabase
+        .from('ai_agent_conversations')
+        .insert({
+          agent_id,
+          session_id: sessionId,
+          channel: channel || 'whatsapp',
+          lead_id: lead_id || null,
+          customer_phone: phone || null,
+          status: 'active',
+        })
+        .select('id')
+        .single();
+
+      if (convError) {
+        console.error('[ai-agent-chat] Error creating conversation:', convError);
+        throw new Error('Failed to create conversation');
+      }
+      conversationId = newConv.id;
+    } else {
+      conversationId = existingConv.id;
+      // Touch updated_at
+      await supabase.from('ai_agent_conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
+    }
 
     if (isNewSession) console.log('[ai-agent-chat] NEW SESSION detected (gap > 4h or first contact)');
 
@@ -162,10 +196,8 @@ serve(async (req) => {
       const { data: recentMessages } = await supabase
         .from('ai_agent_messages')
         .select('content')
-        .eq('agent_id', agent_id)
-        .eq('conversation_id', sessionKey)
+        .eq('conversation_id', conversationId)
         .eq('role', 'assistant')
-        .gte('created_at', sessionCutoff)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -186,9 +218,7 @@ serve(async (req) => {
       supabase
         .from('ai_agent_messages')
         .select('role, content')
-        .eq('agent_id', agent_id)
-        .eq('conversation_id', sessionKey)
-        .gte('created_at', isNewSession ? new Date().toISOString() : sessionCutoff)
+        .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
         .limit(contextWindowSize),
       supabase
@@ -234,15 +264,15 @@ serve(async (req) => {
       ? '\nEsta e uma NOVA CONVERSA. Trate como primeiro contato. NAO assuma nenhum veiculo ou pagamento de conversas anteriores. Comece do zero.'
       : '';
 
-    console.log('[ai-agent-chat] Session:', sessionKey, 'history:', conversationHistory.length);
+    console.log('[ai-agent-chat] Conversation:', conversationId, 'history:', conversationHistory.length);
 
-    // Save user message (non-blocking)
-    supabase.from('ai_agent_messages').insert({
-      agent_id,
-      conversation_id: sessionKey,
+    // Save user message (BLOCKING - must complete before AI call)
+    const { error: userMsgError } = await supabase.from('ai_agent_messages').insert({
+      conversation_id: conversationId,
       role: 'user',
       content: message,
-    }).then(({ error }: any) => { if (error) console.error('Error saving user msg:', error); });
+    });
+    if (userMsgError) console.error('Error saving user msg:', userMsgError);
 
     // =============================================
     // BUILD SYSTEM PROMPT (adapted from Roma)

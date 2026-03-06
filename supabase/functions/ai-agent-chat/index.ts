@@ -828,9 +828,22 @@ async function executeToolCall(
 
       if (!lead) return { success: false, error: 'Lead nao encontrado' };
 
-      // Update lead
+      // Build qualification_data with ALL collected info
+      const qualificationData: Record<string, any> = {};
+      if (args.vehicle_interest) qualificationData.vehicle_interest = args.vehicle_interest;
+      if (args.payment_method) qualificationData.payment_method = args.payment_method;
+      if (args.has_trade_in !== undefined) qualificationData.has_trade_in = args.has_trade_in;
+      if (args.trade_in_details) qualificationData.trade_in_details = args.trade_in_details;
+      if (args.budget_range) qualificationData.budget_range = args.budget_range;
+      if (args.notes) qualificationData.notes = args.notes;
+      qualificationData.qualified_at = new Date().toISOString();
+      qualificationData.qualified_by = 'ai_agent';
+
+      // Update lead with qualification_data
       await supabase.from('leads').update({
         vehicle_interest: args.vehicle_interest,
+        qualification_data: qualificationData,
+        qualification_level: 'Q2',
         status: 'qualificado',
         updated_at: new Date().toISOString(),
       }).eq('id', lead.id);
@@ -847,7 +860,8 @@ async function executeToolCall(
       if (negotiation) {
         await supabase.from('negotiations').update({
           status: 'negociando',
-          notes: `Qualificado pela IA | Veiculo: ${args.vehicle_interest} | Pagamento: ${args.payment_method}${args.has_trade_in ? ' | Com troca' : ''}`,
+          qualification_level: 'Q2',
+          notes: `Qualificado pela IA | Veiculo: ${args.vehicle_interest} | Pagamento: ${args.payment_method}${args.has_trade_in ? ` | Troca: ${args.trade_in_details || 'Sim'}` : ' | Sem troca'}`,
           updated_at: new Date().toISOString(),
         }).eq('id', negotiation.id);
       }
@@ -862,10 +876,10 @@ async function executeToolCall(
         }
         await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: nextSalesperson });
 
-        const { data: salesperson } = await supabase.from('profiles').select('full_name').eq('id', nextSalesperson).single();
+        const { data: salesperson } = await supabase.from('profiles').select('full_name, phone').eq('id', nextSalesperson).single();
         const salespersonName = salesperson?.full_name || 'nosso consultor';
 
-        // Notification
+        // Notification in-app
         await supabase.from('notifications').insert({
           user_id: nextSalesperson,
           type: 'lead_assigned',
@@ -873,6 +887,69 @@ async function executeToolCall(
           message: `Lead qualificado: ${args.vehicle_interest} | Pagamento: ${args.payment_method}`,
           link: '/crm',
         });
+
+        // ===== SEND FICHA VIA WHATSAPP TO SALESPERSON =====
+        if (salesperson?.phone) {
+          try {
+            // Find connected WhatsApp instance (shared/default first)
+            const { data: wpInstances } = await supabase
+              .from('whatsapp_instances')
+              .select('id, instance_name, api_url, api_key')
+              .eq('status', 'connected')
+              .order('is_shared', { ascending: false })
+              .order('is_default', { ascending: false })
+              .limit(1);
+
+            const wpInstance = wpInstances?.[0];
+            if (wpInstance) {
+              // Build ficha message
+              const fichaLines: string[] = [
+                `*NOVO LEAD QUALIFICADO*`,
+                ``,
+                `*Cliente:* ${lead.name || 'Nao informado'}`,
+                `*Telefone:* ${lead.phone}`,
+                `*Veiculo:* ${args.vehicle_interest}`,
+                `*Pagamento:* ${args.payment_method}`,
+              ];
+              if (args.has_trade_in) {
+                fichaLines.push(`*Troca:* ${args.trade_in_details || 'Sim, nao especificou detalhes'}`);
+              }
+              if (args.budget_range) {
+                fichaLines.push(`*Orcamento:* ${args.budget_range}`);
+              }
+              if (args.notes) {
+                fichaLines.push(`*Obs:* ${args.notes}`);
+              }
+              fichaLines.push(``);
+              fichaLines.push(`*Link direto:* https://wa.me/${lead.phone.replace(/\D/g, '')}`);
+
+              const fichaText = fichaLines.join('\n');
+              const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
+
+              console.log('[ai-agent-chat] Sending ficha to salesperson:', salespersonName, salesperson.phone);
+
+              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': wpInstance.api_key,
+                },
+                body: JSON.stringify({
+                  number: salespersonJid,
+                  text: fichaText,
+                }),
+              });
+
+              console.log('[ai-agent-chat] Ficha sent successfully to', salespersonName);
+            } else {
+              console.warn('[ai-agent-chat] No connected WhatsApp instance to send ficha');
+            }
+          } catch (fichaError) {
+            console.error('[ai-agent-chat] Error sending ficha via WhatsApp:', fichaError);
+          }
+        } else {
+          console.warn('[ai-agent-chat] Salesperson has no phone number, skipping WhatsApp ficha');
+        }
 
         return {
           success: true, qualified: true, salesperson_name: salespersonName,

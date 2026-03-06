@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Eye, Bike, Settings2 } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, BarChart3, Car, CheckCircle, Clock, Wrench, DollarSign, Upload, Eye, Bike, Settings2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -32,6 +32,8 @@ import { vehicleStatusLabels, vehicleTypeLabels } from '@/types/inventory';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { mapVehicle, generateXML, getALMModelos, setModelos } from '@/lib/almExportUtils';
+import { toast } from 'sonner';
 
 type ViewMode = 'grid' | 'table' | 'dre';
 
@@ -53,6 +55,18 @@ export default function Inventory() {
 
   const isManager = role === 'gerente';
   const enabledPortalKeys = (portalSettings || []).filter(p => p.is_enabled).map(p => p.portal_key);
+  const [almModelosLoaded, setAlmModelosLoaded] = useState(false);
+
+  useEffect(() => {
+    getALMModelos().then(m => { setModelos(m); setAlmModelosLoaded(true); });
+  }, []);
+
+  const handleExportXML = (allStatuses: boolean) => {
+    if (!vehicles?.length) { toast.error('Nenhum veículo para exportar'); return; }
+    const mapped = vehicles.map(v => mapVehicle(v));
+    generateXML(mapped, true, allStatuses);
+    toast.success(`XML exportado com ${allStatuses ? 'todos os veículos' : 'veículos disponíveis'}`);
+  };
 
   const filteredVehicles = vehicles?.filter((vehicle) => {
     const matchesSearch =
@@ -162,6 +176,31 @@ export default function Inventory() {
                     <span className="w-5 h-5 rounded bg-[#1a1a2e] flex items-center justify-center text-[10px] font-bold text-white">NP</span>
                     Napista
                   </span>
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="lg" className="border-primary/50">
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar XML
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Exportar veículos (ALM)</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={false}
+                  onCheckedChange={() => handleExportXML(false)}
+                >
+                  Apenas Disponíveis
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={false}
+                  onCheckedChange={() => handleExportXML(true)}
+                >
+                  Todos os Veículos
                 </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>

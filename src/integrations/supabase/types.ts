@@ -3093,6 +3093,24 @@ export type Database = {
         }
         Relationships: []
       }
+      phone_locks: {
+        Row: {
+          expires_at: string
+          locked_at: string
+          phone: string
+        }
+        Insert: {
+          expires_at?: string
+          locked_at?: string
+          phone: string
+        }
+        Update: {
+          expires_at?: string
+          locked_at?: string
+          phone?: string
+        }
+        Relationships: []
+      }
       portal_settings: {
         Row: {
           id: string
@@ -4772,6 +4790,10 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_phone_lock: {
+        Args: { p_lock_duration_seconds?: number; p_phone: string }
+        Returns: boolean
+      }
       create_notification: {
         Args: {
           p_link?: string
@@ -4827,6 +4849,7 @@ export type Database = {
         Returns: string
       }
       move_stale_negotiations_to_follow_up: { Args: never; Returns: undefined }
+      release_phone_lock: { Args: { p_phone: string }; Returns: undefined }
       reset_daily_lead_counts: { Args: never; Returns: undefined }
       search_similar_conversations: {
         Args: {

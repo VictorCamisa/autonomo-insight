@@ -888,10 +888,10 @@ async function executeToolCall(
           link: '/crm',
         });
 
-        // ===== SEND FICHA VIA WHATSAPP TO SALESPERSON =====
+        // ===== SEND FICHA COMPLETA VIA WHATSAPP TO SALESPERSON =====
         if (salesperson?.phone) {
           try {
-            // Find connected WhatsApp instance (shared/default first)
+            // Find connected WhatsApp instance
             const { data: wpInstances } = await supabase
               .from('whatsapp_instances')
               .select('id, instance_name, api_url, api_key')
@@ -902,31 +902,143 @@ async function executeToolCall(
 
             const wpInstance = wpInstances?.[0];
             if (wpInstance) {
-              // Build ficha message
+              // 1. Get conversation history for AI summary
+              let conversationSummary = '';
+              let messageCount = 0;
+              let firstMsgTime = '';
+              try {
+                const { data: convForSummary } = await supabase
+                  .from('ai_agent_conversations')
+                  .select('id, created_at')
+                  .eq('lead_id', lead.id)
+                  .eq('status', 'active')
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .single();
+
+                if (convForSummary) {
+                  firstMsgTime = convForSummary.created_at;
+                  const { data: histMsgs } = await supabase
+                    .from('ai_agent_messages')
+                    .select('role, content')
+                    .eq('conversation_id', convForSummary.id)
+                    .order('created_at', { ascending: true });
+
+                  if (histMsgs && histMsgs.length > 0) {
+                    messageCount = histMsgs.filter((m: any) => m.role === 'user').length;
+                    
+                    // Use AI to generate strategic summary
+                    const summaryPrompt = `Analise esta conversa entre um vendedor de carros e um cliente. Gere um resumo ESTRATEGICO para o vendedor que vai assumir a negociacao. Inclua:
+1. RESUMO (2-3 frases do que aconteceu na conversa)
+2. PERFIL DO CLIENTE (o que sabemos sobre ele - urgencia, perfil financeiro, experiencia com carros)
+3. DICAS DE ABORDAGEM (como o vendedor deve abordar esse cliente baseado na conversa)
+
+Seja direto e pratico. Maximo 400 caracteres no total. Sem markdown, sem asteriscos, sem formatacao especial.
+
+Conversa:
+${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.content}`).join('\n')}`;
+
+                    const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                      method: "POST",
+                      headers: {
+                        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        model: 'google/gemini-2.5-flash',
+                        messages: [{ role: 'user', content: summaryPrompt }],
+                        temperature: 0.3,
+                        max_tokens: 300,
+                      }),
+                    });
+
+                    if (summaryResponse.ok) {
+                      const summaryData = await summaryResponse.json();
+                      conversationSummary = summaryData.choices?.[0]?.message?.content || '';
+                    }
+                  }
+                }
+              } catch (summaryErr) {
+                console.error('[ai-agent-chat] Error generating summary:', summaryErr);
+              }
+
+              // 2. Find similar vehicles in stock
+              let similarVehicles = '';
+              try {
+                const searchTerms = (args.vehicle_interest || '').split(/\s+/).filter((w: string) => w.length >= 3);
+                if (searchTerms.length > 0) {
+                  const orClauses = searchTerms.flatMap((w: string) => [`model.ilike.%${w}%`, `brand.ilike.%${w}%`]);
+                  const { data: similar } = await supabase
+                    .from('vehicles')
+                    .select('brand, model, year_model, sale_price, color')
+                    .eq('status', 'disponivel')
+                    .or(orClauses.join(','))
+                    .limit(4);
+
+                  if (similar && similar.length > 0) {
+                    similarVehicles = similar.map((v: any) =>
+                      `  - ${v.brand} ${v.model} ${v.year_model} ${v.color || ''} - R$ ${v.sale_price?.toLocaleString('pt-BR') || 'Consulte'}`
+                    ).join('\n');
+                  }
+                }
+              } catch (stockErr) {
+                console.error('[ai-agent-chat] Error fetching similar:', stockErr);
+              }
+
+              // 3. Calculate conversation duration
+              let duration = '';
+              if (firstMsgTime) {
+                const mins = Math.round((Date.now() - new Date(firstMsgTime).getTime()) / 60000);
+                if (mins < 60) duration = `${mins} min`;
+                else duration = `${Math.floor(mins / 60)}h ${mins % 60}min`;
+              }
+
+              // 4. Build the FICHA message
               const fichaLines: string[] = [
-                `*NOVO LEAD QUALIFICADO*`,
+                `━━━━━━━━━━━━━━━━━━━━━`,
+                `*LEAD QUALIFICADO PELA IA*`,
+                `━━━━━━━━━━━━━━━━━━━━━`,
                 ``,
                 `*Cliente:* ${lead.name || 'Nao informado'}`,
-                `*Telefone:* ${lead.phone}`,
+                `*WhatsApp:* wa.me/${lead.phone.replace(/\D/g, '')}`,
+                `*Origem:* Instagram`,
+                ``,
+                `━━ *INTERESSE* ━━`,
                 `*Veiculo:* ${args.vehicle_interest}`,
                 `*Pagamento:* ${args.payment_method}`,
               ];
+
               if (args.has_trade_in) {
-                fichaLines.push(`*Troca:* ${args.trade_in_details || 'Sim, nao especificou detalhes'}`);
+                fichaLines.push(`*Troca:* ${args.trade_in_details || 'Sim (sem detalhes)'}`);
+              } else {
+                fichaLines.push(`*Troca:* Nao`);
               }
+
               if (args.budget_range) {
                 fichaLines.push(`*Orcamento:* ${args.budget_range}`);
               }
-              if (args.notes) {
-                fichaLines.push(`*Obs:* ${args.notes}`);
+
+              if (conversationSummary) {
+                fichaLines.push(``);
+                fichaLines.push(`━━ *INSIGHTS DA IA* ━━`);
+                fichaLines.push(conversationSummary);
               }
+
+              if (similarVehicles) {
+                fichaLines.push(``);
+                fichaLines.push(`━━ *ESTOQUE SIMILAR* ━━`);
+                fichaLines.push(similarVehicles);
+              }
+
               fichaLines.push(``);
-              fichaLines.push(`*Link direto:* https://wa.me/${lead.phone.replace(/\D/g, '')}`);
+              fichaLines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+              if (duration) fichaLines.push(`Tempo de atendimento IA: ${duration} | ${messageCount} msgs do cliente`);
+              fichaLines.push(`Toque no link pra iniciar o atendimento`);
 
               const fichaText = fichaLines.join('\n');
               const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
 
-              console.log('[ai-agent-chat] Sending ficha to salesperson:', salespersonName, salesperson.phone);
+              console.log('[ai-agent-chat] Sending enhanced ficha to salesperson:', salespersonName);
 
               await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
                 method: 'POST',

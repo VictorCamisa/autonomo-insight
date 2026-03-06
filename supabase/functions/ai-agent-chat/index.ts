@@ -727,15 +727,62 @@ async function executeToolCall(
 
     case 'send_vehicle_photos':
     case 'send_vehicle_photo': {
-      const { data: vehicle } = await supabase
-        .from('vehicles')
-        .select('id, brand, model, version, year_model, sale_price, images')
-        .eq('id', args.vehicle_id)
-        .single();
+      // Try by ID first
+      let vehicle: any = null;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      if (args.vehicle_id && uuidRegex.test(args.vehicle_id)) {
+        const { data } = await supabase
+          .from('vehicles')
+          .select('id, brand, model, version, year_model, sale_price, images')
+          .eq('id', args.vehicle_id)
+          .single();
+        vehicle = data;
+      }
 
-      if (!vehicle) return { success: false, error: 'Veiculo nao encontrado' };
+      // FALLBACK: AI often hallucinates UUIDs. Search by caption/model instead.
+      if (!vehicle) {
+        console.log('[send_vehicle_photos] Vehicle ID not found, trying fallback search by caption:', args.caption);
+        const searchTerm = args.caption || args.vehicle_id || '';
+        // Extract meaningful words (brand/model) from caption
+        const words = searchTerm.split(/[\s,]+/).filter((w: string) => w.length >= 3);
+        
+        if (words.length > 0) {
+          // Try each word as brand or model
+          const orClauses = words.flatMap((w: string) => [`model.ilike.%${w}%`, `brand.ilike.%${w}%`]);
+          const { data: fallbackVehicles } = await supabase
+            .from('vehicles')
+            .select('id, brand, model, version, year_model, sale_price, images')
+            .eq('status', 'disponivel')
+            .or(orClauses.join(','))
+            .limit(1);
+          
+          if (fallbackVehicles && fallbackVehicles.length > 0) {
+            vehicle = fallbackVehicles[0];
+            console.log('[send_vehicle_photos] Fallback found:', vehicle.brand, vehicle.model, vehicle.id);
+          }
+        }
+      }
 
-      const photoUrls: string[] = vehicle.images?.filter((img: string) => img) || [];
+      if (!vehicle) return { success: false, error: 'Veiculo nao encontrado. Use o ID retornado por search_vehicles.' };
+
+      // Try vehicle_images table first, then legacy images array
+      let photoUrls: string[] = [];
+      
+      const { data: categorizedPhotos } = await supabase
+        .from('vehicle_images')
+        .select('image_url')
+        .eq('vehicle_id', vehicle.id)
+        .order('created_at', { ascending: true });
+      
+      if (categorizedPhotos && categorizedPhotos.length > 0) {
+        photoUrls = categorizedPhotos.map((p: any) => p.image_url).filter(Boolean);
+      }
+      
+      // Fallback to legacy images array
+      if (photoUrls.length === 0) {
+        photoUrls = vehicle.images?.filter((img: string) => img) || [];
+      }
 
       if (photoUrls.length === 0) {
         return { success: false, error: 'Este veiculo nao tem fotos disponiveis no momento.' };
@@ -764,7 +811,7 @@ async function executeToolCall(
         has_more: hasMore,
         next_start_index: hasMore ? startIndex + 4 : null,
         message: `${photoBatch.length} foto(s) enviada(s).${hasMore ? ` Ainda tem mais ${photoUrls.length - startIndex - 4} foto(s).` : ' Essas sao todas as fotos.'}`,
-        vehicle_id: args.vehicle_id,
+        vehicle_id: vehicle.id,
       };
     }
 

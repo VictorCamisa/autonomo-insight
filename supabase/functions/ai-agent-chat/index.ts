@@ -530,16 +530,13 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
     // =============================================
     responseMessage = enforceResponseLimits(responseMessage, 600, 3);
 
-    // Save assistant response (non-blocking)
-    const vehicleIdsUsed = toolCallsLog
-      .filter(n => ['send_vehicle_photos', 'get_vehicle_details'].includes(n));
-    
-    supabase.from('ai_agent_messages').insert({
-      agent_id,
-      conversation_id: sessionKey,
+    // Save assistant response (BLOCKING)
+    const { error: assistantMsgError } = await supabase.from('ai_agent_messages').insert({
+      conversation_id: conversationId,
       role: 'assistant',
       content: responseMessage,
-    }).then(({ error }: any) => { if (error) console.error('Error saving assistant msg:', error); });
+    });
+    if (assistantMsgError) console.error('Error saving assistant msg:', assistantMsgError);
 
     // Deduplicate photos
     const seenUrls = new Set<string>();

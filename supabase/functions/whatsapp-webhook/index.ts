@@ -78,18 +78,27 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
   // =============================================
   // FIND WHATSAPP INSTANCE
   // =============================================
-  const { data: whatsappInstance } = await supabase
+  const { data: whatsappInstance, error: instanceError } = await supabase
     .from('whatsapp_instances')
-    .select('id, instance_name, instance_type')
+    .select('id, instance_name')
     .eq('instance_name', instanceName)
     .single();
 
-  if (!whatsappInstance) {
-    console.error('Instance not found:', instanceName);
+  if (instanceError || !whatsappInstance) {
+    console.error('Instance not found:', instanceName, instanceError?.message);
     return;
   }
 
-  const isAIInstance = whatsappInstance.instance_type === 'ai';
+  // Check if this instance has an AI agent linked to it
+  const { data: linkedAgent } = await supabase
+    .from('ai_agents')
+    .select('id, whatsapp_auto_reply')
+    .eq('whatsapp_instance_id', whatsappInstance.id)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle();
+
+  const isAIInstance = !!(linkedAgent && linkedAgent.whatsapp_auto_reply);
 
   // =============================================
   // MESSAGE DEDUPLICATION

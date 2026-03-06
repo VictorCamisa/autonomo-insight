@@ -1,438 +1,532 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function generateVoiceAudio(text: string, voiceId: string): Promise<string | null> {
-  const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
-  
-  if (!ELEVENLABS_API_KEY) {
-    console.log('[ai-agent-chat] ELEVENLABS_API_KEY not configured, skipping voice generation');
-    return null;
-  }
-
-  try {
-    console.log('[ai-agent-chat] Generating voice audio with voice:', voiceId);
-    
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
+// =============================================
+// TOOL DEFINITIONS (OpenAI format for Lovable AI Gateway)
+// =============================================
+const toolDefinitions = [
+  {
+    type: "function",
+    function: {
+      name: "search_vehicles",
+      description: "Busca veiculos disponiveis no estoque da loja. Use SEMPRE que o cliente perguntar sobre qualquer tipo de carro, marca, modelo, preco ou estoque. Para categorias como SUV, sedan, etc, use o campo 'keyword'. Se o cliente perguntar algo generico como 'o que voces tem?', use sem filtros.",
+      parameters: {
+        type: "object",
+        properties: {
+          brand: { type: "string", description: "Marca do veiculo (ex: Honda, Toyota, Volkswagen, Hyundai)" },
+          model: { type: "string", description: "Modelo do veiculo (ex: Civic, Corolla, HB20, Compass)" },
+          keyword: { type: "string", description: "Palavra-chave para busca ampla em modelo, versao e notas. Use para categorias como SUV, sedan, hatch, picape, etc." },
+          min_price: { type: "number", description: "Preco minimo" },
+          max_price: { type: "number", description: "Preco maximo" },
+          max_km: { type: "number", description: "Quilometragem maxima" },
+          year_min: { type: "number", description: "Ano minimo" },
+          color: { type: "string", description: "Cor do veiculo" },
         },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.3,
-            use_speaker_boost: true,
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_vehicle_details",
+      description: "Obtem detalhes completos de um veiculo especifico. Busca por ID ou modelo/marca.",
+      parameters: {
+        type: "object",
+        properties: {
+          vehicle_id: { type: "string", description: "ID UUID do veiculo" },
+          model: { type: "string", description: "Nome do modelo do veiculo" },
+          brand: { type: "string", description: "Marca do veiculo" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_vehicle_photos",
+      description: "Envia de 3 a 4 fotos de um veiculo para o cliente via WhatsApp. Use SOMENTE quando o cliente PEDIR EXPLICITAMENTE fotos. NAO envie fotos automaticamente. Quando o cliente pedir MAIS fotos, use start_index para continuar de onde parou.",
+      parameters: {
+        type: "object",
+        properties: {
+          vehicle_id: { type: "string", description: "ID do veiculo para enviar as fotos." },
+          caption: { type: "string", description: "Legenda curta das fotos" },
+          start_index: { type: "number", description: "Indice inicial das fotos (0 = primeira leva, 4 = segunda leva). Use 0 na primeira vez." },
+        },
+        required: ["vehicle_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "submit_qualification",
+      description: "Envia a ficha de qualificacao do lead. Use quando conseguir captar veiculo de interesse, forma de pagamento e se tem troca. CHAME APENAS UMA VEZ por conversa.",
+      parameters: {
+        type: "object",
+        properties: {
+          vehicle_interest: { type: "string", description: "Veiculo(s) de interesse do cliente" },
+          has_trade_in: { type: "boolean", description: "Se o cliente tem veiculo para troca" },
+          trade_in_details: { type: "string", description: "Detalhes do veiculo de troca" },
+          payment_method: { type: "string", description: "Forma de pagamento preferida" },
+          budget_range: { type: "string", description: "Faixa de orcamento do cliente" },
+          notes: { type: "string", description: "Observacoes adicionais" },
+        },
+        required: ["vehicle_interest", "payment_method"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "mark_lead_lost",
+      description: "Marca o lead como PERDIDO quando o cliente deixa claro que nao quer comprar. Use quando o cliente disser 'nao quero', 'desisto', 'ja comprei', 'sem interesse', etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          loss_reason: {
+            type: "string",
+            enum: ["sem_entrada", "sem_credito", "curioso", "caro", "comprou_outro", "desistiu", "sem_contato", "outros"],
+            description: "Motivo da perda",
           },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[ai-agent-chat] ElevenLabs API error:', response.status, errorText);
-      return null;
-    }
-
-    const audioBuffer = await response.arrayBuffer();
-    const base64Audio = base64Encode(audioBuffer);
-    
-    console.log('[ai-agent-chat] Voice audio generated successfully');
-    return base64Audio;
-  } catch (error) {
-    console.error('[ai-agent-chat] Error generating voice audio:', error);
-    return null;
-  }
-}
+          loss_notes: { type: "string", description: "Detalhes adicionais sobre o motivo" },
+        },
+        required: ["loss_reason"],
+      },
+    },
+  },
+];
 
 serve(async (req) => {
   console.log('[ai-agent-chat] Request received');
-  
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const body = await req.json();
-    const { message, agent_id, conversation_history = [], data_sources = [], is_audio_message = false } = body;
-    
-    console.log('[ai-agent-chat] Processing message for agent:', agent_id, 'is_audio:', is_audio_message);
+    const { message, agent_id, phone, lead_id, channel = 'api', customer_name, is_audio_input } = body;
+
+    console.log('[ai-agent-chat] Processing:', { agent_id, message: message?.substring(0, 80), channel, phone });
 
     if (!message) {
-      return new Response(
-        JSON.stringify({ error: 'Message is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: 'Message is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get agent config
-    let agentConfig = null;
-    if (agent_id) {
-      const { data: agent } = await supabase
-        .from('ai_agents')
-        .select('*')
-        .eq('id', agent_id)
-        .single();
-      agentConfig = agent;
+    // Fetch agent config
+    const { data: agent } = await supabase.from('ai_agents').select('*').eq('id', agent_id).single();
+    if (!agent) {
+      return new Response(JSON.stringify({ error: 'Agente nao encontrado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Get active data sources from agent config (stored in vector_db_config)
-    let activeDataSources: string[] = data_sources;
-    if (agentConfig && activeDataSources.length === 0) {
-      const vectorConfig = agentConfig.vector_db_config as Record<string, unknown> || {};
-      const configSources = (vectorConfig.enabled_data_sources as string[]) || [];
-      activeDataSources = configSources;
+    // =============================================
+    // SESSION & CONTEXT
+    // =============================================
+    const sessionKey = lead_id || phone || crypto.randomUUID();
+    const SESSION_GAP_HOURS = 4;
+    const sessionCutoff = new Date(Date.now() - SESSION_GAP_HOURS * 60 * 60 * 1000).toISOString();
+
+    // Check for session gap
+    const { data: lastMsgCheck } = await supabase
+      .from('ai_agent_messages')
+      .select('created_at')
+      .eq('agent_id', agent_id)
+      .eq('conversation_id', sessionKey)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const isNewSession = !lastMsgCheck || lastMsgCheck.length === 0 ||
+      new Date(lastMsgCheck[0].created_at).getTime() < new Date(sessionCutoff).getTime();
+
+    if (isNewSession) console.log('[ai-agent-chat] NEW SESSION detected (gap > 4h or first contact)');
+
+    // Extract last vehicle_id discussed
+    let lastVehicleContext = '';
+    if (!isNewSession) {
+      const { data: recentMessages } = await supabase
+        .from('ai_agent_messages')
+        .select('content')
+        .eq('agent_id', agent_id)
+        .eq('conversation_id', sessionKey)
+        .eq('role', 'assistant')
+        .gte('created_at', sessionCutoff)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (recentMessages) {
+        for (const msg of recentMessages) {
+          const idMatch = msg.content?.match(/vehicle_id[=:]?\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+          if (idMatch) {
+            lastVehicleContext = `\nULTIMO VEICULO DISCUTIDO (vehicle_id): ${idMatch[1]}. Se o cliente pedir "mais fotos", use ESTE vehicle_id.`;
+            break;
+          }
+        }
+      }
     }
 
-    // Default to all sources if none specified
-    if (activeDataSources.length === 0) {
-      activeDataSources = ['inventory', 'faq'];
-    }
-
-    console.log('[ai-agent-chat] Active data sources:', activeDataSources);
-
-    // Fetch data based on active sources
-    const contextData: Record<string, unknown> = {};
-
-    // INVENTORY - Estoque de veículos com fotos
-    if (activeDataSources.includes('inventory')) {
-      console.log('[ai-agent-chat] Fetching vehicles from inventory...');
-      const { data: vehicles, error: vehiclesError } = await supabase
+    // Fetch conversation history and inventory IN PARALLEL
+    const contextWindowSize = agent.context_window_size || 20;
+    const [historyResult, inventoryResult, leadResult] = await Promise.all([
+      supabase
+        .from('ai_agent_messages')
+        .select('role, content')
+        .eq('agent_id', agent_id)
+        .eq('conversation_id', sessionKey)
+        .gte('created_at', isNewSession ? new Date().toISOString() : sessionCutoff)
+        .order('created_at', { ascending: true })
+        .limit(contextWindowSize),
+      supabase
         .from('vehicles')
-        .select('id, brand, model, version, year_fabrication, year_model, sale_price, purchase_price, color, fuel_type, transmission, km, status, notes, images')
+        .select('brand, model, year_model, sale_price')
         .eq('status', 'disponivel')
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('brand', { ascending: true }),
+      lead_id
+        ? supabase.from('leads').select('id, name, phone, status, vehicle_interest').eq('id', lead_id).single()
+        : Promise.resolve({ data: null }),
+    ]);
 
-      if (vehiclesError) {
-        console.error('[ai-agent-chat] Error fetching vehicles:', vehiclesError);
-      } else {
-        console.log('[ai-agent-chat] Found', vehicles?.length || 0, 'vehicles');
+    const conversationHistory = (historyResult.data || []).map((msg: any) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
+    // Build COMPACT inventory context
+    const brandMap: Record<string, { count: number; minPrice: number; maxPrice: number; models: Set<string> }> = {};
+    for (const v of (inventoryResult.data || [])) {
+      const key = v.brand || 'Outros';
+      if (!brandMap[key]) brandMap[key] = { count: 0, minPrice: Infinity, maxPrice: 0, models: new Set() };
+      brandMap[key].count++;
+      brandMap[key].models.add(v.model);
+      if (v.sale_price) {
+        brandMap[key].minPrice = Math.min(brandMap[key].minPrice, v.sale_price);
+        brandMap[key].maxPrice = Math.max(brandMap[key].maxPrice, v.sale_price);
       }
-
-      contextData.estoque = {
-        total_disponiveis: vehicles?.length || 0,
-        veiculos: vehicles?.map(v => ({
-          id: v.id,
-          veiculo: `${v.brand} ${v.model} ${v.version || ''} ${v.year_model || v.year_fabrication}`.trim(),
-          preco: v.sale_price ? `R$ ${Number(v.sale_price).toLocaleString('pt-BR')}` : 'Consultar',
-          preco_numerico: v.sale_price ? Number(v.sale_price) : null,
-          cor: v.color,
-          combustivel: v.fuel_type,
-          cambio: v.transmission,
-          km: v.km ? `${Number(v.km).toLocaleString('pt-BR')} km` : 'N/A',
-          ano: v.year_model || v.year_fabrication,
-          observacoes: v.notes,
-          foto_principal: v.images && v.images.length > 0 ? v.images[0] : null,
-          todas_fotos: v.images || [],
-        })) || [],
-      };
     }
+    const inventoryContext = Object.entries(brandMap).map(([brand, info]) => {
+      const priceRange = info.minPrice < Infinity ? `R$${(info.minPrice / 1000).toFixed(0)}k-${(info.maxPrice / 1000).toFixed(0)}k` : 'Consulte';
+      return `- ${brand}: ${info.count}x (${[...info.models].slice(0, 4).join(', ')}) ${priceRange}`;
+    }).join('\n');
 
-    // CRM - Leads
-    if (activeDataSources.includes('crm')) {
-      console.log('[ai-agent-chat] Fetching leads from CRM...');
-      const { data: leads, error: leadsError } = await supabase
-        .from('leads')
-        .select('id, name, phone, email, source, qualification_status, vehicle_interest, notes, created_at')
-        .order('created_at', { ascending: false })
-        .limit(20);
+    // Lead context
+    const leadData = leadResult.data;
+    const leadInfo = leadData?.name && !leadData.name.includes('Lead WhatsApp') && !leadData.name.includes('Lead ')
+      ? `O cliente se chama ${leadData.name}. Mas CONFIRME o nome, pode estar errado.`
+      : 'Voce ainda nao sabe o nome do cliente. Descubra naturalmente.';
+    const vehicleInfo = (!isNewSession && leadData?.vehicle_interest) ? `O cliente demonstrou interesse em: ${leadData.vehicle_interest}` : '';
 
-      if (leadsError) {
-        console.error('[ai-agent-chat] Error fetching leads:', leadsError);
-      }
-
-      const { data: leadStats } = await supabase
-        .from('leads')
-        .select('qualification_status');
-
-      contextData.crm = {
-        total_leads: leads?.length || 0,
-        leads_qualificados: leadStats?.filter(l => l.qualification_status === 'qualificado').length || 0,
-        leads_recentes: leads?.slice(0, 10).map(l => ({
-          nome: l.name,
-          telefone: l.phone,
-          email: l.email,
-          origem: l.source,
-          status: l.qualification_status,
-          interesse: l.vehicle_interest,
-          notas: l.notes,
-        })) || [],
-      };
-    }
-
-    // NEGOTIATIONS - Negociações (using new status system)
-    if (activeDataSources.includes('negotiations')) {
-      const { data: negotiations } = await supabase
-        .from('negotiations')
-        .select(`
-          id, status, proposed_value, appointment_date, showed_up, notes, last_message_at,
-          leads:lead_id (name, phone),
-          vehicles:vehicle_id (brand, model, year)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      // Map new status names for display
-      const statusLabels: Record<string, string> = {
-        'atendimento_ia': 'Em Atendimento IA',
-        'negociando': 'Negociando',
-        'follow_up': 'Follow-up',
-        'ganho': 'Ganho',
-        'perdido': 'Perdido',
-      };
-
-      contextData.negociacoes = {
-        total: negotiations?.length || 0,
-        em_atendimento_ia: negotiations?.filter(n => n.status === 'atendimento_ia').length || 0,
-        em_negociacao: negotiations?.filter(n => n.status === 'negociando').length || 0,
-        em_follow_up: negotiations?.filter(n => n.status === 'follow_up').length || 0,
-        lista: negotiations?.slice(0, 10).map(n => ({
-          cliente: (n.leads as any)?.name || 'N/A',
-          veiculo: n.vehicles ? `${(n.vehicles as any).brand} ${(n.vehicles as any).model} ${(n.vehicles as any).year}` : 'N/A',
-          status: statusLabels[n.status] || n.status,
-          valor_proposto: n.proposed_value ? `R$ ${n.proposed_value.toLocaleString('pt-BR')}` : 'N/A',
-          agendamento: n.appointment_date,
-          compareceu: n.showed_up,
-        })) || [],
-      };
-    }
-
-    // SALES - Vendas
-    if (activeDataSources.includes('sales')) {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const { data: sales } = await supabase
-        .from('sales')
-        .select(`
-          id, sale_price, sale_date, status,
-          vehicles:vehicle_id (brand, model, year)
-        `)
-        .gte('sale_date', thirtyDaysAgo.toISOString().split('T')[0])
-        .order('sale_date', { ascending: false });
-
-      const totalReceita = sales?.reduce((sum, s) => sum + (s.sale_price || 0), 0) || 0;
-
-      contextData.vendas = {
-        ultimos_30_dias: {
-          total_vendas: sales?.length || 0,
-          receita_total: `R$ ${totalReceita.toLocaleString('pt-BR')}`,
-          ticket_medio: sales && sales.length > 0 ? `R$ ${(totalReceita / sales.length).toLocaleString('pt-BR')}` : 'N/A',
-        },
-        vendas_recentes: sales?.slice(0, 10).map(s => ({
-          veiculo: s.vehicles ? `${(s.vehicles as any).brand} ${(s.vehicles as any).model} ${(s.vehicles as any).year}` : 'N/A',
-          valor: `R$ ${(s.sale_price || 0).toLocaleString('pt-BR')}`,
-          data: s.sale_date,
-          status: s.status,
-        })) || [],
-      };
-    }
-
-    // FAQ / Knowledge Base
-    if (activeDataSources.includes('faq')) {
-      contextData.faq = {
-        horario_funcionamento: 'Segunda a Sexta: 8h às 18h, Sábado: 8h às 14h',
-        endereco: 'Rua Principal, 123 - Centro',
-        formas_pagamento: ['À vista', 'Financiamento', 'Consórcio', 'Troca'],
-        garantia: 'Todos os veículos possuem garantia de motor e câmbio',
-        test_drive: 'Disponível mediante agendamento',
-        documentacao: 'Toda documentação verificada e regularizada',
-      };
-    }
-
-    // Build system prompt with context
-    let rawSystemPrompt = agentConfig?.system_prompt || `Você é um assistente virtual especializado em vendas de veículos da loja Matheus Veículos.
-
-Seu objetivo é:
-1. Receber o cliente de forma cordial e profissional
-2. Identificar o interesse do cliente (qual veículo, orçamento, forma de pagamento)
-3. Apresentar opções do estoque que correspondam ao interesse
-4. Qualificar o lead coletando nome, telefone e e-mail
-5. Agendar visita ou test-drive quando houver interesse
-
-Regras importantes:
-- Sempre seja educado e prestativo
-- Use APENAS os dados fornecidos no contexto - nunca invente informações
-- Se não souber algo, ofereça transferir para um vendedor humano
-- Colete dados de contato de forma natural na conversa`;
-
-    // ===== ANTI-HALLUCINATION GUARDRAILS =====
-    const antiHallucinationRules = `
-
-===== ⚠️ REGRAS CRÍTICAS ANTI-ALUCINAÇÃO =====
-🚫 PROIBIDO: NUNCA invente informações sobre veículos!
-- NUNCA diga que um carro está disponível se ele NÃO está na lista
-- NUNCA invente cores, anos, versões ou preços
-- NUNCA afirme algo que não está explícito nos dados
-
-✅ SE NÃO SOUBER, DIGA: "Não tenho essa informação no momento. Deixa eu verificar com a equipe e te retorno!"
-✅ SE O CARRO NÃO EXISTIR NO ESTOQUE: "Esse modelo específico não está disponível agora, mas temos [sugerir alternativas DA LISTA]"
-✅ ANTES DE CONFIRMAR DISPONIBILIDADE: Verifique se o veículo está LITERALMENTE na lista acima
-
-Exemplo ERRADO (alucinação):
-Cliente: "Vocês têm Civic 2007?"
-IA: "Sim, temos o Civic 2007 prata!" ← ERRADO se não está na lista!
-
-Exemplo CORRETO:
-Cliente: "Vocês têm Civic 2007?"
-IA: "O Civic 2007 não está no nosso estoque atual. Mas temos o [citar veículos similares da lista]. Quer saber mais?"
-
-===== FIM DAS REGRAS =====
-`;
-
-    // Ajuste automático: trocar Léo por Gabi e ajustar tom feminino
-    let adjustedPrompt = rawSystemPrompt
-      .replace(/\bLéo\b/gi, 'Gabi')
-      .replace(/\bLeo\b/gi, 'Gabi')
-      .replace(/Você é o Gabi/gi, 'Você é a Gabi')
-      .replace(/o primeiro contato/gi, 'a primeira contato')
-      .replace(/um especialista de produto/gi, 'uma especialista de produto')
-      .replace(/gente boa, amigável/gi, 'gente boa, simpática')
-      .replace(/um amigo que entende/gi, 'uma amiga que entende')
-      .replace(/Sou um assistente/gi, 'Sou uma assistente')
-      .replace(/Meu nome é Léo/gi, 'Meu nome é Gabi')
-      .replace(/Meu nome é Leo/gi, 'Meu nome é Gabi');
-
-    // Adiciona instrução explícita de identidade feminina no início
-    const femaleIdentityInstruction = `
-=== IDENTIDADE OBRIGATÓRIA ===
-Você é a GABI (mulher). NUNCA se apresente como Léo ou qualquer outro nome masculino.
-Sempre use linguagem FEMININA: "obrigada", "animada", "feliz", "empolgada".
-Quando se apresentar, diga: "Meu nome é Gabi" ou "Sou a Gabi".
-
-`;
-    const defaultSystemPrompt = femaleIdentityInstruction + adjustedPrompt;
-
-    // Instruções especiais para fotos
-    const photoInstructions = `
-
-=== INSTRUÇÃO ESPECIAL: ENVIO DE FOTOS ===
-Quando o cliente pedir para ver fotos de um veículo específico, você DEVE:
-1. Identificar o veículo no estoque
-2. Se houver fotos disponíveis (campo "foto_principal" ou "todas_fotos"), responda com:
-   [ENVIAR_FOTO: URL_DA_FOTO]
-   
-Exemplo: Se o cliente pedir "me manda foto do Civic", responda:
-"Claro! Aqui está a foto do Civic:
-
-[ENVIAR_FOTO: https://exemplo.com/foto-civic.jpg]
-
-Gostou? Quer ver de outro ângulo?"
-
-IMPORTANTE: Use APENAS URLs de fotos que existem no campo "todas_fotos" do veículo. Nunca invente URLs.`;
-
-    const contextString = Object.keys(contextData).length > 0 
-      ? `\n\n=== DADOS ATUALIZADOS DO SISTEMA ===\n${JSON.stringify(contextData, null, 2)}\n=== FIM DOS DADOS ===\n\nUse estes dados para responder perguntas sobre estoque, preços, vendas, etc. Seja preciso e use os valores reais.`
+    const sessionNote = isNewSession
+      ? '\nEsta e uma NOVA CONVERSA. Trate como primeiro contato. NAO assuma nenhum veiculo ou pagamento de conversas anteriores. Comece do zero.'
       : '';
 
-    // Inject anti-hallucination rules before all other content
-    const fullSystemPrompt = antiHallucinationRules + defaultSystemPrompt + photoInstructions + contextString;
+    console.log('[ai-agent-chat] Session:', sessionKey, 'history:', conversationHistory.length);
 
-    // Build messages array
-    const messages = [
-      { role: 'system', content: fullSystemPrompt },
-      ...conversation_history.map((m: { role: string; content: string }) => ({
-        role: m.role,
-        content: m.content,
-      })),
+    // Save user message (non-blocking)
+    supabase.from('ai_agent_messages').insert({
+      agent_id,
+      conversation_id: sessionKey,
+      role: 'user',
+      content: message,
+    }).then(({ error }: any) => { if (error) console.error('Error saving user msg:', error); });
+
+    // =============================================
+    // BUILD SYSTEM PROMPT (adapted from Roma)
+    // =============================================
+    const systemPrompt = `Voce e a Gabi, vendedora da Matheus Veiculos. Voce conversa com clientes pelo WhatsApp como uma pessoa real. Ninguem pode desconfiar que voce e uma IA. Voce e simpatica, leve, descontraida, mas profissional. Voce gosta de carros e entende do assunto.
+
+===== SOBRE A LOJA =====
+- Matheus Veiculos vende CARROS
+- Aceita veiculo na troca
+- Formas de pagamento: financiamento, a vista, consorcio
+- Horario: Seg a Sex 08h as 18h / Sabado 08h as 14h
+
+===== COMO VOCE FALA (PRIORIDADE MAXIMA) =====
+Voce fala como uma pessoa real no WhatsApp. Isso significa:
+- Mensagens CURTAS. Maximo 200 caracteres por balao.
+- SEMPRE divida sua resposta em 2 ou 3 baloes usando |||. Nunca mande 1 balao sozinho e nunca mande mais que 3.
+- Exemplo do ritmo certo:
+  "Oi Victor, tudo bem? Sou a Gabi da Matheus Veiculos! ||| Vi que voce curtiu o City, bonito demais ne? Ja conhecia ele?"
+- Outro exemplo:
+  "Achei aqui pra voce! Tem um City 2013 automatico, ta novinho ||| Quer que eu mande umas fotos pra voce dar uma olhada?"
+- Fale como se estivesse digitando rapido no celular
+- Use girias leves quando fizer sentido: show, massa, top, beleza, da hora
+- NUNCA use emoji em nenhuma circunstancia
+- NUNCA faca mais de 1 pergunta por mensagem. Escolha a mais importante.
+- Nao use linguagem formal. Nada de "prezado", "estimado", "seria possivel".
+- Nao use pontos de exclamacao demais. Maximo 1 por mensagem.
+
+===== PRIMEIRA MENSAGEM =====
+Quando um cliente falar com voce pela primeira vez:
+1. Cumprimente de forma natural e se apresente
+2. Pergunte o NOME do cliente (isso e obrigatorio, sempre pergunte o nome antes de qualquer coisa)
+3. Se o cliente ja mencionou um veiculo, pergunte o nome E ja demonstre que sabe qual carro ele viu
+Exemplo: "Oi, tudo bem? Sou a Gabi da Matheus Veiculos! Me fala seu nome? ||| Vi que voce curtiu o Civic, e lindo ne?"
+IMPORTANTE: Mesmo que o sistema ja tenha um nome cadastrado, SEMPRE pergunte o nome. O nome cadastrado pode estar errado.
+
+===== COMO VOCE VENDE (VENDA CONSULTIVA) =====
+Voce NAO e uma vendedora insistente. Voce e uma consultora que ajuda o cliente a encontrar o veiculo certo.
+
+O fluxo natural de uma conversa e:
+1. RAPPORT: Cumprimentar, pegar o nome, criar conexao
+2. DESCOBERTA: Entender o que o cliente busca
+3. APRESENTACAO: Mostrar opcoes reais do estoque
+4. APROFUNDAMENTO: Perguntar sobre forma de pagamento, se tem veiculo pra trocar
+5. QUALIFICACAO: Quando tiver veiculo + pagamento + troca, chamar submit_qualification
+6. HANDOFF: Avisar que um consultor vai continuar o atendimento
+
+REGRAS DO FLUXO:
+- NUNCA pule etapas. Nao pergunte sobre troca antes de apresentar o veiculo.
+- Cada mensagem do cliente e uma oportunidade de colher 1 informacao nova. Nao tente pegar tudo de uma vez.
+- Se o cliente der uma resposta curta (ta, ok, sim), avance naturalmente.
+
+===== USO DE TOOLS — ESTOQUE =====
+REGRA CRITICA: Se o cliente mencionar QUALQUER veiculo, voce DEVE chamar search_vehicles IMEDIATAMENTE.
+- NAO pergunte "qual modelo?" antes de buscar. Busque primeiro e mostre as opcoes.
+- Se o cliente diz "gostei do Honda" → busque todos os Honda
+- Se o cliente diz "quero um SUV" → busque SUVs
+- Se o cliente diz "to procurando algo ate 80 mil" → busque veiculos nessa faixa
+
+Quando apresentar resultados do estoque:
+- Use APENAS dados reais retornados pela tool
+- NUNCA invente preco, km, cor ou qualquer dado
+- Apresente 1 ou 2 opcoes por mensagem (nao jogue uma lista)
+- Se NAO retornar resultados, diga que no momento nao tem, sugira alternativas
+
+===== USO DE TOOLS — FOTOS =====
+- NAO envie fotos automaticamente. Envie APENAS quando o cliente pedir.
+- Quando o cliente pedir fotos, use send_vehicle_photos com o vehicle_id correto
+- Apos enviar fotos, SEMPRE faca uma pergunta para continuar a conversa
+- Se nao tiver fotos disponiveis, avise
+
+===== USO DE TOOLS — QUALIFICACAO =====
+- Colete naturalmente: veiculo de interesse, forma de pagamento, se tem troca
+- Quando tiver os 3 dados, chame submit_qualification UMA UNICA VEZ
+- Se submit_qualification ja foi chamado, NUNCA chame novamente
+- Apos qualificar, avise que um consultor vai entrar em contato
+
+===== LEAD PERDIDO =====
+- Se o cliente deixar CLARO que nao quer, chame mark_lead_lost IMEDIATAMENTE
+- Apos marcar como perdido, se despeca educadamente. Nao insista.
+
+===== SITUACOES ESPECIAIS =====
+CLIENTE PEDE DESCONTO:
+- Voce nao tem poder pra dar desconto. Faca uma brincadeira leve.
+- Diga que vai passar pro gerente avaliar.
+
+CLIENTE SUMIU E VOLTOU:
+- Faca uma brincadeira leve pra quebrar o gelo
+- Retome de onde parou
+
+CLIENTE PERGUNTA ALGO QUE VOCE NAO SABE:
+- NUNCA invente. Diga que vai confirmar com a equipe.
+- NUNCA revele que e uma IA
+
+===== REGRAS ABSOLUTAS (NUNCA VIOLAR) =====
+1. SEMPRE pergunte o nome do cliente na primeira interacao
+2. SEMPRE use search_vehicles antes de falar sobre qualquer veiculo
+3. NUNCA invente dados de veiculos
+4. NUNCA revele que e uma IA
+5. NUNCA use emoji
+6. NUNCA faca mais de 1 pergunta por mensagem
+7. SEMPRE divida a resposta em 2 ou 3 baloes com |||
+8. SEMPRE chame o cliente pelo nome depois de saber
+9. Idioma: PT-BR sempre
+10. Se submit_qualification ja foi chamado, NUNCA chame de novo
+
+===== ESTOQUE ATUAL =====
+${inventoryContext || 'Use a ferramenta search_vehicles para consultar o estoque atualizado.'}
+
+===== CONTEXTO DO LEAD =====
+${leadInfo}
+${vehicleInfo}${lastVehicleContext}${sessionNote}
+Interacoes nesta sessao: ${conversationHistory.length}`;
+
+    // =============================================
+    // AI API CALL WITH TOOL CALLING LOOP
+    // =============================================
+    const aiMessages: Array<{ role: string; content?: string; tool_calls?: any[]; tool_call_id?: string; name?: string }> = [
+      ...conversationHistory,
       { role: 'user', content: message },
     ];
 
-    console.log('[ai-agent-chat] Calling AI with context data:', Object.keys(contextData));
+    const temperature = Math.min(agent.temperature || 0.6, 0.7);
+    const maxTokens = agent.max_tokens || 512;
+    const MAX_ROUNDS = 3;
+    let round = 0;
+    let responseMessage = '';
+    let photosToSend: Array<{ url: string; caption: string }> = [];
+    let toolCallsLog: string[] = [];
 
-    // Use Lovable AI Gateway with Gemini Flash
-    const selectedModel = 'google/gemini-3-flash-preview';
+    try {
+      while (round < MAX_ROUNDS) {
+        round++;
+        console.log(`[ai-agent-chat] Round ${round}, messages: ${aiMessages.length}`);
 
-    console.log('[ai-agent-chat] Using Lovable AI model:', selectedModel);
+        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [{ role: 'system', content: systemPrompt }, ...aiMessages],
+            tools: toolDefinitions,
+            temperature,
+            max_tokens: maxTokens,
+          }),
+        });
 
-    // Call Lovable AI Gateway
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages,
-        // ANTI-HALLUCINATION: Temperature baixa (0.3-0.4) para respostas mais precisas e factuais
-        temperature: Math.min(agentConfig?.temperature || 0.35, 0.5),
-        max_tokens: agentConfig?.max_tokens || 2048,
-      }),
+        if (!aiResponse.ok) {
+          const errorText = await aiResponse.text();
+          console.error('[ai-agent-chat] AI error:', aiResponse.status, errorText);
+          if (aiResponse.status === 429) throw new Error("Rate limit exceeded");
+          if (aiResponse.status === 402) throw new Error("Credits exhausted");
+          throw new Error(`AI error: ${aiResponse.status}`);
+        }
+
+        const data = await aiResponse.json();
+        const choice = data.choices?.[0];
+        const assistantMsg = choice?.message;
+
+        if (!assistantMsg) break;
+
+        // Check if there are tool calls
+        if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
+          // Add assistant message with tool calls to history
+          aiMessages.push({
+            role: 'assistant',
+            content: assistantMsg.content || '',
+            tool_calls: assistantMsg.tool_calls,
+          });
+
+          // Execute each tool call
+          for (const toolCall of assistantMsg.tool_calls) {
+            const fnName = toolCall.function?.name;
+            let fnArgs: any = {};
+            try { fnArgs = JSON.parse(toolCall.function?.arguments || '{}'); } catch {}
+
+            console.log(`[ai-agent-chat] Executing tool: ${fnName}`, fnArgs);
+            toolCallsLog.push(fnName);
+
+            const toolResult = await executeToolCall(supabase, fnName, fnArgs, phone, photosToSend, agent_id);
+
+            aiMessages.push({
+              role: 'tool',
+              content: JSON.stringify(toolResult),
+              tool_call_id: toolCall.id,
+              name: fnName,
+            });
+          }
+          // Continue loop to get final text
+        } else {
+          // No tool calls — final text response
+          responseMessage = assistantMsg.content || '';
+          break;
+        }
+      }
+
+      // If we ran out of rounds without text, do one more call without tools
+      if (!responseMessage && round >= MAX_ROUNDS) {
+        console.log('[ai-agent-chat] Max rounds, getting final text...');
+        const finalResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [{ role: 'system', content: systemPrompt }, ...aiMessages],
+            temperature,
+            max_tokens: maxTokens,
+          }),
+        });
+        if (finalResponse.ok) {
+          const finalData = await finalResponse.json();
+          responseMessage = finalData.choices?.[0]?.message?.content || '';
+        }
+      }
+
+      // Retry if empty
+      if (!responseMessage || responseMessage.trim().length === 0) {
+        console.warn('[ai-agent-chat] Empty response, retrying with nudge...');
+        const retryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...aiMessages,
+              { role: 'user', content: 'IMPORTANTE: O cliente esta esperando uma resposta. Responda com texto em portugues.' },
+            ],
+            temperature,
+            max_tokens: maxTokens,
+          }),
+        });
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          responseMessage = retryData.choices?.[0]?.message?.content || '';
+        }
+        if (!responseMessage) responseMessage = 'Oi! Me conta o que voce esta procurando que eu busco aqui no estoque.';
+      }
+
+    } catch (aiError) {
+      console.error('[ai-agent-chat] AI error:', aiError);
+      responseMessage = 'Oi! Estou aqui para te ajudar. Me conta o que voce esta procurando.';
+    }
+
+    // =============================================
+    // ENFORCE RESPONSE LIMITS (from Roma)
+    // =============================================
+    responseMessage = enforceResponseLimits(responseMessage, 600, 3);
+
+    // Save assistant response (non-blocking)
+    const vehicleIdsUsed = toolCallsLog
+      .filter(n => ['send_vehicle_photos', 'get_vehicle_details'].includes(n));
+    
+    supabase.from('ai_agent_messages').insert({
+      agent_id,
+      conversation_id: sessionKey,
+      role: 'assistant',
+      content: responseMessage,
+    }).then(({ error }: any) => { if (error) console.error('Error saving assistant msg:', error); });
+
+    // Deduplicate photos
+    const seenUrls = new Set<string>();
+    const uniquePhotos = photosToSend.filter(p => {
+      if (seenUrls.has(p.url)) return false;
+      seenUrls.add(p.url);
+      return true;
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[ai-agent-chat] Lovable AI error:', response.status, errorText);
-      if (response.status === 429) {
-        throw new Error("Rate limit exceeded - aguarde um momento e tente novamente");
-      }
-      if (response.status === 402) {
-        throw new Error("Créditos de IA esgotados - adicione créditos no workspace Lovable");
-      }
-      throw new Error(`Lovable AI error: ${response.status}`);
-    }
-
-    const aiResponse = await response.json();
-    const content = aiResponse.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error("No content in AI response");
-    }
-
-    console.log('[ai-agent-chat] Response generated successfully');
-
-    // Extract images from response using [ENVIAR_FOTO: URL] pattern
-    const photoRegex = /\[ENVIAR_FOTO:\s*(https?:\/\/[^\]]+)\]/gi;
-    const extractedImages: string[] = [];
-    let cleanContent = content;
-    
-    let match;
-    while ((match = photoRegex.exec(content)) !== null) {
-      extractedImages.push(match[1].trim());
-    }
-    
-    // Remove the photo tags from the text content
-    cleanContent = content.replace(photoRegex, '').trim();
-    
-    console.log('[ai-agent-chat] Extracted images:', extractedImages.length);
-
-    // Generate voice audio if enabled (always generate when voice is enabled)
-    let audioContent: string | null = null;
-    if (agentConfig?.enable_voice && agentConfig?.voice_id) {
-      console.log('[ai-agent-chat] Generating voice response with voice:', agentConfig.voice_id);
-      audioContent = await generateVoiceAudio(cleanContent, agentConfig.voice_id);
-      console.log('[ai-agent-chat] Voice audio generated:', audioContent ? 'success' : 'failed');
-    }
+    console.log('[ai-agent-chat] Response generated, photos:', uniquePhotos.length);
 
     return new Response(
       JSON.stringify({
-        response: cleanContent,
-        images: extractedImages,
-        audio_content: audioContent,
-        data_sources_used: Object.keys(contextData),
-        tokens_used: aiResponse.usage?.total_tokens || 0,
+        message: responseMessage,
+        photos: uniquePhotos,
+        tool_calls: toolCallsLog,
+        lead_id,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -440,11 +534,377 @@ IMPORTANTE: Use APENAS URLs de fotos que existem no campo "todas_fotos" do veíc
   } catch (error) {
     console.error('[ai-agent-chat] Error:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error instanceof Error ? error.message : 'Erro interno',
-        response: 'Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.',
+        message: 'Desculpe, tive um problema tecnico. Um vendedor vai te atender em breve.',
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
+
+// =============================================
+// EXECUTE TOOL CALL
+// =============================================
+async function executeToolCall(
+  supabase: any,
+  functionName: string,
+  args: any,
+  customerPhone?: string,
+  photosToSend?: Array<{ url: string; caption: string }>,
+  agentId?: string,
+): Promise<any> {
+  console.log(`[ai-agent-chat] Executing ${functionName}:`, args);
+
+  switch (functionName) {
+    case 'search_vehicles': {
+      let query = supabase
+        .from('vehicles')
+        .select('id, brand, model, version, year_model, year_fabrication, color, km, sale_price, fuel_type, transmission, images, status, notes')
+        .eq('status', 'disponivel');
+
+      const generateVariants = (term: string): string[] => {
+        const variants = new Set<string>();
+        variants.add(term);
+        variants.add(term.replace(/-/g, ' '));
+        variants.add(term.replace(/-/g, ''));
+        variants.add(term.replace(/\s+/g, '-'));
+        variants.add(term.replace(/\s+/g, ''));
+        return [...variants].filter(v => v.length > 0);
+      };
+
+      if (args.brand) query = query.ilike('brand', `%${args.brand}%`);
+      if (args.model) {
+        const modelVariants = generateVariants(args.model);
+        if (modelVariants.length > 1) {
+          query = query.or(modelVariants.map(v => `model.ilike.%${v}%`).join(','));
+        } else {
+          query = query.ilike('model', `%${args.model}%`);
+        }
+      }
+      if (args.keyword) {
+        const categoryMap: Record<string, string[]> = {
+          'suv': ['Compass', 'Renegade', 'Tracker', 'Creta', 'Kicks', 'T-Cross', 'Nivus', 'Pulse', 'Duster', 'HR-V', 'CR-V', 'Tucson', 'IX35', 'Tiguan', 'Taos', 'EcoSport', 'Territory'],
+          'sedan': ['Civic', 'Corolla', 'Cruze', 'Sentra', 'Versa', 'City', 'Jetta', 'Passat', 'Prisma', 'Cobalt', 'Logan'],
+          'hatch': ['Onix', 'Polo', 'Gol', 'HB20', 'Argo', 'Mobi', 'Uno', 'Kwid', 'Fit', 'Golf', 'Fox'],
+          'picape': ['Hilux', 'Ranger', 'Amarok', 'S10', 'Montana', 'Toro', 'Strada', 'Saveiro', 'Frontier'],
+          'popular': ['Mobi', 'Kwid', 'Uno', 'Gol', 'Onix', 'HB20', 'Argo', 'Ka', 'Fox'],
+        };
+
+        const keyword = args.keyword.toLowerCase().trim();
+        const mappedModels = categoryMap[keyword];
+
+        if (mappedModels) {
+          query = query.or(mappedModels.map(m => `model.ilike.%${m}%`).join(','));
+        } else {
+          const kwVariants = generateVariants(args.keyword);
+          const orParts = kwVariants.flatMap(v => [
+            `model.ilike.%${v}%`, `version.ilike.%${v}%`, `notes.ilike.%${v}%`, `brand.ilike.%${v}%`,
+          ]);
+          query = query.or(orParts.join(','));
+        }
+      }
+      if (args.min_price) query = query.gte('sale_price', args.min_price);
+      if (args.max_price) query = query.lte('sale_price', args.max_price);
+      if (args.max_km) query = query.lte('km', args.max_km);
+      if (args.year_min) query = query.gte('year_model', args.year_min);
+      if (args.color) query = query.ilike('color', `%${args.color}%`);
+
+      const { data, error } = await query.limit(10);
+
+      if (error) return { error: 'Erro ao buscar veiculos', vehicles: [] };
+      if (!data || data.length === 0) {
+        // Fallback broader search
+        const fallbackTerm = (args.model || args.keyword || '').replace(/[-_]/g, ' ').trim();
+        if (fallbackTerm.length >= 2) {
+          const { data: fallbackData } = await supabase
+            .from('vehicles')
+            .select('id, brand, model, version, year_model, year_fabrication, color, km, sale_price, fuel_type, transmission, images')
+            .eq('status', 'disponivel')
+            .or(`model.ilike.%${fallbackTerm}%,brand.ilike.%${fallbackTerm}%`)
+            .limit(10);
+
+          if (fallbackData && fallbackData.length > 0) {
+            return {
+              total: fallbackData.length,
+              vehicles: fallbackData.map((v: any) => ({
+                id: v.id, marca: v.brand, modelo: v.model, versao: v.version,
+                ano: `${v.year_fabrication}/${v.year_model}`, cor: v.color,
+                km: v.km ? `${v.km.toLocaleString('pt-BR')} km` : 'Nao informado',
+                preco: v.sale_price ? `R$ ${v.sale_price.toLocaleString('pt-BR')}` : 'Consulte',
+                combustivel: v.fuel_type, cambio: v.transmission,
+                tem_fotos: v.images && v.images.length > 0,
+              })),
+            };
+          }
+        }
+        return { message: 'Nenhum veiculo encontrado', vehicles: [], suggestion: 'Tente buscar por outras marcas ou modelos' };
+      }
+
+      return {
+        total: data.length,
+        vehicles: data.map((v: any) => ({
+          id: v.id, marca: v.brand, modelo: v.model, versao: v.version,
+          ano: `${v.year_fabrication}/${v.year_model}`, cor: v.color,
+          km: v.km ? `${v.km.toLocaleString('pt-BR')} km` : 'Nao informado',
+          preco: v.sale_price ? `R$ ${v.sale_price.toLocaleString('pt-BR')}` : 'Consulte',
+          combustivel: v.fuel_type, cambio: v.transmission,
+          tem_fotos: v.images && v.images.length > 0,
+        })),
+      };
+    }
+
+    case 'get_vehicle_details': {
+      let query = supabase.from('vehicles').select('*').eq('status', 'disponivel');
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      if (args.vehicle_id && uuidRegex.test(args.vehicle_id)) {
+        query = query.eq('id', args.vehicle_id);
+      } else if (args.model || args.vehicle_id) {
+        const searchTerm = args.model || args.vehicle_id;
+        query = query.or(`model.ilike.%${searchTerm}%,version.ilike.%${searchTerm}%`);
+      } else if (args.brand) {
+        query = query.ilike('brand', `%${args.brand}%`);
+      } else {
+        return { error: 'Especifique ID, modelo ou marca' };
+      }
+
+      const { data, error } = await query.limit(5);
+      if (error) return { error: 'Erro ao buscar veiculo' };
+      if (!data || data.length === 0) return { error: 'Nenhum veiculo encontrado' };
+
+      if (data.length > 1) {
+        return {
+          message: `Encontrei ${data.length} veiculos:`,
+          veiculos: data.map((v: any) => ({
+            id: v.id, marca: v.brand, modelo: v.model, versao: v.version,
+            ano: `${v.year_fabrication}/${v.year_model}`, cor: v.color,
+            km: v.km ? `${v.km.toLocaleString('pt-BR')} km` : 'Nao informado',
+            preco: v.sale_price ? `R$ ${v.sale_price.toLocaleString('pt-BR')}` : 'Consulte',
+            tem_fotos: v.images && v.images.length > 0,
+          })),
+        };
+      }
+
+      const vehicle = data[0];
+      return {
+        id: vehicle.id, marca: vehicle.brand, modelo: vehicle.model, versao: vehicle.version,
+        ano: `${vehicle.year_fabrication}/${vehicle.year_model}`, cor: vehicle.color,
+        km: vehicle.km ? `${vehicle.km.toLocaleString('pt-BR')} km` : 'Nao informado',
+        preco: vehicle.sale_price ? `R$ ${vehicle.sale_price.toLocaleString('pt-BR')}` : 'Consulte',
+        combustivel: vehicle.fuel_type, cambio: vehicle.transmission,
+        tem_fotos: vehicle.images && vehicle.images.length > 0,
+        total_fotos: vehicle.images?.length || 0,
+      };
+    }
+
+    case 'send_vehicle_photos':
+    case 'send_vehicle_photo': {
+      const { data: vehicle } = await supabase
+        .from('vehicles')
+        .select('id, brand, model, version, year_model, sale_price, images')
+        .eq('id', args.vehicle_id)
+        .single();
+
+      if (!vehicle) return { success: false, error: 'Veiculo nao encontrado' };
+
+      const photoUrls: string[] = vehicle.images?.filter((img: string) => img) || [];
+
+      if (photoUrls.length === 0) {
+        return { success: false, error: 'Este veiculo nao tem fotos disponiveis no momento.' };
+      }
+
+      const startIndex = args.start_index || 0;
+      const photoBatch = photoUrls.slice(startIndex, startIndex + 4);
+
+      if (photoBatch.length === 0) {
+        return { success: true, message: 'Ja enviei todas as fotos disponiveis desse veiculo.' };
+      }
+
+      const caption = args.caption || `${vehicle.brand} ${vehicle.model} ${vehicle.version || ''} ${vehicle.year_model}`.trim();
+      
+      if (photosToSend) {
+        for (const url of photoBatch) {
+          photosToSend.push({ url, caption });
+        }
+      }
+
+      const hasMore = startIndex + 4 < photoUrls.length;
+      return {
+        success: true,
+        photos_sent: photoBatch.length,
+        total_photos: photoUrls.length,
+        has_more: hasMore,
+        next_start_index: hasMore ? startIndex + 4 : null,
+        message: `${photoBatch.length} foto(s) enviada(s).${hasMore ? ` Ainda tem mais ${photoUrls.length - startIndex - 4} foto(s).` : ' Essas sao todas as fotos.'}`,
+        vehicle_id: args.vehicle_id,
+      };
+    }
+
+    case 'submit_qualification': {
+      if (!customerPhone) return { success: false, error: 'Phone not available' };
+
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('id, name, phone')
+        .eq('phone', customerPhone)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!lead) return { success: false, error: 'Lead nao encontrado' };
+
+      // Update lead
+      await supabase.from('leads').update({
+        vehicle_interest: args.vehicle_interest,
+        status: 'qualificado',
+        updated_at: new Date().toISOString(),
+      }).eq('id', lead.id);
+
+      // Update negotiation
+      const { data: negotiation } = await supabase
+        .from('negotiations')
+        .select('id')
+        .eq('lead_id', lead.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (negotiation) {
+        await supabase.from('negotiations').update({
+          status: 'negociando',
+          notes: `Qualificado pela IA | Veiculo: ${args.vehicle_interest} | Pagamento: ${args.payment_method}${args.has_trade_in ? ' | Com troca' : ''}`,
+          updated_at: new Date().toISOString(),
+        }).eq('id', negotiation.id);
+      }
+
+      // Assign via round robin
+      const { data: nextSalesperson } = await supabase.rpc('get_next_round_robin_salesperson');
+
+      if (nextSalesperson) {
+        await supabase.from('leads').update({ assigned_to: nextSalesperson, updated_at: new Date().toISOString() }).eq('id', lead.id);
+        if (negotiation) {
+          await supabase.from('negotiations').update({ salesperson_id: nextSalesperson }).eq('id', negotiation.id);
+        }
+        await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: nextSalesperson });
+
+        const { data: salesperson } = await supabase.from('profiles').select('full_name').eq('id', nextSalesperson).single();
+        const salespersonName = salesperson?.full_name || 'nosso consultor';
+
+        // Notification
+        await supabase.from('notifications').insert({
+          user_id: nextSalesperson,
+          type: 'lead_assigned',
+          title: 'Novo Lead Qualificado pela IA',
+          message: `Lead qualificado: ${args.vehicle_interest} | Pagamento: ${args.payment_method}`,
+          link: '/crm',
+        });
+
+        return {
+          success: true, qualified: true, salesperson_name: salespersonName,
+          message: `QUALIFICACAO ENVIADA. NAO chame esta funcao novamente. O vendedor ${salespersonName} foi designado.`,
+          handoff_message: `Perfeito, ja registrei suas informacoes. O ${salespersonName} vai entrar em contato com voce em breve.`,
+        };
+      }
+
+      return {
+        success: true, qualified: true,
+        message: 'QUALIFICACAO ENVIADA. NAO chame esta funcao novamente.',
+        handoff_message: 'Registrei suas informacoes. Um consultor vai entrar em contato em breve.',
+      };
+    }
+
+    case 'mark_lead_lost': {
+      if (!customerPhone) return { success: false, error: 'Phone not available' };
+
+      const { data: lostLead } = await supabase
+        .from('leads')
+        .select('id, name')
+        .eq('phone', customerPhone)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!lostLead) return { success: false, error: 'Lead nao encontrado' };
+
+      await supabase.from('leads').update({ status: 'perdido', updated_at: new Date().toISOString() }).eq('id', lostLead.id);
+
+      const { data: lostNeg } = await supabase
+        .from('negotiations')
+        .select('id')
+        .eq('lead_id', lostLead.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (lostNeg) {
+        await supabase.from('negotiations').update({
+          status: 'perdido',
+          loss_reason: args.loss_notes || args.loss_reason,
+          updated_at: new Date().toISOString(),
+        }).eq('id', lostNeg.id);
+      }
+
+      console.log('[ai-agent-chat] Lead marked as lost:', lostLead.id, 'reason:', args.loss_reason);
+      return { success: true, message: 'Lead marcado como perdido. Despeca-se educadamente.' };
+    }
+
+    default:
+      return { error: `Ferramenta desconhecida: ${functionName}` };
+  }
+}
+
+// =============================================
+// ENFORCE RESPONSE LIMITS (from Roma)
+// =============================================
+function enforceResponseLimits(text: string, maxChars: number = 600, maxBlocks: number = 3): string {
+  let processed = text.trim();
+
+  // FORCE split if no ||| present
+  if (!processed.includes('|||') && processed.length > 40) {
+    let splitIndex = -1;
+    const searchEnd = Math.min(processed.length, 200);
+    for (let i = 40; i < searchEnd; i++) {
+      if (processed[i] === '.' || processed[i] === '?' || processed[i] === '!') {
+        splitIndex = i;
+        break;
+      }
+    }
+    if (splitIndex > 0) {
+      processed = processed.substring(0, splitIndex + 1) + '|||' + processed.substring(splitIndex + 1).trim();
+    } else {
+      const mid = Math.floor(processed.length / 2);
+      let bestSpace = -1;
+      for (let offset = 0; offset < mid; offset++) {
+        if (mid + offset < processed.length && processed[mid + offset] === ' ') { bestSpace = mid + offset; break; }
+        if (mid - offset > 0 && processed[mid - offset] === ' ') { bestSpace = mid - offset; break; }
+      }
+      if (bestSpace > 0) {
+        processed = processed.substring(0, bestSpace) + '|||' + processed.substring(bestSpace + 1).trim();
+      }
+    }
+  }
+
+  let blocks = processed.split('|||').map(b => b.trim()).filter(b => b.length > 0);
+  if (blocks.length === 0) blocks = [processed];
+  if (blocks.length > maxBlocks) blocks = blocks.slice(0, maxBlocks);
+
+  blocks = blocks.map(block => {
+    if (block.length > maxChars) {
+      const cut = block.substring(0, maxChars);
+      const lastPeriod = cut.lastIndexOf('.');
+      const lastQuestion = cut.lastIndexOf('?');
+      const lastExcl = cut.lastIndexOf('!');
+      const cutPoint = Math.max(lastPeriod, lastQuestion, lastExcl);
+      if (cutPoint > maxChars * 0.3) return cut.substring(0, cutPoint + 1).trim();
+      return cut.trim();
+    }
+    return block;
+  });
+
+  // Remove emojis
+  blocks = blocks.map(b => b.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2702}-\u{27B0}\u{24C2}-\u{1F251}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim());
+  blocks = blocks.filter(b => b.length > 0);
+
+  return blocks.join('|||');
+}

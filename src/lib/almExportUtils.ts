@@ -322,9 +322,9 @@ export function generateJSON(vehicles: MappedVehicle[], includeWarn: boolean) {
   return data;
 }
 
-export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean) {
+export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, allStatuses = false) {
   const data = vehicles
-    .filter(mv => mv.raw.status === 'disponivel')
+    .filter(mv => allStatuses || mv.raw.status === 'disponivel')
     .filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'))
     .map(mv => mv.almPayload);
 

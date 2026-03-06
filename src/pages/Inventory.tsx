@@ -180,6 +180,31 @@ export default function Inventory() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="lg" className="border-primary/50">
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar XML
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Exportar veículos (ALM)</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={false}
+                  onCheckedChange={() => handleExportXML(false)}
+                >
+                  Apenas Disponíveis
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={false}
+                  onCheckedChange={() => handleExportXML(true)}
+                >
+                  Todos os Veículos
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Link to="/estoque/importar">
               <Button variant="outline" size="lg">
                 <Upload className="h-4 w-4 mr-2" />

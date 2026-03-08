@@ -122,7 +122,7 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
   let phoneLockAcquired = false;
   if (isAIInstance && phone) {
     const { data: lockResult, error: lockError } = await supabase
-      .rpc('acquire_phone_lock', { p_phone: phone, p_lock_duration_seconds: 30 });
+      .rpc('acquire_phone_lock', { p_phone: phone, p_lock_duration_seconds: 45 });
 
     if (lockError || !lockResult) {
       console.log('Phone lock NOT acquired for:', phone, '- saving message only');
@@ -339,9 +339,11 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
       : [];
 
     if (!responseMessage && photos.length === 0) {
-      console.log('No response from AI');
+      console.log('No response from AI - empty message and no photos');
       return;
     }
+
+    console.log('[webhook] AI response ready. Text length:', responseMessage?.length, 'Photos:', photos.length);
 
     // =============================================
     // SEND RESPONSE VIA WHATSAPP
@@ -527,9 +529,13 @@ function extractMessageContent(data: any) {
   if (msg.conversation) return { messageText: msg.conversation, messageType: 'text' };
   if (msg.extendedTextMessage?.text) return { messageText: msg.extendedTextMessage.text, messageType: 'text' };
   if (msg.imageMessage) return { messageText: msg.imageMessage.caption || '[Imagem]', messageType: 'image' };
-  if (msg.audioMessage || msg.pttMessage) return { messageText: '[Áudio]', messageType: 'audio' };
+  // Handle all audio variants: audioMessage, pttMessage (push-to-talk), and senderKeyDistributionMessage with audio
+  if (msg.audioMessage || msg.pttMessage || msg.ptt) return { messageText: '[Áudio]', messageType: 'audio' };
   if (msg.videoMessage) return { messageText: msg.videoMessage.caption || '[Video]', messageType: 'video' };
   if (msg.documentMessage) return { messageText: msg.documentMessage.fileName || '[Documento]', messageType: 'document' };
+  if (msg.stickerMessage) return { messageText: '[Sticker]', messageType: 'sticker' };
+  if (msg.contactMessage || msg.contactsArrayMessage) return { messageText: '[Contato]', messageType: 'contact' };
+  if (msg.locationMessage || msg.liveLocationMessage) return { messageText: '[Localizacao]', messageType: 'location' };
   return { messageText: null, messageType: 'text' };
 }
 
@@ -699,22 +705,51 @@ async function sendWhatsAppMessage(instanceName: string, remoteJid: string, mess
 async function sendWhatsAppImage(instanceName: string, remoteJid: string, imageUrl: string, caption?: string): Promise<boolean> {
   const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
   const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
-  if (!evolutionUrl || !evolutionApiKey) return false;
+  if (!evolutionUrl || !evolutionApiKey) {
+    console.error('[sendImage] Evolution API not configured');
+    return false;
+  }
 
   try {
     const baseUrl = evolutionUrl.replace(/\/$/, '');
+    console.log('[sendImage] Sending to:', remoteJid, 'URL:', imageUrl.substring(0, 80));
+    
     const response = await fetch(`${baseUrl}/message/sendMedia/${instanceName}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': evolutionApiKey },
       body: JSON.stringify({ number: remoteJid, mediatype: 'image', media: imageUrl, caption: caption || '' }),
     });
+    
     if (!response.ok) {
-      console.error('Error sending image:', await response.text());
-      return false;
+      const errText = await response.text();
+      console.error('[sendImage] Evolution API error:', response.status, errText);
+      
+      // Retry with fileName for compatibility with some Evolution versions
+      console.log('[sendImage] Retrying with alternative payload...');
+      const retryResponse = await fetch(`${baseUrl}/message/sendMedia/${instanceName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': evolutionApiKey },
+        body: JSON.stringify({ 
+          number: remoteJid, 
+          mediatype: 'image', 
+          media: imageUrl, 
+          caption: caption || '',
+          fileName: 'veiculo.jpg',
+        }),
+      });
+      
+      if (!retryResponse.ok) {
+        console.error('[sendImage] Retry also failed:', await retryResponse.text());
+        return false;
+      }
+      console.log('[sendImage] Retry succeeded');
+      return true;
     }
+    
+    console.log('[sendImage] Success');
     return true;
   } catch (error) {
-    console.error('Image send error:', error);
+    console.error('[sendImage] Exception:', error);
     return false;
   }
 }
@@ -763,27 +798,46 @@ async function transcribeWhatsAppAudio(instanceName: string, messageId: string):
   const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
   const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
-  if (!OPENAI_API_KEY || !evolutionUrl || !evolutionApiKey) return null;
+  if (!OPENAI_API_KEY) { console.error('[transcribe] OPENAI_API_KEY not set'); return null; }
+  if (!evolutionUrl || !evolutionApiKey) { console.error('[transcribe] Evolution API not configured'); return null; }
 
   try {
     const baseUrl = evolutionUrl.replace(/\/$/, '');
+    console.log('[transcribe] Fetching audio base64 for messageId:', messageId);
+    
     const mediaResponse = await fetch(`${baseUrl}/chat/getBase64FromMediaMessage/${instanceName}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': evolutionApiKey },
       body: JSON.stringify({ message: { key: { id: messageId } }, convertToMp4: false }),
     });
 
-    if (!mediaResponse.ok) return null;
+    if (!mediaResponse.ok) {
+      const errText = await mediaResponse.text();
+      console.error('[transcribe] Evolution media fetch failed:', mediaResponse.status, errText);
+      return null;
+    }
+    
     const mediaData = await mediaResponse.json();
-    if (!mediaData.base64) return null;
+    if (!mediaData.base64) {
+      console.error('[transcribe] No base64 in Evolution response. Keys:', Object.keys(mediaData));
+      return null;
+    }
 
+    console.log('[transcribe] Got base64 audio, length:', mediaData.base64.length);
+    
     const binaryStr = atob(mediaData.base64);
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-    const audioBlob = new Blob([bytes], { type: 'audio/ogg' });
+    
+    // Detect mime type from Evolution response or default to ogg
+    const mimeType = mediaData.mimetype || 'audio/ogg';
+    const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('mpeg') ? 'mp3' : 'ogg';
+    const audioBlob = new Blob([bytes], { type: mimeType });
+
+    console.log('[transcribe] Audio blob created:', bytes.length, 'bytes, type:', mimeType);
 
     const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.ogg');
+    formData.append('file', audioBlob, `audio.${extension}`);
     formData.append('model', 'whisper-1');
     formData.append('language', 'pt');
 
@@ -793,10 +847,17 @@ async function transcribeWhatsAppAudio(instanceName: string, messageId: string):
       body: formData,
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[transcribe] Whisper API error:', response.status, errText);
+      return null;
+    }
+    
     const data = await response.json();
+    console.log('[transcribe] Success! Text:', data.text?.substring(0, 80));
     return data.text || null;
-  } catch {
+  } catch (error) {
+    console.error('[transcribe] Exception:', error);
     return null;
   }
 }

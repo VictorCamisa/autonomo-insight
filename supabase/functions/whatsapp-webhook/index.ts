@@ -122,7 +122,7 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
   let phoneLockAcquired = false;
   if (isAIInstance && phone) {
     const { data: lockResult, error: lockError } = await supabase
-      .rpc('acquire_phone_lock', { p_phone: phone, p_lock_duration_seconds: 30 });
+      .rpc('acquire_phone_lock', { p_phone: phone, p_lock_duration_seconds: 45 });
 
     if (lockError || !lockResult) {
       console.log('Phone lock NOT acquired for:', phone, '- saving message only');

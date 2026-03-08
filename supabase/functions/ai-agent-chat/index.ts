@@ -63,45 +63,93 @@ const toolDefinitions = [
       },
     },
   },
-  {
+  // submit_qualification will be built dynamically based on qualification level
+];
+
+// Mark lead lost tool (static)
+const markLeadLostTool = {
+  type: "function",
+  function: {
+    name: "mark_lead_lost",
+    description: "Marca o lead como PERDIDO quando o cliente deixa claro que nao quer comprar. Use quando o cliente disser 'nao quero', 'desisto', 'ja comprei', 'sem interesse', etc.",
+    parameters: {
+      type: "object",
+      properties: {
+        loss_reason: {
+          type: "string",
+          enum: ["sem_entrada", "sem_credito", "curioso", "caro", "comprou_outro", "desistiu", "sem_contato", "outros"],
+          description: "Motivo da perda",
+        },
+        loss_notes: { type: "string", description: "Detalhes adicionais sobre o motivo" },
+      },
+      required: ["loss_reason"],
+    },
+  },
+};
+
+// Field mappings for qualification tool properties
+const QUAL_FIELD_TO_TOOL_PROP: Record<string, { type: string; description: string }> = {
+  nome: { type: "string", description: "Nome completo do cliente" },
+  telefone: { type: "string", description: "Telefone do cliente" },
+  veiculo_interesse: { type: "string", description: "Veiculo(s) de interesse do cliente" },
+  origem: { type: "string", description: "Como o cliente encontrou a loja" },
+  forma_pagamento: { type: "string", description: "Forma de pagamento preferida (financiamento, a vista, consorcio)" },
+  orcamento: { type: "string", description: "Faixa de orcamento do cliente" },
+  entrada: { type: "string", description: "Valor da entrada que o cliente tem disponivel" },
+  parcela: { type: "string", description: "Valor de parcela desejada" },
+  veiculo_troca: { type: "string", description: "Detalhes do veiculo de troca (marca, modelo, ano)" },
+  tem_troca: { type: "boolean", description: "Se o cliente tem veiculo para troca" },
+  cpf: { type: "string", description: "CPF do cliente" },
+  nome_limpo: { type: "boolean", description: "Se o cliente tem nome limpo (SPC/Serasa)" },
+  profissao: { type: "string", description: "Profissao do cliente" },
+  renda: { type: "string", description: "Renda mensal do cliente" },
+};
+
+// Field display names in Portuguese
+const QUAL_FIELD_LABELS: Record<string, string> = {
+  nome: 'Nome', telefone: 'Telefone', veiculo_interesse: 'Veiculo de Interesse',
+  origem: 'Origem', forma_pagamento: 'Forma de Pagamento', orcamento: 'Orcamento',
+  entrada: 'Entrada', parcela: 'Parcela', veiculo_troca: 'Veiculo na Troca',
+  tem_troca: 'Se tem Troca', cpf: 'CPF', nome_limpo: 'Nome Limpo',
+  profissao: 'Profissao', renda: 'Renda',
+};
+
+function buildSubmitQualificationTool(requiredFields: string[], optionalFields: string[]): any {
+  const allFields = [...requiredFields, ...optionalFields];
+  const properties: Record<string, any> = {};
+  const required: string[] = [];
+
+  for (const field of allFields) {
+    const prop = QUAL_FIELD_TO_TOOL_PROP[field];
+    if (prop) {
+      // Map field names to tool-friendly parameter names
+      properties[field] = { type: prop.type, description: prop.description };
+      if (requiredFields.includes(field)) required.push(field);
+    }
+  }
+
+  // Always include notes
+  properties.notes = { type: "string", description: "Observacoes adicionais" };
+
+  const requiredLabels = requiredFields.map(f => QUAL_FIELD_LABELS[f] || f).join(', ');
+  const optionalLabels = optionalFields.map(f => QUAL_FIELD_LABELS[f] || f).join(', ');
+
+  let description = `Envia a ficha de qualificacao do lead. CHAME APENAS UMA VEZ por conversa. Campos OBRIGATORIOS: ${requiredLabels}.`;
+  if (optionalLabels) description += ` Campos opcionais (bonus): ${optionalLabels}.`;
+
+  return {
     type: "function",
     function: {
       name: "submit_qualification",
-      description: "Envia a ficha de qualificacao do lead. Use quando conseguir captar veiculo de interesse, forma de pagamento e se tem troca. CHAME APENAS UMA VEZ por conversa.",
+      description,
       parameters: {
         type: "object",
-        properties: {
-          vehicle_interest: { type: "string", description: "Veiculo(s) de interesse do cliente" },
-          has_trade_in: { type: "boolean", description: "Se o cliente tem veiculo para troca" },
-          trade_in_details: { type: "string", description: "Detalhes do veiculo de troca" },
-          payment_method: { type: "string", description: "Forma de pagamento preferida" },
-          budget_range: { type: "string", description: "Faixa de orcamento do cliente" },
-          notes: { type: "string", description: "Observacoes adicionais" },
-        },
-        required: ["vehicle_interest", "payment_method"],
+        properties,
+        required: required.length > 0 ? required : ["veiculo_interesse"],
       },
     },
-  },
-  {
-    type: "function",
-    function: {
-      name: "mark_lead_lost",
-      description: "Marca o lead como PERDIDO quando o cliente deixa claro que nao quer comprar. Use quando o cliente disser 'nao quero', 'desisto', 'ja comprei', 'sem interesse', etc.",
-      parameters: {
-        type: "object",
-        properties: {
-          loss_reason: {
-            type: "string",
-            enum: ["sem_entrada", "sem_credito", "curioso", "caro", "comprou_outro", "desistiu", "sem_contato", "outros"],
-            description: "Motivo da perda",
-          },
-          loss_notes: { type: "string", description: "Detalhes adicionais sobre o motivo" },
-        },
-        required: ["loss_reason"],
-      },
-    },
-  },
-];
+  };
+}
 
 serve(async (req) => {
   console.log('[ai-agent-chat] Request received');

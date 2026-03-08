@@ -670,6 +670,7 @@ async function executeToolCall(
   customerPhone?: string,
   photosToSend?: Array<{ url: string; caption: string }>,
   agentId?: string,
+  qualificationLevel?: string,
 ): Promise<any> {
   console.log(`[ai-agent-chat] Executing ${functionName}:`, args);
 

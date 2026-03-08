@@ -544,7 +544,7 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
             console.log(`[ai-agent-chat] Executing tool: ${fnName}`, fnArgs);
             toolCallsLog.push(fnName);
 
-            const toolResult = await executeToolCall(supabase, fnName, fnArgs, phone, photosToSend, agent_id);
+            const toolResult = await executeToolCall(supabase, fnName, fnArgs, phone, photosToSend, agent_id, activeLevel);
 
             aiMessages.push({
               role: 'tool',

@@ -393,6 +393,8 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
     `-- Exportacao ALM - ${now}`,
     `-- Total: ${data.length} veiculos`,
     '',
+    'SET FOREIGN_KEY_CHECKS=0;',
+    '',
   ];
 
   data.forEach((mv, idx) => {

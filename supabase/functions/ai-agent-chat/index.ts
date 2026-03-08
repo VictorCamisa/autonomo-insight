@@ -324,6 +324,40 @@ serve(async (req) => {
       ? '\nEsta e uma NOVA CONVERSA. Trate como primeiro contato. NAO assuma nenhum veiculo ou pagamento de conversas anteriores. Comece do zero.'
       : '';
 
+    // =============================================
+    // QUALIFICATION LEVEL CONFIGURATION (dynamic from DB)
+    // =============================================
+    const activeLevel = qualCurrentResult.data?.required_fields?.[0] || 'Q2';
+    const qualLevels = (qualLevelsResult.data || []) as any[];
+    const activeQualConfig = qualLevels.find((q: any) => q.level === activeLevel);
+    
+    const qualRequiredFields: string[] = activeQualConfig?.required_fields || ['veiculo_interesse', 'forma_pagamento', 'tem_troca'];
+    const qualOptionalFields: string[] = activeQualConfig?.optional_fields || [];
+    const qualLevelName = activeQualConfig?.name || activeLevel;
+    const qualLevelDescription = activeQualConfig?.description || '';
+
+    console.log('[ai-agent-chat] Active qualification level:', activeLevel, 'required:', qualRequiredFields, 'optional:', qualOptionalFields);
+
+    // Build dynamic qualification prompt section
+    const requiredLabels = qualRequiredFields.map(f => QUAL_FIELD_LABELS[f] || f);
+    const optionalLabels = qualOptionalFields.map(f => QUAL_FIELD_LABELS[f] || f);
+
+    let qualPromptSection = `===== QUALIFICACAO (Nivel ${activeLevel} - ${qualLevelName}) =====\n`;
+    if (qualLevelDescription) qualPromptSection += `${qualLevelDescription}\n`;
+    qualPromptSection += `Para qualificar o lead, voce PRECISA coletar estas informacoes OBRIGATORIAS:\n`;
+    qualPromptSection += requiredLabels.map((l, i) => `  ${i + 1}. ${l}`).join('\n');
+    if (optionalLabels.length > 0) {
+      qualPromptSection += `\n\nInformacoes OPCIONAIS (bonus, colete se surgir naturalmente):\n`;
+      qualPromptSection += optionalLabels.map(l => `  - ${l}`).join('\n');
+    }
+    qualPromptSection += `\n\nQUANDO tiver TODOS os campos obrigatorios, chame submit_qualification UMA UNICA VEZ.`;
+    qualPromptSection += `\nSe submit_qualification ja foi chamado, NUNCA chame novamente.`;
+    qualPromptSection += `\nApos qualificar, avise que um consultor vai entrar em contato.`;
+
+    // Build dynamic tools array
+    const submitQualTool = buildSubmitQualificationTool(qualRequiredFields, qualOptionalFields);
+    const dynamicTools = [...toolDefinitions, submitQualTool, markLeadLostTool];
+
     console.log('[ai-agent-chat] Conversation:', conversationId, 'history:', conversationHistory.length);
 
     // Save user message (BLOCKING - must complete before AI call)
@@ -375,14 +409,16 @@ O fluxo natural de uma conversa e:
 1. RAPPORT: Cumprimentar, pegar o nome, criar conexao
 2. DESCOBERTA: Entender o que o cliente busca
 3. APRESENTACAO: Mostrar opcoes reais do estoque
-4. APROFUNDAMENTO: Perguntar sobre forma de pagamento, se tem veiculo pra trocar
-5. QUALIFICACAO: Quando tiver veiculo + pagamento + troca, chamar submit_qualification
+4. APROFUNDAMENTO: Coletar informacoes para qualificacao (veja secao QUALIFICACAO abaixo)
+5. QUALIFICACAO: Quando tiver TODOS os campos obrigatorios, chamar submit_qualification
 6. HANDOFF: Avisar que um consultor vai continuar o atendimento
 
 REGRAS DO FLUXO:
 - NUNCA pule etapas. Nao pergunte sobre troca antes de apresentar o veiculo.
 - Cada mensagem do cliente e uma oportunidade de colher 1 informacao nova. Nao tente pegar tudo de uma vez.
 - Se o cliente der uma resposta curta (ta, ok, sim), avance naturalmente.
+
+${qualPromptSection}
 
 ===== USO DE TOOLS — ESTOQUE =====
 REGRA CRITICA: Se o cliente mencionar QUALQUER veiculo, voce DEVE chamar search_vehicles IMEDIATAMENTE.
@@ -402,12 +438,6 @@ Quando apresentar resultados do estoque:
 - Quando o cliente pedir fotos, use send_vehicle_photos com o vehicle_id correto
 - Apos enviar fotos, SEMPRE faca uma pergunta para continuar a conversa
 - Se nao tiver fotos disponiveis, avise
-
-===== USO DE TOOLS — QUALIFICACAO =====
-- Colete naturalmente: veiculo de interesse, forma de pagamento, se tem troca
-- Quando tiver os 3 dados, chame submit_qualification UMA UNICA VEZ
-- Se submit_qualification ja foi chamado, NUNCA chame novamente
-- Apos qualificar, avise que um consultor vai entrar em contato
 
 ===== LEAD PERDIDO =====
 - Se o cliente deixar CLARO que nao quer, chame mark_lead_lost IMEDIATAMENTE

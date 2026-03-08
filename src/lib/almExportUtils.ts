@@ -365,7 +365,7 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
   const xmlLines: string[] = [
     '<?xml version="1.0" encoding="utf-8"?>',
     '<pma_xml_export version="1.0" xmlns:pma="https://www.phpmyadmin.net/some_doc_url/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
-    '\t<database name="veiculos">',
+    '\t<database name="db_a77b4c_vsautos">',
   ];
 
   data.forEach((mv, idx) => {

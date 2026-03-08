@@ -511,7 +511,10 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
   xmlLines.push('</resultset>');
 
   const xmlContent = xmlLines.join('\n');
-  const blob = new Blob([encodeWindows1252(xmlContent)], { type: 'application/xml;charset=windows-1252' });
+  const encoded = encodeWindows1252(xmlContent);
+  const buffer = new ArrayBuffer(encoded.length);
+  new Uint8Array(buffer).set(encoded);
+  const blob = new Blob([buffer], { type: 'application/xml;charset=windows-1252' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'estoque_alm_export.xml';

@@ -323,10 +323,23 @@ export function generateJSON(vehicles: MappedVehicle[], includeWarn: boolean) {
 }
 
 function sanitizeXmlText(value: string): string {
-  // Remove chars invalid in XML 1.0 (including surrogate code units)
-  return value
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '')
-    .replace(/\r\n?/g, '\n');
+  // Keep only XML 1.0 valid chars:
+  // #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+  let out = '';
+  for (const ch of value) {
+    const cp = ch.codePointAt(0)!;
+    const isValid =
+      cp === 0x9 ||
+      cp === 0xA ||
+      cp === 0xD ||
+      (cp >= 0x20 && cp <= 0xD7FF) ||
+      (cp >= 0xE000 && cp <= 0xFFFD) ||
+      (cp >= 0x10000 && cp <= 0x10FFFF);
+
+    if (isValid) out += ch;
+  }
+
+  return out.replace(/\r\n?/g, '\n');
 }
 
 const WIN1252_UNICODE_TO_BYTE: Record<number, number> = {

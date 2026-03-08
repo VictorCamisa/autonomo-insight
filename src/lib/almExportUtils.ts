@@ -408,40 +408,40 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
       numOrNull(p.QtdPortas),                           // QtdPortas
       p.Valor ? p.Valor.toFixed(2) : '0.00',           // Valor
       sqlEsc(p.Descricao),                              // Descricao
-      sqlEsc(p.TipoMotor || null),                      // TipoMotor
-      'NULL',                                           // NumeroDonos
+      sqlEsc(p.TipoMotor || ''),                         // TipoMotor
+      "''",                                             // NumeroDonos
       numOrNull(p.MarcaId),                             // MarcaId
       numOrNull(p.ModeloId),                            // ModeloId
       p.TipoVeiculo === 'Moto' ? 1 : 0,                // TipoVeiculo
       sqlEsc(p.Placa),                                  // Placa
-      'NULL', 'NULL', 'NULL',                           // DsAutoEstoqueId, DsDataCadastro, DsDataAlteracao
+      "''", "''", "''",                                 // DsAutoEstoqueId, DsDataCadastro, DsDataAlteracao
       sqlEsc(now),                                      // DataCadastro
       sqlEsc(now),                                      // DataAlteracao
-      'NULL',                                           // DataInsercaoBatch
+      "''",                                             // DataInsercaoBatch
       statusNum,                                        // StatusVeiculo
-      'NULL', 'NULL', 'NULL', 'NULL',                   // VersaoId, CompraId, ConsignacaoId, VendaId
-      sqlEsc(p.Chassi || null),                         // Chassi
-      'NULL',                                           // MercadoLibreId
+      "''", "''", "''", "''",                           // VersaoId, CompraId, ConsignacaoId, VendaId
+      sqlEsc(p.Chassi || ''),                           // Chassi
+      "''",                                             // MercadoLibreId
       numOrNull(p.CombustivelId),                       // CombustivelId
       numOrNull(p.CorId),                               // CorId
-      'NULL',                                           // OutraCor
+      "''",                                             // OutraCor
       numOrNull(p.CambioId),                            // CambioId
-      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // CategoriaId..AlimentacaoId
-      'NULL', 'NULL', 'NULL',                           // FreioId, MotorId, RefrigeracaoId
-      'NULL', 'NULL',                                   // MercadoLibreDataPublicacao, MercadoLibrePlano
-      'NULL', 'NULL', 'NULL', 'NULL',                   // Olx*
-      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // CompreCar*, OlxErros, OlxStatus, OlxOperacao
-      'NULL', 'NULL', 'NULL', 'NULL',                   // ICarros*, MercadoLibreUrl
-      'NULL', 'NULL', 'NULL',                           // Autoline*
+      "''", "''", "''", "''", "''",                     // CategoriaId..AlimentacaoId
+      "''", "''", "''",                                 // FreioId, MotorId, RefrigeracaoId
+      "''", "''",                                       // MercadoLibreDataPublicacao, MercadoLibrePlano
+      "''", "''", "''", "''",                           // Olx*
+      "''", "''", "''", "''", "''",                     // CompreCar*, OlxErros, OlxStatus, OlxOperacao
+      "''", "''", "''", "''",                           // ICarros*, MercadoLibreUrl
+      "''", "''", "''",                                 // Autoline*
       p.ZeroKm ? 1 : 0,                                // ZeroKm
-      'NULL', 'NULL',                                   // CompreCarUrl, CompreCarWarnings
-      'NULL', 'NULL', 'NULL',                           // CarroAmericana*
-      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // Webmotors*
-      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // MeuCarroNovo*
-      'NULL', 'NULL', 'NULL', 'NULL',                   // AutosnaWeb*
-      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // Mobiauto*
-      sqlEsc((v as any).renavam || null),                // Renavam
-      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // Usadosbr*
+      "''", "''",                                       // CompreCarUrl, CompreCarWarnings
+      "''", "''", "''",                                 // CarroAmericana*
+      "''", "''", "''", "''", "''",                     // Webmotors*
+      "''", "''", "''", "''", "''",                     // MeuCarroNovo*
+      "''", "''", "''", "''",                           // AutosnaWeb*
+      "''", "''", "''", "''", "''",                     // Mobiauto*
+      sqlEsc((v as any).renavam || ''),                  // Renavam
+      "''", "''", "''", "''", "''",                     // Usadosbr*
     ];
 
     lines.push(`INSERT INTO \`carro\` (\`${columns.join('`, `')}\`) VALUES (${values.join(', ')});`);

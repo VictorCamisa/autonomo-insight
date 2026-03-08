@@ -339,9 +339,11 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
       : [];
 
     if (!responseMessage && photos.length === 0) {
-      console.log('No response from AI');
+      console.log('No response from AI - empty message and no photos');
       return;
     }
+
+    console.log('[webhook] AI response ready. Text length:', responseMessage?.length, 'Photos:', photos.length);
 
     // =============================================
     // SEND RESPONSE VIA WHATSAPP

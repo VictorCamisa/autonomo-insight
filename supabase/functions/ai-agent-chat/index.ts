@@ -506,7 +506,7 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
           body: JSON.stringify({
             model: 'google/gemini-2.5-flash',
             messages: [{ role: 'system', content: systemPrompt }, ...aiMessages],
-            tools: toolDefinitions,
+            tools: dynamicTools,
             temperature,
             max_tokens: maxTokens,
           }),

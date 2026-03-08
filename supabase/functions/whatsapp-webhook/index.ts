@@ -527,9 +527,13 @@ function extractMessageContent(data: any) {
   if (msg.conversation) return { messageText: msg.conversation, messageType: 'text' };
   if (msg.extendedTextMessage?.text) return { messageText: msg.extendedTextMessage.text, messageType: 'text' };
   if (msg.imageMessage) return { messageText: msg.imageMessage.caption || '[Imagem]', messageType: 'image' };
-  if (msg.audioMessage || msg.pttMessage) return { messageText: '[Áudio]', messageType: 'audio' };
+  // Handle all audio variants: audioMessage, pttMessage (push-to-talk), and senderKeyDistributionMessage with audio
+  if (msg.audioMessage || msg.pttMessage || msg.ptt) return { messageText: '[Áudio]', messageType: 'audio' };
   if (msg.videoMessage) return { messageText: msg.videoMessage.caption || '[Video]', messageType: 'video' };
   if (msg.documentMessage) return { messageText: msg.documentMessage.fileName || '[Documento]', messageType: 'document' };
+  if (msg.stickerMessage) return { messageText: '[Sticker]', messageType: 'sticker' };
+  if (msg.contactMessage || msg.contactsArrayMessage) return { messageText: '[Contato]', messageType: 'contact' };
+  if (msg.locationMessage || msg.liveLocationMessage) return { messageText: '[Localizacao]', messageType: 'location' };
   return { messageText: null, messageType: 'text' };
 }
 

@@ -260,9 +260,9 @@ serve(async (req) => {
       }
     }
 
-    // Fetch conversation history and inventory IN PARALLEL
+    // Fetch conversation history, inventory, lead, AND qualification settings IN PARALLEL
     const contextWindowSize = agent.context_window_size || 20;
-    const [historyResult, inventoryResult, leadResult] = await Promise.all([
+    const [historyResult, inventoryResult, leadResult, qualCurrentResult, qualLevelsResult] = await Promise.all([
       supabase
         .from('ai_agent_messages')
         .select('role, content')
@@ -277,6 +277,18 @@ serve(async (req) => {
       lead_id
         ? supabase.from('leads').select('id, name, phone, status, vehicle_interest').eq('id', lead_id).single()
         : Promise.resolve({ data: null }),
+      // Fetch CURRENT active qualification level
+      supabase
+        .from('qualification_settings')
+        .select('required_fields')
+        .eq('level', 'CURRENT')
+        .single(),
+      // Fetch all Q1/Q2/Q3 definitions
+      supabase
+        .from('qualification_settings')
+        .select('level, name, required_fields, optional_fields, description')
+        .in('level', ['Q1', 'Q2', 'Q3'])
+        .order('level', { ascending: true }),
     ]);
 
     const conversationHistory = (historyResult.data || []).map((msg: any) => ({

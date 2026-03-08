@@ -919,25 +919,33 @@ async function executeToolCall(
 
       if (!lead) return { success: false, error: 'Lead nao encontrado' };
 
-      // Build qualification_data with ALL collected info
+      // Build qualification_data with ALL collected info (dynamic fields)
       const qualificationData: Record<string, any> = {};
-      if (args.vehicle_interest) qualificationData.vehicle_interest = args.vehicle_interest;
-      if (args.payment_method) qualificationData.payment_method = args.payment_method;
-      if (args.has_trade_in !== undefined) qualificationData.has_trade_in = args.has_trade_in;
-      if (args.trade_in_details) qualificationData.trade_in_details = args.trade_in_details;
-      if (args.budget_range) qualificationData.budget_range = args.budget_range;
-      if (args.notes) qualificationData.notes = args.notes;
+      // Copy all args from the tool call (dynamically generated fields)
+      for (const [key, val] of Object.entries(args)) {
+        if (val !== undefined && val !== null && val !== '') {
+          qualificationData[key] = val;
+        }
+      }
       qualificationData.qualified_at = new Date().toISOString();
       qualificationData.qualified_by = 'ai_agent';
+      qualificationData.qualification_level = qualificationLevel || 'Q2';
+
+      // Determine vehicle interest from various possible field names
+      const vehicleInterest = args.veiculo_interesse || args.vehicle_interest || '';
+      const paymentMethod = args.forma_pagamento || args.payment_method || '';
+      const hasTrade = args.tem_troca || args.has_trade_in || false;
+      const tradeDetails = args.veiculo_troca || args.trade_in_details || '';
 
       // Update lead with qualification_data
-      await supabase.from('leads').update({
-        vehicle_interest: args.vehicle_interest,
+      const leadUpdate: Record<string, any> = {
         qualification_data: qualificationData,
-        qualification_level: 'Q2',
+        qualification_level: qualificationLevel || 'Q2',
         status: 'qualificado',
         updated_at: new Date().toISOString(),
-      }).eq('id', lead.id);
+      };
+      if (vehicleInterest) leadUpdate.vehicle_interest = vehicleInterest;
+      await supabase.from('leads').update(leadUpdate).eq('id', lead.id);
 
       // Update negotiation
       const { data: negotiation } = await supabase
@@ -949,10 +957,15 @@ async function executeToolCall(
         .single();
 
       if (negotiation) {
+        const noteParts = [`Qualificado pela IA (${qualificationLevel || 'Q2'})`];
+        if (vehicleInterest) noteParts.push(`Veiculo: ${vehicleInterest}`);
+        if (paymentMethod) noteParts.push(`Pagamento: ${paymentMethod}`);
+        if (hasTrade) noteParts.push(`Troca: ${tradeDetails || 'Sim'}`);
+        
         await supabase.from('negotiations').update({
           status: 'negociando',
-          qualification_level: 'Q2',
-          notes: `Qualificado pela IA | Veiculo: ${args.vehicle_interest} | Pagamento: ${args.payment_method}${args.has_trade_in ? ` | Troca: ${args.trade_in_details || 'Sim'}` : ' | Sem troca'}`,
+          qualification_level: qualificationLevel || 'Q2',
+          notes: noteParts.join(' | '),
           updated_at: new Date().toISOString(),
         }).eq('id', negotiation.id);
       }

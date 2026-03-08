@@ -699,22 +699,51 @@ async function sendWhatsAppMessage(instanceName: string, remoteJid: string, mess
 async function sendWhatsAppImage(instanceName: string, remoteJid: string, imageUrl: string, caption?: string): Promise<boolean> {
   const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
   const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
-  if (!evolutionUrl || !evolutionApiKey) return false;
+  if (!evolutionUrl || !evolutionApiKey) {
+    console.error('[sendImage] Evolution API not configured');
+    return false;
+  }
 
   try {
     const baseUrl = evolutionUrl.replace(/\/$/, '');
+    console.log('[sendImage] Sending to:', remoteJid, 'URL:', imageUrl.substring(0, 80));
+    
     const response = await fetch(`${baseUrl}/message/sendMedia/${instanceName}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': evolutionApiKey },
       body: JSON.stringify({ number: remoteJid, mediatype: 'image', media: imageUrl, caption: caption || '' }),
     });
+    
     if (!response.ok) {
-      console.error('Error sending image:', await response.text());
-      return false;
+      const errText = await response.text();
+      console.error('[sendImage] Evolution API error:', response.status, errText);
+      
+      // Retry with fileName for compatibility with some Evolution versions
+      console.log('[sendImage] Retrying with alternative payload...');
+      const retryResponse = await fetch(`${baseUrl}/message/sendMedia/${instanceName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': evolutionApiKey },
+        body: JSON.stringify({ 
+          number: remoteJid, 
+          mediatype: 'image', 
+          media: imageUrl, 
+          caption: caption || '',
+          fileName: 'veiculo.jpg',
+        }),
+      });
+      
+      if (!retryResponse.ok) {
+        console.error('[sendImage] Retry also failed:', await retryResponse.text());
+        return false;
+      }
+      console.log('[sendImage] Retry succeeded');
+      return true;
     }
+    
+    console.log('[sendImage] Success');
     return true;
   } catch (error) {
-    console.error('Image send error:', error);
+    console.error('[sendImage] Exception:', error);
     return false;
   }
 }

@@ -763,27 +763,46 @@ async function transcribeWhatsAppAudio(instanceName: string, messageId: string):
   const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
   const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
-  if (!OPENAI_API_KEY || !evolutionUrl || !evolutionApiKey) return null;
+  if (!OPENAI_API_KEY) { console.error('[transcribe] OPENAI_API_KEY not set'); return null; }
+  if (!evolutionUrl || !evolutionApiKey) { console.error('[transcribe] Evolution API not configured'); return null; }
 
   try {
     const baseUrl = evolutionUrl.replace(/\/$/, '');
+    console.log('[transcribe] Fetching audio base64 for messageId:', messageId);
+    
     const mediaResponse = await fetch(`${baseUrl}/chat/getBase64FromMediaMessage/${instanceName}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': evolutionApiKey },
       body: JSON.stringify({ message: { key: { id: messageId } }, convertToMp4: false }),
     });
 
-    if (!mediaResponse.ok) return null;
+    if (!mediaResponse.ok) {
+      const errText = await mediaResponse.text();
+      console.error('[transcribe] Evolution media fetch failed:', mediaResponse.status, errText);
+      return null;
+    }
+    
     const mediaData = await mediaResponse.json();
-    if (!mediaData.base64) return null;
+    if (!mediaData.base64) {
+      console.error('[transcribe] No base64 in Evolution response. Keys:', Object.keys(mediaData));
+      return null;
+    }
 
+    console.log('[transcribe] Got base64 audio, length:', mediaData.base64.length);
+    
     const binaryStr = atob(mediaData.base64);
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-    const audioBlob = new Blob([bytes], { type: 'audio/ogg' });
+    
+    // Detect mime type from Evolution response or default to ogg
+    const mimeType = mediaData.mimetype || 'audio/ogg';
+    const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('mpeg') ? 'mp3' : 'ogg';
+    const audioBlob = new Blob([bytes], { type: mimeType });
+
+    console.log('[transcribe] Audio blob created:', bytes.length, 'bytes, type:', mimeType);
 
     const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.ogg');
+    formData.append('file', audioBlob, `audio.${extension}`);
     formData.append('model', 'whisper-1');
     formData.append('language', 'pt');
 
@@ -793,10 +812,17 @@ async function transcribeWhatsAppAudio(instanceName: string, messageId: string):
       body: formData,
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[transcribe] Whisper API error:', response.status, errText);
+      return null;
+    }
+    
     const data = await response.json();
+    console.log('[transcribe] Success! Text:', data.text?.substring(0, 80));
     return data.text || null;
-  } catch {
+  } catch (error) {
+    console.error('[transcribe] Exception:', error);
     return null;
   }
 }

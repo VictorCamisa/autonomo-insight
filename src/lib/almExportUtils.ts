@@ -352,15 +352,15 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
 
   // Generate SQL INSERT statements for reliability (phpMyAdmin can import .sql directly)
   const sqlEsc = (val: unknown): string => {
-    if (val === null || val === undefined || val === '') return 'NULL';
+    if (val === null || val === undefined || val === '') return "''";
     const s = sanitizeXmlText(String(val));
     return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
   };
 
   const numOrNull = (val: unknown): string => {
-    if (val === null || val === undefined || val === '') return 'NULL';
+    if (val === null || val === undefined || val === '') return "''";
     const n = Number(val);
-    return isNaN(n) ? 'NULL' : String(n);
+    return isNaN(n) ? "''" : String(n);
   };
 
   const now = new Date().toISOString().replace('T', ' ').substring(0, 19);

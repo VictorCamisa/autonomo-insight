@@ -343,29 +343,56 @@ function sanitizeXmlText(value: string): string {
 }
 
 export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, allStatuses = false) {
-  const data = vehicles
-    .filter(mv => allStatuses || mv.raw.status === 'disponivel')
-    .filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'));
+  const data = allStatuses
+    ? vehicles.filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'))
+    : vehicles
+        .filter(mv => mv.raw.status === 'disponivel')
+        .filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'));
+  if (!data.length) return;
 
-  const esc = (v: unknown) => sanitizeXmlText(String(v ?? ''))
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-
-  const nil = 'xsi:nil="true"';
-  const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-  const columnVal = (name: string, val: unknown) => {
-    if (val === null || val === undefined || val === '') return `\t\t\t\t<column name="${name}" ${nil} />`;
-    return `\t\t\t\t<column name="${name}">${esc(val)}</column>`;
+  // Generate SQL INSERT statements for reliability (phpMyAdmin can import .sql directly)
+  const sqlEsc = (val: unknown): string => {
+    if (val === null || val === undefined || val === '') return 'NULL';
+    const s = sanitizeXmlText(String(val));
+    return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
   };
 
-  const xmlLines: string[] = [
-    '<?xml version="1.0" encoding="utf-8"?>',
-    '<pma_xml_export version="1.0" xmlns:pma="https://www.phpmyadmin.net/some_doc_url/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
-    '\t<database name="db_a77b4c_vsautos">',
+  const numOrNull = (val: unknown): string => {
+    if (val === null || val === undefined || val === '') return 'NULL';
+    const n = Number(val);
+    return isNaN(n) ? 'NULL' : String(n);
+  };
+
+  const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+  const columns = [
+    'Id', 'Ano', 'AnoModelo', 'Km', 'QtdPortas', 'Valor', 'Descricao', 'TipoMotor',
+    'NumeroDonos', 'MarcaId', 'ModeloId', 'TipoVeiculo', 'Placa',
+    'DsAutoEstoqueId', 'DsDataCadastro', 'DsDataAlteracao',
+    'DataCadastro', 'DataAlteracao', 'DataInsercaoBatch',
+    'StatusVeiculo', 'VersaoId', 'CompraId', 'ConsignacaoId', 'VendaId',
+    'Chassi', 'MercadoLibreId', 'CombustivelId', 'CorId', 'OutraCor', 'CambioId',
+    'CategoriaId', 'DirecaoId', 'Cilindrada', 'PartidaId', 'AlimentacaoId',
+    'FreioId', 'MotorId', 'RefrigeracaoId',
+    'MercadoLibreDataPublicacao', 'MercadoLibrePlano',
+    'OlxToken', 'OlxId', 'OlxUrl', 'OlxDataPublicacao',
+    'CompreCarId', 'CompreCarDataPublicacao', 'OlxErros', 'OlxStatus', 'OlxOperacao',
+    'ICarrosId', 'ICarrosDataPublicacao', 'ICarrosPrioridade', 'MercadoLibreUrl',
+    'AutolineId', 'AutolineDataPublicacao', 'AutolinePlano',
+    'ZeroKm', 'CompreCarUrl', 'CompreCarWarnings',
+    'CarroAmericanaIntegradorId', 'CarroAmericanaPublicar', 'CarroAmericanaDataPublicacao',
+    'WebmotorsId', 'WebmotorsPlano', 'WebmotorsPublicar', 'WebmotorsDataPublicacao', 'WebmotorsUrl',
+    'MeuCarroNovoId', 'MeuCarroNovoPublicar', 'MeuCarroNovoDataPublicacao', 'MeuCarroNovoUrl', 'MeuCarroNovoPlano',
+    'AutosnaWebId', 'AutosnaWebPublicar', 'AutosnaWebDataPublicacao', 'AutosnaWebUrl',
+    'MobiautoId', 'MobiautoPlano', 'MobiautoPublicar', 'MobiautoDataPublicacao', 'MobiautoUrl',
+    'Renavam',
+    'UsadosbrId', 'UsadosbrPlano', 'UsadosbrPublicar', 'UsadosbrDataPublicacao', 'UsadosbrUrl'
+  ];
+
+  const lines: string[] = [
+    `-- Exportacao ALM - ${now}`,
+    `-- Total: ${data.length} veiculos`,
+    '',
   ];
 
   data.forEach((mv, idx) => {
@@ -373,105 +400,58 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
     const v = mv.raw;
     const statusNum = v.status === 'disponivel' ? 0 : v.status === 'vendido' ? 2 : 1;
 
-    xmlLines.push('\t\t<table name="carro">');
-    xmlLines.push(columnVal('Id', idx + 1));
-    xmlLines.push(columnVal('Ano', p.Ano));
-    xmlLines.push(columnVal('AnoModelo', p.AnoModelo));
-    xmlLines.push(columnVal('Km', p.Km));
-    xmlLines.push(columnVal('QtdPortas', p.QtdPortas));
-    xmlLines.push(columnVal('Valor', p.Valor ? p.Valor.toFixed(2) : '0.00'));
-    xmlLines.push(columnVal('Descricao', p.Descricao));
-    xmlLines.push(columnVal('TipoMotor', p.TipoMotor || null));
-    xmlLines.push(columnVal('NumeroDonos', null));
-    xmlLines.push(columnVal('MarcaId', p.MarcaId));
-    xmlLines.push(columnVal('ModeloId', p.ModeloId));
-    xmlLines.push(columnVal('TipoVeiculo', p.TipoVeiculo === 'Moto' ? 1 : 0));
-    xmlLines.push(columnVal('Placa', p.Placa));
-    xmlLines.push(columnVal('DsAutoEstoqueId', null));
-    xmlLines.push(columnVal('DsDataCadastro', null));
-    xmlLines.push(columnVal('DsDataAlteracao', null));
-    xmlLines.push(columnVal('DataCadastro', now));
-    xmlLines.push(columnVal('DataAlteracao', now));
-    xmlLines.push(columnVal('DataInsercaoBatch', null));
-    xmlLines.push(columnVal('StatusVeiculo', statusNum));
-    xmlLines.push(columnVal('VersaoId', null));
-    xmlLines.push(columnVal('CompraId', null));
-    xmlLines.push(columnVal('ConsignacaoId', null));
-    xmlLines.push(columnVal('VendaId', null));
-    xmlLines.push(columnVal('Chassi', p.Chassi || null));
-    xmlLines.push(columnVal('MercadoLibreId', null));
-    xmlLines.push(columnVal('CombustivelId', p.CombustivelId));
-    xmlLines.push(columnVal('CorId', p.CorId));
-    xmlLines.push(columnVal('OutraCor', null));
-    xmlLines.push(columnVal('CambioId', p.CambioId));
-    xmlLines.push(columnVal('CategoriaId', null));
-    xmlLines.push(columnVal('DirecaoId', null));
-    xmlLines.push(columnVal('Cilindrada', null));
-    xmlLines.push(columnVal('PartidaId', null));
-    xmlLines.push(columnVal('AlimentacaoId', null));
-    xmlLines.push(columnVal('FreioId', null));
-    xmlLines.push(columnVal('MotorId', null));
-    xmlLines.push(columnVal('RefrigeracaoId', null));
-    xmlLines.push(columnVal('MercadoLibreDataPublicacao', null));
-    xmlLines.push(columnVal('MercadoLibrePlano', null));
-    xmlLines.push(columnVal('OlxToken', null));
-    xmlLines.push(columnVal('OlxId', null));
-    xmlLines.push(columnVal('OlxUrl', null));
-    xmlLines.push(columnVal('OlxDataPublicacao', null));
-    xmlLines.push(columnVal('CompreCarId', null));
-    xmlLines.push(columnVal('CompreCarDataPublicacao', null));
-    xmlLines.push(columnVal('OlxErros', null));
-    xmlLines.push(columnVal('OlxStatus', null));
-    xmlLines.push(columnVal('OlxOperacao', null));
-    xmlLines.push(columnVal('ICarrosId', null));
-    xmlLines.push(columnVal('ICarrosDataPublicacao', null));
-    xmlLines.push(columnVal('ICarrosPrioridade', null));
-    xmlLines.push(columnVal('MercadoLibreUrl', null));
-    xmlLines.push(columnVal('AutolineId', null));
-    xmlLines.push(columnVal('AutolineDataPublicacao', null));
-    xmlLines.push(columnVal('AutolinePlano', null));
-    xmlLines.push(columnVal('ZeroKm', p.ZeroKm ? 1 : 0));
-    xmlLines.push(columnVal('CompreCarUrl', null));
-    xmlLines.push(columnVal('CompreCarWarnings', null));
-    xmlLines.push(columnVal('CarroAmericanaIntegradorId', null));
-    xmlLines.push(columnVal('CarroAmericanaPublicar', null));
-    xmlLines.push(columnVal('CarroAmericanaDataPublicacao', null));
-    xmlLines.push(columnVal('WebmotorsId', null));
-    xmlLines.push(columnVal('WebmotorsPlano', null));
-    xmlLines.push(columnVal('WebmotorsPublicar', null));
-    xmlLines.push(columnVal('WebmotorsDataPublicacao', null));
-    xmlLines.push(columnVal('WebmotorsUrl', null));
-    xmlLines.push(columnVal('MeuCarroNovoId', null));
-    xmlLines.push(columnVal('MeuCarroNovoPublicar', null));
-    xmlLines.push(columnVal('MeuCarroNovoDataPublicacao', null));
-    xmlLines.push(columnVal('MeuCarroNovoUrl', null));
-    xmlLines.push(columnVal('MeuCarroNovoPlano', null));
-    xmlLines.push(columnVal('AutosnaWebId', null));
-    xmlLines.push(columnVal('AutosnaWebPublicar', null));
-    xmlLines.push(columnVal('AutosnaWebDataPublicacao', null));
-    xmlLines.push(columnVal('AutosnaWebUrl', null));
-    xmlLines.push(columnVal('MobiautoId', null));
-    xmlLines.push(columnVal('MobiautoPlano', null));
-    xmlLines.push(columnVal('MobiautoPublicar', null));
-    xmlLines.push(columnVal('MobiautoDataPublicacao', null));
-    xmlLines.push(columnVal('MobiautoUrl', null));
-    xmlLines.push(columnVal('Renavam', (v as any).renavam || null));
-    xmlLines.push(columnVal('UsadosbrId', null));
-    xmlLines.push(columnVal('UsadosbrPlano', null));
-    xmlLines.push(columnVal('UsadosbrPublicar', null));
-    xmlLines.push(columnVal('UsadosbrDataPublicacao', null));
-    xmlLines.push(columnVal('UsadosbrUrl', null));
-    xmlLines.push('\t\t</table>');
+    const values = [
+      idx + 1,                                          // Id
+      numOrNull(p.Ano),                                 // Ano
+      numOrNull(p.AnoModelo),                           // AnoModelo
+      numOrNull(p.Km),                                  // Km
+      numOrNull(p.QtdPortas),                           // QtdPortas
+      p.Valor ? p.Valor.toFixed(2) : '0.00',           // Valor
+      sqlEsc(p.Descricao),                              // Descricao
+      sqlEsc(p.TipoMotor || null),                      // TipoMotor
+      'NULL',                                           // NumeroDonos
+      numOrNull(p.MarcaId),                             // MarcaId
+      numOrNull(p.ModeloId),                            // ModeloId
+      p.TipoVeiculo === 'Moto' ? 1 : 0,                // TipoVeiculo
+      sqlEsc(p.Placa),                                  // Placa
+      'NULL', 'NULL', 'NULL',                           // DsAutoEstoqueId, DsDataCadastro, DsDataAlteracao
+      sqlEsc(now),                                      // DataCadastro
+      sqlEsc(now),                                      // DataAlteracao
+      'NULL',                                           // DataInsercaoBatch
+      statusNum,                                        // StatusVeiculo
+      'NULL', 'NULL', 'NULL', 'NULL',                   // VersaoId, CompraId, ConsignacaoId, VendaId
+      sqlEsc(p.Chassi || null),                         // Chassi
+      'NULL',                                           // MercadoLibreId
+      numOrNull(p.CombustivelId),                       // CombustivelId
+      numOrNull(p.CorId),                               // CorId
+      'NULL',                                           // OutraCor
+      numOrNull(p.CambioId),                            // CambioId
+      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // CategoriaId..AlimentacaoId
+      'NULL', 'NULL', 'NULL',                           // FreioId, MotorId, RefrigeracaoId
+      'NULL', 'NULL',                                   // MercadoLibreDataPublicacao, MercadoLibrePlano
+      'NULL', 'NULL', 'NULL', 'NULL',                   // Olx*
+      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // CompreCar*, OlxErros, OlxStatus, OlxOperacao
+      'NULL', 'NULL', 'NULL', 'NULL',                   // ICarros*, MercadoLibreUrl
+      'NULL', 'NULL', 'NULL',                           // Autoline*
+      p.ZeroKm ? 1 : 0,                                // ZeroKm
+      'NULL', 'NULL',                                   // CompreCarUrl, CompreCarWarnings
+      'NULL', 'NULL', 'NULL',                           // CarroAmericana*
+      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // Webmotors*
+      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // MeuCarroNovo*
+      'NULL', 'NULL', 'NULL', 'NULL',                   // AutosnaWeb*
+      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // Mobiauto*
+      sqlEsc((v as any).renavam || null),                // Renavam
+      'NULL', 'NULL', 'NULL', 'NULL', 'NULL',           // Usadosbr*
+    ];
+
+    lines.push(`INSERT INTO \`carro\` (\`${columns.join('`, `')}\`) VALUES (${values.join(', ')});`);
   });
 
-  xmlLines.push('\t</database>');
-  xmlLines.push('</pma_xml_export>');
-
-  const xmlContent = xmlLines.join('\n');
-  const blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8' });
+  const sqlContent = lines.join('\n');
+  const blob = new Blob([sqlContent], { type: 'application/sql;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'estoque_alm_export.xml';
+  a.download = 'estoque_alm_export.sql';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

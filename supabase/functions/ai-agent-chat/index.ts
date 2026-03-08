@@ -988,7 +988,7 @@ async function executeToolCall(
           user_id: nextSalesperson,
           type: 'lead_assigned',
           title: 'Novo Lead Qualificado pela IA',
-          message: `Lead qualificado: ${args.vehicle_interest} | Pagamento: ${args.payment_method}`,
+          message: `Lead qualificado (${qualificationLevel}): ${vehicleInterest || 'N/A'}${paymentMethod ? ' | Pagamento: ' + paymentMethod : ''}`,
           link: '/crm',
         });
 

@@ -1069,7 +1069,7 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
               // 2. Find similar vehicles in stock
               let similarVehicles = '';
               try {
-                const searchTerms = (args.vehicle_interest || '').split(/\s+/).filter((w: string) => w.length >= 3);
+                const searchTerms = (vehicleInterest || '').split(/\s+/).filter((w: string) => w.length >= 3);
                 if (searchTerms.length > 0) {
                   const orClauses = searchTerms.flatMap((w: string) => [`model.ilike.%${w}%`, `brand.ilike.%${w}%`]);
                   const { data: similar } = await supabase

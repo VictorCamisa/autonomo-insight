@@ -1097,30 +1097,37 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
                 else duration = `${Math.floor(mins / 60)}h ${mins % 60}min`;
               }
 
-              // 4. Build the FICHA message
+              // 4. Build the FICHA message (dynamic based on collected data)
               const fichaLines: string[] = [
                 `━━━━━━━━━━━━━━━━━━━━━`,
-                `*LEAD QUALIFICADO PELA IA*`,
+                `*LEAD QUALIFICADO PELA IA (${qualificationLevel || 'Q2'})*`,
                 `━━━━━━━━━━━━━━━━━━━━━`,
                 ``,
-                `*Cliente:* ${lead.name || 'Nao informado'}`,
+                `*Cliente:* ${lead.name || args.nome || 'Nao informado'}`,
                 `*WhatsApp:* wa.me/${lead.phone.replace(/\D/g, '')}`,
-                `*Origem:* Instagram`,
-                ``,
-                `━━ *INTERESSE* ━━`,
-                `*Veiculo:* ${args.vehicle_interest}`,
-                `*Pagamento:* ${args.payment_method}`,
               ];
 
-              if (args.has_trade_in) {
-                fichaLines.push(`*Troca:* ${args.trade_in_details || 'Sim (sem detalhes)'}`);
-              } else {
-                fichaLines.push(`*Troca:* Nao`);
+              // Add all collected qualification data dynamically
+              if (args.origem) fichaLines.push(`*Origem:* ${args.origem}`);
+              fichaLines.push(``);
+              fichaLines.push(`━━ *DADOS COLETADOS* ━━`);
+              
+              const fieldDisplayOrder = ['veiculo_interesse', 'forma_pagamento', 'orcamento', 'entrada', 'parcela', 'tem_troca', 'veiculo_troca', 'cpf', 'nome_limpo', 'profissao', 'renda'];
+              for (const field of fieldDisplayOrder) {
+                const val = args[field];
+                if (val !== undefined && val !== null && val !== '') {
+                  const label = QUAL_FIELD_LABELS[field] || field;
+                  if (typeof val === 'boolean') {
+                    fichaLines.push(`*${label}:* ${val ? 'Sim' : 'Nao'}`);
+                  } else {
+                    fichaLines.push(`*${label}:* ${val}`);
+                  }
+                }
               }
-
-              if (args.budget_range) {
-                fichaLines.push(`*Orcamento:* ${args.budget_range}`);
-              }
+              // Legacy field support
+              if (!args.veiculo_interesse && args.vehicle_interest) fichaLines.push(`*Veiculo:* ${args.vehicle_interest}`);
+              if (!args.forma_pagamento && args.payment_method) fichaLines.push(`*Pagamento:* ${args.payment_method}`);
+              if (args.notes) fichaLines.push(`*Obs:* ${args.notes}`);
 
               if (conversationSummary) {
                 fichaLines.push(``);

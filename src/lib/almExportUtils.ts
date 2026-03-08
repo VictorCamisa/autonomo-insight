@@ -322,12 +322,82 @@ export function generateJSON(vehicles: MappedVehicle[], includeWarn: boolean) {
   return data;
 }
 
+function sanitizeXmlText(value: string): string {
+  // Remove chars invalid in XML 1.0 (including surrogate code units)
+  return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '')
+    .replace(/\r\n?/g, '\n');
+}
+
+const WIN1252_UNICODE_TO_BYTE: Record<number, number> = {
+  0x20AC: 0x80, // €
+  0x201A: 0x82, // ‚
+  0x0192: 0x83, // ƒ
+  0x201E: 0x84, // „
+  0x2026: 0x85, // …
+  0x2020: 0x86, // †
+  0x2021: 0x87, // ‡
+  0x02C6: 0x88, // ˆ
+  0x2030: 0x89, // ‰
+  0x0160: 0x8A, // Š
+  0x2039: 0x8B, // ‹
+  0x0152: 0x8C, // Œ
+  0x017D: 0x8E, // Ž
+  0x2018: 0x91, // ‘
+  0x2019: 0x92, // ’
+  0x201C: 0x93, // “
+  0x201D: 0x94, // ”
+  0x2022: 0x95, // •
+  0x2013: 0x96, // –
+  0x2014: 0x97, // —
+  0x02DC: 0x98, // ˜
+  0x2122: 0x99, // ™
+  0x0161: 0x9A, // š
+  0x203A: 0x9B, // ›
+  0x0153: 0x9C, // œ
+  0x017E: 0x9E, // ž
+  0x0178: 0x9F, // Ÿ
+};
+
+function encodeWindows1252(input: string): Uint8Array {
+  const bytes: number[] = [];
+  for (const ch of input) {
+    const code = ch.codePointAt(0)!;
+
+    const mapped = WIN1252_UNICODE_TO_BYTE[code];
+    if (mapped !== undefined) {
+      bytes.push(mapped);
+      continue;
+    }
+
+    // Skip astral chars (emoji etc.) unsupported in Windows-1252
+    if (code > 0xFFFF) {
+      bytes.push(0x3F); // ?
+      continue;
+    }
+
+    // Latin-1 compatible range
+    if (code <= 0xFF) {
+      bytes.push(code);
+      continue;
+    }
+
+    // Any remaining unsupported char
+    bytes.push(0x3F);
+  }
+  return new Uint8Array(bytes);
+}
+
 export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, allStatuses = false) {
   const data = vehicles
     .filter(mv => allStatuses || mv.raw.status === 'disponivel')
     .filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'));
 
-  const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const esc = (v: unknown) => sanitizeXmlText(String(v ?? ''))
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
   const nil = `xsi:nil="true"`;
   const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
@@ -440,7 +510,8 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
 
   xmlLines.push('</resultset>');
 
-  const blob = new Blob([xmlLines.join('\n')], { type: 'application/xml' });
+  const xmlContent = xmlLines.join('\n');
+  const blob = new Blob([encodeWindows1252(xmlContent)], { type: 'application/xml;charset=windows-1252' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'estoque_alm_export.xml';

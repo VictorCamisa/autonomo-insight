@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, Search } from 'lucide-react';
-import { useFeaturedVehicles, usePublicVehicles } from '@/hooks/usePublicVehicles';
+import { usePublicVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
 import logoImg from '@/assets/logo-matheus-veiculos.png';
 import heroBanner from '@/assets/hero-banner.png';

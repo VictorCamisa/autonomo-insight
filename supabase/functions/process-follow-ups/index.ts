@@ -182,9 +182,27 @@ serve(async (req) => {
       `)
       .in('status', statusArray);
 
-    console.log(`Found ${flowsData.length} active flows`);
+    if (negError) throw negError;
 
-    // 4. Buscar steps de cada fluxo
+    const negotiations: Negotiation[] = (negotiationsData || []).map((n: any) => ({
+      id: n.id,
+      lead_id: n.lead_id,
+      status: n.status,
+      last_message_at: n.last_message_at,
+      lead: n.lead,
+    }));
+
+    console.log(`Found ${negotiations.length} negotiations to process`);
+
+    if (negotiations.length === 0) {
+      console.log('No negotiations to process');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No negotiations to process', processed: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 5. Buscar steps de cada fluxo
     const flowIds = flowsData.map(f => f.id);
     const { data: stepsData, error: stepsError } = await supabase
       .from('follow_up_steps')

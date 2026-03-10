@@ -478,6 +478,7 @@ export function generateSQL(vehicles: MappedVehicle[], includeWarn: boolean, all
     `-- Exportacao ALM - ${now}`,
     `-- Total: ${data.length} veiculos`,
     '',
+    'USE `db_a77b4c_vsautos`;',
     'SET FOREIGN_KEY_CHECKS=0;',
     '',
   ];

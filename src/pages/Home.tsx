@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, Search } from 'lucide-react';
-import { useFeaturedVehicles, usePublicVehicles } from '@/hooks/usePublicVehicles';
+import { usePublicVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
 import logoImg from '@/assets/logo-matheus-veiculos.png';
 import heroBanner from '@/assets/hero-banner.png';
@@ -25,16 +25,16 @@ const staggerItem = {
 };
 
 export default function Home() {
-  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(6);
   const { data: allVehicles, isLoading: loadingAll } = usePublicVehicles();
 
   const openWhatsApp = () => {
     window.open('https://wa.me/5512988973547?text=Olá! Vim pelo site e gostaria de mais informações.', '_blank');
   };
 
-  // "Acabou de Chegar": pegar veículos featured que NÃO estão nos 6 destaques
-  const featuredIds = new Set((featuredVehicles || []).slice(0, 6).map(v => v.id));
-  const recentVehicles = allVehicles?.filter(v => v.images && v.images.length > 0 && !featuredIds.has(v.id)).slice(0, 4) || [];
+  // Separar veículos com foto: 6 destaque + 4 recentes
+  const vehiclesWithPhotos = allVehicles?.filter(v => v.images && v.images.length > 0) || [];
+  const featuredVehicles = vehiclesWithPhotos.slice(0, 6);
+  const recentVehicles = vehiclesWithPhotos.slice(6, 10);
 
   return (
     <div className="text-foreground">
@@ -125,7 +125,7 @@ export default function Home() {
             </Link>
           </motion.div>
 
-          {loadingFeatured ? (
+          {loadingAll ? (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="bg-muted rounded-2xl h-[280px] md:h-[420px] animate-pulse" />
@@ -139,7 +139,7 @@ export default function Home() {
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
             >
-              {featuredVehicles.filter(v => v.images && v.images.length > 0).slice(0, 6).map((vehicle, index) => (
+              {featuredVehicles.map((vehicle, index) => (
                 <motion.div key={vehicle.id} variants={staggerItem}>
                   <PublicVehicleCard vehicle={vehicle} index={index} />
                 </motion.div>

@@ -35,7 +35,7 @@ export function PublicVehicleCard({ vehicle, index = 0 }: PublicVehicleCardProps
     >
       <Link
         to={`/veiculos/${vehicle.id}`}
-        className="group relative block rounded-2xl overflow-hidden bg-card border border-border hover:shadow-[0_8px_40px_-12px_hsl(var(--primary)/0.12)] transition-all duration-500"
+        className="group relative block rounded-2xl overflow-hidden bg-[#0a0a0a] border border-white/10 hover:shadow-[0_8px_40px_-12px_hsl(var(--primary)/0.2)] transition-all duration-500"
       >
         {/* Image area */}
         <div className="relative aspect-[4/3] overflow-hidden bg-black">
@@ -98,28 +98,28 @@ export function PublicVehicleCard({ vehicle, index = 0 }: PublicVehicleCardProps
             {vehicle.brand}
           </span>
 
-          <h3 className="text-foreground font-bold text-sm md:text-base mt-0.5 leading-tight group-hover:text-primary transition-colors duration-300 truncate">
+          <h3 className="text-white font-bold text-sm md:text-base mt-0.5 leading-tight group-hover:text-primary transition-colors duration-300 truncate">
             {vehicle.model}
             {vehicle.version && (
-              <span className="hidden sm:inline font-normal text-muted-foreground text-xs ml-1.5">{vehicle.version}</span>
+              <span className="hidden sm:inline font-normal text-white/50 text-xs ml-1.5">{vehicle.version}</span>
             )}
           </h3>
 
           <div className="hidden sm:flex items-center gap-1.5 mt-2.5 flex-wrap">
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded-md">
+            <span className="inline-flex items-center gap-1 text-[10px] text-white/60 bg-white/8 px-2 py-1 rounded-md">
               <Fuel className="h-3 w-3" />
               {fuelTypeLabels[vehicle.fuel_type] || vehicle.fuel_type}
             </span>
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded-md">
+            <span className="inline-flex items-center gap-1 text-[10px] text-white/60 bg-white/8 px-2 py-1 rounded-md">
               <Settings2 className="h-3 w-3" />
               {transmissionLabels[vehicle.transmission] || vehicle.transmission}
             </span>
           </div>
 
-          <div className="mt-3 pt-3 border-t border-border flex items-end justify-between">
+          <div className="mt-3 pt-3 border-t border-white/10 flex items-end justify-between">
             <div>
-              <p className="text-[9px] md:text-[10px] text-muted-foreground uppercase tracking-wider font-medium">A partir de</p>
-              <p className="text-base md:text-xl font-extrabold text-foreground tracking-tight">
+              <p className="text-[9px] md:text-[10px] text-white/50 uppercase tracking-wider font-medium">A partir de</p>
+              <p className="text-base md:text-xl font-extrabold text-white tracking-tight">
                 {formatPrice(vehicle.sale_price)}
               </p>
             </div>

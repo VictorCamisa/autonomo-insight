@@ -352,10 +352,14 @@ export default function ALMExportPage() {
           Incluir veículos ⚠️ no export
         </label>
         <div className="flex gap-2 ml-auto flex-wrap">
-          <Button onClick={() => generateJSON(mappedVehicles, includeWarn)} className="bg-green-700 hover:bg-green-800">
+          <input type="file" accept=".xml" ref={fileInputRef} className="hidden" onChange={handleImportAlmXml} />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-2" />Importar IDs do ALM (XML)
+          </Button>
+          <Button onClick={() => { generateJSON(mappedVehicles, includeWarn); saveAlmIds(mappedVehicles); }} className="bg-green-700 hover:bg-green-800">
             <Download className="h-4 w-4 mr-2" />Gerar JSON
           </Button>
-          <Button onClick={() => generateSQL(mappedVehicles, includeWarn)} className="bg-orange-600 hover:bg-orange-700">
+          <Button onClick={() => { generateSQL(mappedVehicles, includeWarn); saveAlmIds(mappedVehicles); }} className="bg-orange-600 hover:bg-orange-700">
             <FileText className="h-4 w-4 mr-2" />Gerar SQL
           </Button>
           <Button variant="outline" onClick={() => setPreviewOpen(true)}>

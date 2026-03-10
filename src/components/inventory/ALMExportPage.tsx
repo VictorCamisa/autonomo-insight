@@ -16,65 +16,8 @@ import {
   type MappedVehicle, type MatchLevel,
 } from '@/lib/almExportUtils';
 
-// Inline a subset of popular ALM models for the dealership's common brands
-// Full list from the HTML source
 import type { ALMModelo } from '@/lib/almExportData';
-
-const INLINE_MODELOS: ALMModelo[] = [
-  {id:196,nome:"CORSA",marcaId:1},{id:174,nome:"ASTRA",marcaId:1},{id:189,nome:"CELTA",marcaId:1},
-  {id:194,nome:"CLASSIC",marcaId:1},{id:195,nome:"COBALT",marcaId:1},{id:199,nome:"CRUZE",marcaId:1},
-  {id:209,nome:"KADETT",marcaId:1},{id:215,nome:"MONTANA",marcaId:1},{id:216,nome:"MONZA",marcaId:1},
-  {id:219,nome:"ONIX",marcaId:1},{id:1805,nome:"ONIX PLUS",marcaId:1},{id:220,nome:"OPALA",marcaId:1},
-  {id:225,nome:"PRISMA",marcaId:1},{id:228,nome:"S10",marcaId:1},{id:233,nome:"SPIN",marcaId:1},
-  {id:234,nome:"TRACKER",marcaId:1},{id:236,nome:"VECTRA",marcaId:1},{id:237,nome:"ZAFIRA",marcaId:1},
-  {id:1803,nome:"EQUINOX",marcaId:1},{id:185,nome:"CAMARO",marcaId:1},
-  {id:340,nome:"DOBLÒ",marcaId:3},{id:344,nome:"FIORINO",marcaId:3},{id:346,nome:"GRAND SIENA",marcaId:3},
-  {id:347,nome:"IDEA",marcaId:3},{id:349,nome:"LINEA",marcaId:3},{id:350,nome:"MOBI",marcaId:3},
-  {id:351,nome:"PALIO",marcaId:3},{id:1846,nome:"PALIO ADVENTURE",marcaId:3},{id:352,nome:"PALIO WEEKEND",marcaId:3},
-  {id:353,nome:"PUNTO",marcaId:3},{id:354,nome:"SIENA",marcaId:3},{id:357,nome:"STRADA",marcaId:3},
-  {id:358,nome:"STILO",marcaId:3},{id:359,nome:"TEMPRA",marcaId:3},{id:360,nome:"TORO",marcaId:3},
-  {id:361,nome:"UNO",marcaId:3},{id:1844,nome:"ARGO",marcaId:3},{id:1845,nome:"CRONOS",marcaId:3},
-  {id:341,nome:"DUCATO",marcaId:3},{id:345,nome:"FREEMONT",marcaId:3},
-  {id:371,nome:"ECOSPORT",marcaId:4},{id:385,nome:"FIESTA",marcaId:4},{id:388,nome:"FOCUS",marcaId:4},
-  {id:389,nome:"FUSION",marcaId:4},{id:391,nome:"KA",marcaId:4},{id:1839,nome:"KA+",marcaId:4},
-  {id:395,nome:"RANGER",marcaId:4},{id:372,nome:"EDGE",marcaId:4},{id:373,nome:"ESCORT",marcaId:4},
-  {id:424,nome:"ACCORD",marcaId:5},{id:425,nome:"CITY",marcaId:5},{id:426,nome:"CIVIC",marcaId:5},
-  {id:427,nome:"CRV",marcaId:5},{id:428,nome:"FIT",marcaId:5},{id:429,nome:"HRV",marcaId:5},
-  {id:430,nome:"WRV",marcaId:5},
-  {id:442,nome:"CRETA",marcaId:6},{id:443,nome:"ELANTRA",marcaId:6},{id:448,nome:"HB20",marcaId:6},
-  {id:449,nome:"HB20S",marcaId:6},{id:450,nome:"HB20X",marcaId:6},{id:451,nome:"I30",marcaId:6},
-  {id:452,nome:"IX35",marcaId:6},{id:456,nome:"SANTA FE",marcaId:6},{id:458,nome:"TUCSON",marcaId:6},
-  {id:459,nome:"VELOSTER",marcaId:6},
-  {id:14,nome:"FRONTIER",marcaId:8},{id:15,nome:"KICKS",marcaId:8},{id:16,nome:"LIVINA",marcaId:8},
-  {id:17,nome:"MARCH",marcaId:8},{id:18,nome:"SENTRA",marcaId:8},{id:20,nome:"TIIDA",marcaId:8},
-  {id:21,nome:"VERSA",marcaId:8},
-  {id:832,nome:"CAPTUR",marcaId:10},{id:833,nome:"CLIO",marcaId:10},{id:834,nome:"DUSTER",marcaId:10},
-  {id:835,nome:"DUSTER OROCH",marcaId:10},{id:837,nome:"FLUENCE",marcaId:10},{id:838,nome:"KWID",marcaId:10},
-  {id:840,nome:"LOGAN",marcaId:10},{id:842,nome:"SANDERO",marcaId:10},{id:846,nome:"SYMBOL",marcaId:10},
-  {id:903,nome:"COROLLA",marcaId:11},{id:905,nome:"ETIOS",marcaId:11},{id:909,nome:"HILUX",marcaId:11},
-  {id:914,nome:"RAV4",marcaId:11},{id:919,nome:"SW4",marcaId:11},{id:921,nome:"YARIS",marcaId:11},
-  {id:926,nome:"AMAROK",marcaId:12},{id:935,nome:"FOX",marcaId:12},{id:936,nome:"FUSCA",marcaId:12},
-  {id:937,nome:"GOL",marcaId:12},{id:938,nome:"GOLF",marcaId:12},{id:940,nome:"JETTA",marcaId:12},
-  {id:944,nome:"POLO",marcaId:12},{id:946,nome:"SAVEIRO",marcaId:12},{id:949,nome:"T-CROSS",marcaId:12},
-  {id:951,nome:"TIGUAN",marcaId:12},{id:953,nome:"UP",marcaId:12},{id:955,nome:"VOYAGE",marcaId:12},
-  {id:931,nome:"CROSS UP",marcaId:12},{id:932,nome:"CROSSFOX",marcaId:12},{id:947,nome:"SPACEFOX",marcaId:12},
-  {id:501,nome:"COMPASS",marcaId:61},{id:504,nome:"RENEGADE",marcaId:61},
-  {id:512,nome:"CERATO",marcaId:63},{id:523,nome:"SOUL",marcaId:63},{id:524,nome:"SPORTAGE",marcaId:63},
-  // Honda Motos
-  {id:1271,nome:"CG 160 FAN",marcaId:121},{id:1272,nome:"CG 160 START ES",marcaId:121},
-  {id:1273,nome:"CG 160 TITAN ESDi",marcaId:121},{id:1274,nome:"CG 160 TITAN EX",marcaId:121},
-  {id:1247,nome:"CG 125 TITAN",marcaId:121},{id:1239,nome:"CG 125",marcaId:121},
-  {id:1181,nome:"BIZ 110i",marcaId:121},{id:2015,nome:"BIZ 125i",marcaId:121},
-  {id:1179,nome:"BIZ 100 ES",marcaId:121},
-  {id:1214,nome:"CB TWISTER",marcaId:121},{id:1209,nome:"CB 600F HORNET",marcaId:121},
-  {id:1202,nome:"CB 500",marcaId:121},{id:1193,nome:"CB 300R",marcaId:121},
-  {id:1308,nome:"NXR 160 BROS",marcaId:121},{id:1309,nome:"NXR 160 BROS ESD",marcaId:121},
-  {id:1310,nome:"NXR 160 BROS ESDD",marcaId:121},
-  {id:1316,nome:"PCX 150",marcaId:121},{id:2039,nome:"PCX 160",marcaId:121},
-  {id:1320,nome:"POP 110i",marcaId:121},
-  {id:1330,nome:"XRE 190",marcaId:121},{id:1331,nome:"XRE 300",marcaId:121},
-  {id:1332,nome:"XRE 300 ABS",marcaId:121},
-];
+import { getALMModelos } from '@/lib/almExportUtils';
 
 export default function ALMExportPage() {
   const navigate = useNavigate();
@@ -87,9 +30,13 @@ export default function ALMExportPage() {
   const [overrides, setOverrides] = useState<Record<string, Record<string, string | number>>>({});
   const [brandMapExtra, setBrandMapExtra] = useState<Record<string, string>>({});
   const [colorMapExtra, setColorMapExtra] = useState<Record<string, number>>({});
+  const [loadedModelos, setLoadedModelos] = useState<ALMModelo[]>([]);
 
   useEffect(() => {
-    setModelos(INLINE_MODELOS);
+    getALMModelos().then(m => {
+      setModelos(m);
+      setLoadedModelos(m);
+    });
   }, []);
 
   // Apply extra mappings
@@ -249,7 +196,7 @@ export default function ALMExportPage() {
             <TableBody>
               {filtered.map((mv, idx) => {
                 const v = mv.raw;
-                const modelsForBrand = mv.brandMatch ? INLINE_MODELOS.filter(m => m.marcaId === mv.brandMatch!.id) : [];
+                const modelsForBrand = mv.brandMatch ? loadedModelos.filter(m => m.marcaId === mv.brandMatch!.id) : [];
                 return (
                   <TableRow key={v.id} className={mv.matchLevel === 'err' ? 'bg-red-50 dark:bg-red-950/20' : mv.matchLevel === 'warn' ? 'bg-yellow-50 dark:bg-yellow-950/20' : ''}>
                     <TableCell className="font-bold text-xs">{idx + 1}</TableCell>

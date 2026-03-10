@@ -98,7 +98,7 @@ export default function Home() {
               </Link>
               <motion.button
                 onClick={openWhatsApp}
-                className="flex-1 md:flex-none px-5 md:px-7 py-3 bg-[hsl(145,63%,32%)]/70 backdrop-blur-xl border border-[hsl(145,63%,42%)]/30 text-white font-medium rounded-xl hover:bg-[hsl(145,63%,32%)]/90 transition-all flex items-center justify-center gap-2 text-sm shadow-xl shadow-black/30"
+                className="flex-1 md:flex-none px-5 md:px-7 py-3 bg-primary/80 backdrop-blur-xl border border-primary/40 text-primary-foreground font-medium rounded-xl hover:bg-primary transition-all flex items-center justify-center gap-2 text-sm shadow-xl shadow-black/30"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
               >

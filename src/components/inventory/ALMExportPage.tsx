@@ -93,7 +93,75 @@ export default function ALMExportPage() {
 
   const previewData = useMemo(() => getPreviewData(mappedVehicles, includeWarn), [mappedVehicles, includeWarn]);
 
-  if (isLoading) {
+  // Save ALM IDs after export
+  const saveAlmIds = async (mapped: MappedVehicle[]) => {
+    const updates = mapped
+      .filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'))
+      .filter(mv => mv.raw.status === 'disponivel')
+      .map((mv, idx) => ({ id: mv.raw.id, alm_id: idx + 1 }));
+
+    for (const u of updates) {
+      await supabase.from('vehicles').update({ alm_id: u.alm_id } as any).eq('id', u.id);
+    }
+    toast.success(`ALM IDs salvos para ${updates.length} veículos`);
+  };
+
+  // Import ALM IDs from XML file (matches by plate)
+  const handleImportAlmXml = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+
+    // Parse ALM XML format: <table name="carro"><column name="Id">5</column><column name="Placa">EWR...</column></table>
+    // Also support <row><field name="Id">5</field><field name="Placa">...</field></row>
+    const tables = doc.querySelectorAll('table[name="carro"]');
+    const rows = doc.querySelectorAll('row');
+    
+    const plateToAlmId: Record<string, number> = {};
+
+    tables.forEach(table => {
+      const cols = table.querySelectorAll('column');
+      let id: number | null = null;
+      let plate = '';
+      cols.forEach(col => {
+        const name = col.getAttribute('name');
+        if (name === 'Id') id = parseInt(col.textContent || '');
+        if (name === 'Placa') plate = (col.textContent || '').trim().toUpperCase();
+      });
+      if (id && plate) plateToAlmId[plate] = id;
+    });
+
+    rows.forEach(row => {
+      const fields = row.querySelectorAll('field');
+      let id: number | null = null;
+      let plate = '';
+      fields.forEach(field => {
+        const name = field.getAttribute('name');
+        if (name === 'Id') id = parseInt(field.textContent || '');
+        if (name === 'Placa') plate = (field.textContent || '').trim().toUpperCase();
+      });
+      if (id && plate) plateToAlmId[plate] = id;
+    });
+
+    if (Object.keys(plateToAlmId).length === 0) {
+      toast.error('Nenhum veículo encontrado no XML');
+      return;
+    }
+
+    let matched = 0;
+    for (const v of vehicles || []) {
+      const plate = (v.plate || '').trim().toUpperCase();
+      if (plate && plateToAlmId[plate]) {
+        await supabase.from('vehicles').update({ alm_id: plateToAlmId[plate] } as any).eq('id', v.id);
+        matched++;
+      }
+    }
+    toast.success(`${matched} veículos atualizados com IDs do ALM (de ${Object.keys(plateToAlmId).length} no XML)`);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
     return <div className="flex items-center justify-center min-h-[400px]"><span className="text-muted-foreground">Carregando veículos...</span></div>;
   }
 

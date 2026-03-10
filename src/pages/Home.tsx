@@ -33,7 +33,7 @@ export default function Home() {
   };
 
   // "Acabou de Chegar": pegar veículos featured que NÃO estão nos 6 destaques
-  const featuredIds = new Set((featuredVehicles || []).slice(0, 6).map(v => v.id));
+  const featuredIds = new Set((featuredVehicles || []).slice(0, 9).map(v => v.id));
   const recentVehicles = allVehicles?.filter(v => v.images && v.images.length > 0 && !featuredIds.has(v.id)).slice(0, 4) || [];
 
   return (

@@ -58,6 +58,7 @@ OptimizedImage.displayName = 'OptimizedImage';
 
 export default function Home() {
   const { data: featuredVehicles, isLoading } = useFeaturedVehicles(6);
+  const { data: recentVehicles, isLoading: isLoadingRecent } = useRecentVehicles(12);
 
   const openGoogleMaps = () => {
     window.open(

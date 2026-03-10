@@ -27,7 +27,7 @@ const staggerItem = {
 };
 
 export default function Home() {
-  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(6);
+  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(8);
   const { data: allVehicles, isLoading: loadingAll } = usePublicVehicles();
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ 
@@ -136,14 +136,14 @@ export default function Home() {
           </motion.div>
 
           {loadingFeatured ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
-              {[...Array(3)].map((_, i) => (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
+              {[...Array(4)].map((_, i) => (
                 <div key={i} className="bg-muted rounded-2xl h-[280px] md:h-[420px] animate-pulse" />
               ))}
             </div>
           ) : featuredVehicles && featuredVehicles.length > 0 ? (
             <motion.div
-              className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6"
+              className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5"
               variants={staggerContainer}
               initial="hidden"
               whileInView="visible"

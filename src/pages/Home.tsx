@@ -136,20 +136,20 @@ export default function Home() {
           </motion.div>
 
           {loadingFeatured ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
-              {[...Array(4)].map((_, i) => (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
+              {[...Array(3)].map((_, i) => (
                 <div key={i} className="bg-muted rounded-2xl h-[280px] md:h-[420px] animate-pulse" />
               ))}
             </div>
           ) : featuredVehicles && featuredVehicles.length > 0 ? (
             <motion.div
-              className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5"
+              className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5"
               variants={staggerContainer}
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
             >
-              {featuredVehicles.slice(0, 8).map((vehicle, index) => (
+              {featuredVehicles.filter(v => v.images && v.images.length > 0).slice(0, 6).map((vehicle, index) => (
                 <motion.div key={vehicle.id} variants={staggerItem}>
                   <PublicVehicleCard vehicle={vehicle} index={index} />
                 </motion.div>

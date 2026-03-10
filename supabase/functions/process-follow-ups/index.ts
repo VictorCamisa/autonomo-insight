@@ -154,14 +154,15 @@ serve(async (req) => {
 
     console.log(`Found ${flowsData.length} active flows`);
 
-    // 3. Coletar todos os status de negociação que os fluxos miram
+    // 3. Coletar todos os status de negociação que os fluxos ativos miram
     const targetStatuses = new Set<string>();
-    // Sempre incluir follow_up como padrão
-    targetStatuses.add('follow_up');
     
     for (const flow of flowsData) {
       if (flow.target_negotiation_status && flow.target_negotiation_status.length > 0) {
         flow.target_negotiation_status.forEach((s: string) => targetStatuses.add(s));
+      } else {
+        // Se o fluxo não tem target_negotiation_status, assume follow_up
+        targetStatuses.add('follow_up');
       }
     }
 

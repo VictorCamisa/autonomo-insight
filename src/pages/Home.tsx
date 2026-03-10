@@ -111,7 +111,13 @@ export default function Home() {
       </section>
 
       {/* ═══════════ VEÍCULOS EM DESTAQUE ═══════════ */}
-      <section className="pt-10 pb-10 md:pt-20 md:pb-24 relative overflow-hidden bg-background">
+      <motion.section 
+        className="pt-10 pb-10 md:pt-20 md:pb-24 relative overflow-hidden bg-background"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-100px" }}
+      >
         <div className="container mx-auto px-4 md:px-6 relative z-10">
           <motion.div
             className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 md:mb-10 gap-3"

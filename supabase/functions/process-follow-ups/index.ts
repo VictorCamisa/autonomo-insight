@@ -253,13 +253,23 @@ serve(async (req) => {
       const lead = negotiation.lead;
       totalProcessed++;
 
-      console.log(`\n📋 Processing: ${lead.name} (negotiation ${negotiation.id})`);
+      console.log(`\n📋 Processing: ${lead.name} (${negotiation.status}, negotiation ${negotiation.id})`);
 
       // Verificar se lead está convertido
       if (lead.status === 'convertido') {
         console.log('  ⏭️ Lead converted, skipping');
         totalSkipped++;
         continue;
+      }
+
+      // Verificar inatividade mínima - não enviar follow-up se teve mensagem recente (<1h)
+      if (negotiation.last_message_at) {
+        const minutesSinceLastMsg = (Date.now() - new Date(negotiation.last_message_at).getTime()) / (1000 * 60);
+        if (minutesSinceLastMsg < 60) {
+          console.log(`  ⏭️ Recent activity (${minutesSinceLastMsg.toFixed(0)}min ago), skipping`);
+          totalSkipped++;
+          continue;
+        }
       }
 
       // Encontrar fluxo aplicável

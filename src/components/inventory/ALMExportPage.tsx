@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useVehicles } from '@/hooks/useVehicles';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { ALM_MARCAS, ALM_CORES, BRAND_MAP, COLOR_MAP } from '@/lib/almExportData';
 import {
   mapVehicle, generateJSON, generateSQL, exportCSV, getPreviewData,

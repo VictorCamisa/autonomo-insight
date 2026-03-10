@@ -19,7 +19,7 @@ export function useFormPersistence<T extends FieldValues>({
   debounceMs = 500,
 }: UseFormPersistenceOptions<T>) {
   const storageKey = `form_draft_${key}`;
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
 
   // Restaurar dados salvos ao montar o componente

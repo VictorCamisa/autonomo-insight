@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { useRef } from 'react';
 import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, Search } from 'lucide-react';
 import { usePublicVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
@@ -9,19 +10,27 @@ import lojaFachada1 from '@/assets/loja-fachada-1.jpg';
 import lojaFachada2 from '@/assets/loja-fachada-2.jpg';
 import lojaInterior from '@/assets/loja-interior.jpg';
 
+const sectionVariants = {
+  hidden: { opacity: 0, y: 60, scale: 0.97 },
+  visible: { 
+    opacity: 1, y: 0, scale: 1, 
+    transition: { duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] } 
+  }
+};
+
 const fadeInUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
 
 const staggerContainer = {
   hidden: { opacity: 1 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.06 } }
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } }
 };
 
 const staggerItem = {
-  hidden: { opacity: 0, y: 15 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
+  hidden: { opacity: 0, y: 20, scale: 0.95 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4 } }
 };
 
 export default function Home() {
@@ -89,7 +98,7 @@ export default function Home() {
               </Link>
               <motion.button
                 onClick={openWhatsApp}
-                className="flex-1 md:flex-none px-5 md:px-7 py-3 bg-[hsl(145,63%,32%)]/70 backdrop-blur-xl border border-[hsl(145,63%,42%)]/30 text-white font-medium rounded-xl hover:bg-[hsl(145,63%,32%)]/90 transition-all flex items-center justify-center gap-2 text-sm shadow-xl shadow-black/30"
+                className="flex-1 md:flex-none px-5 md:px-7 py-3 bg-primary/80 backdrop-blur-xl border border-primary/40 text-primary-foreground font-medium rounded-xl hover:bg-primary transition-all flex items-center justify-center gap-2 text-sm shadow-xl shadow-black/30"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
               >
@@ -102,7 +111,13 @@ export default function Home() {
       </section>
 
       {/* ═══════════ VEÍCULOS EM DESTAQUE ═══════════ */}
-      <section className="pt-10 pb-10 md:pt-20 md:pb-24 relative overflow-hidden bg-background">
+      <motion.section 
+        className="pt-10 pb-10 md:pt-20 md:pb-24 relative overflow-hidden bg-background"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-100px" }}
+      >
         <div className="container mx-auto px-4 md:px-6 relative z-10">
           <motion.div
             className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 md:mb-10 gap-3"
@@ -151,11 +166,17 @@ export default function Home() {
             </div>
           )}
         </div>
-      </section>
+      </motion.section>
 
       {/* ═══════════ ACABOU DE CHEGAR ═══════════ */}
       {recentVehicles.length > 0 && (
-        <section className="py-10 md:py-24 relative overflow-hidden bg-background">
+        <motion.section 
+          className="py-10 md:py-24 relative overflow-hidden bg-background"
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+        >
           <div className="absolute inset-0">
             <img src={lojaFachada1} alt="" className="w-full h-full object-cover opacity-[0.03]" />
           </div>
@@ -197,11 +218,17 @@ export default function Home() {
               ))}
             </motion.div>
           </div>
-        </section>
+        </motion.section>
       )}
 
       {/* ═══════════ DIFERENCIAIS ═══════════ */}
-      <section className="py-10 md:py-16 relative overflow-hidden">
+      <motion.section 
+        className="py-10 md:py-16 relative overflow-hidden"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-100px" }}
+      >
         <div className="absolute inset-0">
           <img src={lojaInterior} alt="" className="w-full h-full object-cover opacity-[0.03]" />
         </div>
@@ -232,10 +259,16 @@ export default function Home() {
             ))}
           </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ═══════════ CTA + CONTATO ═══════════ */}
-      <section className="py-12 md:py-20 relative overflow-hidden">
+      <motion.section 
+        className="py-12 md:py-20 relative overflow-hidden"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-100px" }}
+      >
         <div className="absolute inset-0 bg-black" />
         <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.4\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }} />
         <div className="container mx-auto px-4 md:px-6 relative z-10">
@@ -301,7 +334,7 @@ export default function Home() {
             </motion.div>
           </div>
         </div>
-      </section>
+      </motion.section>
     </div>
   );
 }

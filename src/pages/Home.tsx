@@ -259,7 +259,7 @@ export default function Home() {
             ))}
           </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ═══════════ CTA + CONTATO ═══════════ */}
       <section className="py-12 md:py-20 relative overflow-hidden">

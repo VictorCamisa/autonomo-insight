@@ -10,24 +10,24 @@
 
 @layer base {
   :root {
-    /* Light mode - Vermelho, Branco e Preto */
-    --background: 0 0% 98%;
-    --foreground: 0 0% 10%;
+    /* Light mode - Dark theme (same as dark for public consistency) */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 92%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 92%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 92%;
 
     --primary: 0 73% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 20%;
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 85%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 55%;
 
     --accent: 0 73% 55%;
     --accent-foreground: 0 0% 100%;
@@ -41,31 +41,19 @@
     --warning: 0 73% 55%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 92%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
     --ring: 0 73% 55%;
 
-    --radius: 0.625rem;
-
-    /* Sidebar - Light */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 30%;
-    --sidebar-primary: 0 73% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 96%;
-    --sidebar-accent-foreground: 0 0% 20%;
-    --sidebar-border: 0 0% 92%;
-    --sidebar-ring: 0 73% 55%;
-
     /* Surface levels for depth */
-    --surface-1: 0 0% 100%;
-    --surface-2: 0 0% 98%;
-    --surface-3: 0 0% 96%;
+    --surface-1: 0 0% 10%;
+    --surface-2: 0 0% 12%;
+    --surface-3: 0 0% 14%;
 
     /* Text hierarchy */
-    --text-primary: 0 0% 10%;
-    --text-secondary: 0 0% 40%;
-    --text-muted: 0 0% 55%;
+    --text-primary: 0 0% 95%;
+    --text-secondary: 0 0% 65%;
+    --text-muted: 0 0% 50%;
 
     /* Auth page colors */
     --auth-bg: 0 0% 97%;

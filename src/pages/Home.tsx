@@ -6,6 +6,7 @@ import { usePublicVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
 import logoImg from '@/assets/logo-matheus-veiculos.png';
 import heroBanner from '@/assets/hero-banner.png';
+import heroBannerMobile from '@/assets/hero-banner-mobile.png';
 import lojaFachada1 from '@/assets/loja-fachada-1.jpg';
 import lojaFachada2 from '@/assets/loja-fachada-2.jpg';
 import lojaInterior from '@/assets/loja-interior.jpg';

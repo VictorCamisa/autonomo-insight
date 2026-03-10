@@ -39,9 +39,9 @@ export default function Home() {
   return (
     <div className="text-foreground">
       {/* ═══════════ HERO ═══════════ */}
-      <section className="relative w-full overflow-hidden min-h-[85vh] md:min-h-0 flex flex-col justify-end">
-        <div className="relative w-full">
-          <img src={heroBanner} alt="Matheus Veículos" className="w-full h-[85vh] md:h-auto object-cover brightness-[0.5]" />
+      <section className="relative w-full overflow-hidden h-screen flex flex-col justify-end">
+        <div className="absolute inset-0">
+          <img src={heroBanner} alt="Matheus Veículos" className="w-full h-full object-cover brightness-[0.5]" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/40" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-transparent h-1/3" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_50%,rgba(0,0,0,0.5)_100%)]" />

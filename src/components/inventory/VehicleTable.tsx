@@ -182,7 +182,9 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
                                   : `${cfg.bg} ${cfg.text} border-transparent opacity-30 hover:opacity-80`
                               }`}
                               onClick={() => {
-                                window.open(`http://amodolo82-004-site5.jtempurl.com/index.html#!/vehiclead/${encodeURIComponent(vehicle.plate || '')}`, '_blank');
+                                if (vehicle.alm_id) {
+                                  window.open(`http://amodolo82-004-site5.jtempurl.com/index.html#!/vehicle/${vehicle.alm_id}`, '_blank');
+                                }
                               }}
                             >
                               {cfg.abbr}

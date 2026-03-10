@@ -14,13 +14,13 @@ const sectionVariants = {
   hidden: { opacity: 0, y: 60, scale: 0.97 },
   visible: { 
     opacity: 1, y: 0, scale: 1, 
-    transition: { duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] } 
+    transition: { duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] } 
   }
 };
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
 
 const staggerContainer = {
@@ -30,7 +30,7 @@ const staggerContainer = {
 
 const staggerItem = {
   hidden: { opacity: 0, y: 20, scale: 0.95 },
-  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: 'easeOut' } }
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4 } }
 };
 
 export default function Home() {

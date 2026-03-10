@@ -1,10 +1,8 @@
-import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, ChevronLeft, Search } from 'lucide-react';
+import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, Search } from 'lucide-react';
 import { useFeaturedVehicles, usePublicVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
-import useEmblaCarousel from 'embla-carousel-react';
 import logoImg from '@/assets/logo-matheus-veiculos.png';
 import lojaFachadaPrincipal from '@/assets/loja-fachada-principal.jpg';
 import lojaFachada1 from '@/assets/loja-fachada-1.jpg';
@@ -27,24 +25,14 @@ const staggerItem = {
 };
 
 export default function Home() {
-  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(8);
+  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(6);
   const { data: allVehicles, isLoading: loadingAll } = usePublicVehicles();
-
-  const [emblaRef, emblaApi] = useEmblaCarousel({ 
-    loop: true, 
-    align: 'start',
-    slidesToScroll: 1,
-    containScroll: 'trimSnaps'
-  });
-
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
 
   const openWhatsApp = () => {
     window.open('https://wa.me/5512988973547?text=Olá! Vim pelo site e gostaria de mais informações.', '_blank');
   };
 
-  const recentVehicles = allVehicles?.filter(v => !v.featured && v.images && v.images.length > 0).slice(0, 12) || [];
+  const recentVehicles = allVehicles?.filter(v => !v.featured && v.images && v.images.length > 0).slice(0, 4) || [];
 
   return (
     <div className="text-foreground">
@@ -136,20 +124,20 @@ export default function Home() {
           </motion.div>
 
           {loadingFeatured ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
-              {[...Array(4)].map((_, i) => (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
+              {[...Array(3)].map((_, i) => (
                 <div key={i} className="bg-muted rounded-2xl h-[280px] md:h-[420px] animate-pulse" />
               ))}
             </div>
           ) : featuredVehicles && featuredVehicles.length > 0 ? (
             <motion.div
-              className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5"
+              className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5"
               variants={staggerContainer}
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
             >
-              {featuredVehicles.slice(0, 8).map((vehicle, index) => (
+              {featuredVehicles.filter(v => v.images && v.images.length > 0).slice(0, 6).map((vehicle, index) => (
                 <motion.div key={vehicle.id} variants={staggerItem}>
                   <PublicVehicleCard vehicle={vehicle} index={index} />
                 </motion.div>
@@ -187,38 +175,25 @@ export default function Home() {
                   Acabou de <span className="text-primary">Chegar</span>
                 </h2>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={scrollPrev}
-                  className="w-9 h-9 md:w-11 md:h-11 rounded-full bg-muted hover:bg-primary text-muted-foreground hover:text-primary-foreground flex items-center justify-center transition-all border border-border hover:border-primary"
-                >
-                  <ChevronLeft className="w-4 h-4 md:w-5 md:h-5" />
-                </button>
-                <button
-                  onClick={scrollNext}
-                  className="w-9 h-9 md:w-11 md:h-11 rounded-full bg-muted hover:bg-primary text-muted-foreground hover:text-primary-foreground flex items-center justify-center transition-all border border-border hover:border-primary"
-                >
-                  <ChevronRight className="w-4 h-4 md:w-5 md:h-5" />
-                </button>
-              </div>
+              <Link to="/veiculos" className="group flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors text-sm font-medium">
+                Ver todos
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
             </motion.div>
 
-            <div className="overflow-hidden" ref={emblaRef}>
-              <div className="flex gap-3 md:gap-5">
-                {recentVehicles.map((vehicle, index) => (
-                  <motion.div
-                    key={vehicle.id}
-                    className="flex-shrink-0 w-[200px] sm:w-[280px] md:w-[320px] lg:w-[340px]"
-                    initial={{ opacity: 0, y: 15 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05, duration: 0.3 }}
-                    viewport={{ once: true }}
-                  >
-                    <PublicVehicleCard vehicle={vehicle} index={index} />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
+            <motion.div
+              className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5"
+              variants={staggerContainer}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-50px" }}
+            >
+              {recentVehicles.map((vehicle, index) => (
+                <motion.div key={vehicle.id} variants={staggerItem}>
+                  <PublicVehicleCard vehicle={vehicle} index={index} />
+                </motion.div>
+              ))}
+            </motion.div>
           </div>
         </section>
       )}

@@ -168,7 +168,8 @@ serve(async (req) => {
     const statusArray = Array.from(targetStatuses);
     console.log(`Querying negotiations with statuses: ${statusArray.join(', ')}`);
 
-    // 4. Buscar negociações nos status que os fluxos miram
+    // 4. Buscar negociações nos status que os fluxos miram (inativas há >1h, limite 50 por batch)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { data: negotiationsData, error: negError } = await supabase
       .from('negotiations')
       .select(`
@@ -180,7 +181,11 @@ serve(async (req) => {
           id, name, phone, status, source, assigned_to, created_at, vehicle_interest, qualification_status
         )
       `)
-      .in('status', statusArray);
+      .in('status', statusArray)
+      .lt('last_message_at', oneHourAgo)
+      .not('lead.status', 'eq', 'convertido')
+      .order('last_message_at', { ascending: true })
+      .limit(50);
 
     if (negError) throw negError;
 
@@ -192,12 +197,12 @@ serve(async (req) => {
       lead: n.lead,
     }));
 
-    console.log(`Found ${negotiations.length} negotiations to process`);
+    console.log(`Found ${negotiations.length} negotiations to process (batch of 50, inactive >1h)`);
 
     if (negotiations.length === 0) {
-      console.log('No negotiations to process');
+      console.log('No inactive negotiations to process');
       return new Response(
-        JSON.stringify({ success: true, message: 'No negotiations to process', processed: 0 }),
+        JSON.stringify({ success: true, message: 'No inactive negotiations', processed: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

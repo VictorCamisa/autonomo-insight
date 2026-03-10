@@ -40,6 +40,7 @@ export interface Vehicle {
   images: string[] | null;
   portal_ml: boolean;
   portal_np: boolean;
+  alm_id: number | null;
 }
 
 export interface VehicleCost {

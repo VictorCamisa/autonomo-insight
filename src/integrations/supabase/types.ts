@@ -4279,6 +4279,7 @@ export type Database = {
       }
       vehicles: {
         Row: {
+          alm_id: number | null
           brand: string
           chassis: string | null
           city: string | null
@@ -4326,6 +4327,7 @@ export type Database = {
           zip_code: string | null
         }
         Insert: {
+          alm_id?: number | null
           brand: string
           chassis?: string | null
           city?: string | null
@@ -4373,6 +4375,7 @@ export type Database = {
           zip_code?: string | null
         }
         Update: {
+          alm_id?: number | null
           brand?: string
           chassis?: string | null
           city?: string | null

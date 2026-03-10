@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, FileJson, FileText, Eye, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { ArrowLeft, Download, FileJson, FileText, Eye, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useVehicles } from '@/hooks/useVehicles';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { ALM_MARCAS, ALM_CORES, BRAND_MAP, COLOR_MAP } from '@/lib/almExportData';
 import {
   mapVehicle, generateJSON, generateSQL, exportCSV, getPreviewData,
@@ -31,6 +33,7 @@ export default function ALMExportPage() {
   const [brandMapExtra, setBrandMapExtra] = useState<Record<string, string>>({});
   const [colorMapExtra, setColorMapExtra] = useState<Record<string, number>>({});
   const [loadedModelos, setLoadedModelos] = useState<ALMModelo[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getALMModelos().then(m => {
@@ -89,6 +92,75 @@ export default function ALMExportPage() {
   };
 
   const previewData = useMemo(() => getPreviewData(mappedVehicles, includeWarn), [mappedVehicles, includeWarn]);
+
+  // Save ALM IDs after export
+  const saveAlmIds = async (mapped: MappedVehicle[]) => {
+    const updates = mapped
+      .filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'))
+      .filter(mv => mv.raw.status === 'disponivel')
+      .map((mv, idx) => ({ id: mv.raw.id, alm_id: idx + 1 }));
+
+    for (const u of updates) {
+      await supabase.from('vehicles').update({ alm_id: u.alm_id } as any).eq('id', u.id);
+    }
+    toast.success(`ALM IDs salvos para ${updates.length} veículos`);
+  };
+
+  // Import ALM IDs from XML file (matches by plate)
+  const handleImportAlmXml = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+
+    // Parse ALM XML format: <table name="carro"><column name="Id">5</column><column name="Placa">EWR...</column></table>
+    // Also support <row><field name="Id">5</field><field name="Placa">...</field></row>
+    const tables = doc.querySelectorAll('table[name="carro"]');
+    const rows = doc.querySelectorAll('row');
+    
+    const plateToAlmId: Record<string, number> = {};
+
+    tables.forEach(table => {
+      const cols = table.querySelectorAll('column');
+      let id: number | null = null;
+      let plate = '';
+      cols.forEach(col => {
+        const name = col.getAttribute('name');
+        if (name === 'Id') id = parseInt(col.textContent || '');
+        if (name === 'Placa') plate = (col.textContent || '').trim().toUpperCase();
+      });
+      if (id && plate) plateToAlmId[plate] = id;
+    });
+
+    rows.forEach(row => {
+      const fields = row.querySelectorAll('field');
+      let id: number | null = null;
+      let plate = '';
+      fields.forEach(field => {
+        const name = field.getAttribute('name');
+        if (name === 'Id') id = parseInt(field.textContent || '');
+        if (name === 'Placa') plate = (field.textContent || '').trim().toUpperCase();
+      });
+      if (id && plate) plateToAlmId[plate] = id;
+    });
+
+    if (Object.keys(plateToAlmId).length === 0) {
+      toast.error('Nenhum veículo encontrado no XML');
+      return;
+    }
+
+    let matched = 0;
+    for (const v of vehicles || []) {
+      const plate = (v.plate || '').trim().toUpperCase();
+      if (plate && plateToAlmId[plate]) {
+        await supabase.from('vehicles').update({ alm_id: plateToAlmId[plate] } as any).eq('id', v.id);
+        matched++;
+      }
+    }
+    toast.success(`${matched} veículos atualizados com IDs do ALM (de ${Object.keys(plateToAlmId).length} no XML)`);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center min-h-[400px]"><span className="text-muted-foreground">Carregando veículos...</span></div>;
@@ -280,10 +352,14 @@ export default function ALMExportPage() {
           Incluir veículos ⚠️ no export
         </label>
         <div className="flex gap-2 ml-auto flex-wrap">
-          <Button onClick={() => generateJSON(mappedVehicles, includeWarn)} className="bg-green-700 hover:bg-green-800">
+          <input type="file" accept=".xml" ref={fileInputRef} className="hidden" onChange={handleImportAlmXml} />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-2" />Importar IDs do ALM (XML)
+          </Button>
+          <Button onClick={() => { generateJSON(mappedVehicles, includeWarn); saveAlmIds(mappedVehicles); }} className="bg-green-700 hover:bg-green-800">
             <Download className="h-4 w-4 mr-2" />Gerar JSON
           </Button>
-          <Button onClick={() => generateSQL(mappedVehicles, includeWarn)} className="bg-orange-600 hover:bg-orange-700">
+          <Button onClick={() => { generateSQL(mappedVehicles, includeWarn); saveAlmIds(mappedVehicles); }} className="bg-orange-600 hover:bg-orange-700">
             <FileText className="h-4 w-4 mr-2" />Gerar SQL
           </Button>
           <Button variant="outline" onClick={() => setPreviewOpen(true)}>

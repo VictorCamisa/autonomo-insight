@@ -29,8 +29,6 @@ export default function Home() {
   const { data: allVehicles, isLoading: loadingAll } = usePublicVehicles();
 
   const openWhatsApp = () => {
-
-  const openWhatsApp = () => {
     window.open('https://wa.me/5512988973547?text=Olá! Vim pelo site e gostaria de mais informações.', '_blank');
   };
 

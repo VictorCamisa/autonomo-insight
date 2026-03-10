@@ -170,8 +170,9 @@ export function useFeaturedVehicles(limit = 6) {
         .from('vehicles')
         .select('*')
         .eq('status', 'disponivel')
+        .eq('featured', true)
         .order('created_at', { ascending: false })
-        .limit(limit * 2); // Buscar mais para filtrar os featured
+        .limit(limit);
 
       if (vehiclesError) throw vehiclesError;
       const vehicles = data as VehicleRow[] | null;

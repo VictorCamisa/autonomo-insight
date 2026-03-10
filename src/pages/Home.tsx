@@ -44,7 +44,7 @@ export default function Home() {
     window.open('https://wa.me/5512988973547?text=Olá! Vim pelo site e gostaria de mais informações.', '_blank');
   };
 
-  const recentVehicles = allVehicles?.filter(v => !v.featured && v.images && v.images.length > 0).slice(0, 12) || [];
+  const recentVehicles = allVehicles?.filter(v => !v.featured && v.images && v.images.length > 0).slice(0, 4) || [];
 
   return (
     <div className="text-foreground">

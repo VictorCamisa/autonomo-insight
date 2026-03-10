@@ -1,0 +1,2 @@
+-- Mark all vehicles with sale_price >= 45000 and status 'disponivel' as featured
+UPDATE vehicles SET featured = true WHERE sale_price >= 45000 AND status = 'disponivel' AND (featured = false OR featured IS NULL);

@@ -222,7 +222,13 @@ export default function Home() {
       )}
 
       {/* ═══════════ DIFERENCIAIS ═══════════ */}
-      <section className="py-10 md:py-16 relative overflow-hidden">
+      <motion.section 
+        className="py-10 md:py-16 relative overflow-hidden"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-100px" }}
+      >
         <div className="absolute inset-0">
           <img src={lojaInterior} alt="" className="w-full h-full object-cover opacity-[0.03]" />
         </div>

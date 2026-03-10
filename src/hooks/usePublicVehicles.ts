@@ -170,15 +170,15 @@ export function useFeaturedVehicles(limit = 6) {
         .from('vehicles')
         .select('*')
         .eq('status', 'disponivel')
+        .eq('featured', true)
         .order('created_at', { ascending: false })
-        .limit(limit * 2); // Buscar mais para filtrar os featured
+        .limit(limit);
 
       if (vehiclesError) throw vehiclesError;
       const vehicles = data as VehicleRow[] | null;
       if (!vehicles || vehicles.length === 0) return [];
 
-      // Filtrar featured e limitar
-      const featuredVehicles = vehicles.filter(v => v.featured === true).slice(0, limit);
+      const featuredVehicles = vehicles.slice(0, limit);
       if (featuredVehicles.length === 0) return [];
 
       const vehicleIds = featuredVehicles.map(v => v.id);

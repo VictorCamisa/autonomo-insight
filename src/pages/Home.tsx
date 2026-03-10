@@ -166,7 +166,7 @@ export default function Home() {
             </div>
           )}
         </div>
-      </section>
+      </motion.section>
 
       {/* ═══════════ ACABOU DE CHEGAR ═══════════ */}
       {recentVehicles.length > 0 && (

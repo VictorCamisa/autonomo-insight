@@ -30,6 +30,8 @@ export default function PublicEstoque() {
   };
 
   const filteredVehicles = vehicles?.filter(v => {
+    // Só exibir veículos com foto
+    if (!v.images || v.images.length === 0) return false;
     const searchLower = search.toLowerCase();
     const matchesSearch =
       v.brand.toLowerCase().includes(searchLower) ||

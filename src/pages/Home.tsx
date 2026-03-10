@@ -25,7 +25,7 @@ const staggerItem = {
 };
 
 export default function Home() {
-  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(9);
+  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(6);
   const { data: allVehicles, isLoading: loadingAll } = usePublicVehicles();
 
   const openWhatsApp = () => {
@@ -33,7 +33,7 @@ export default function Home() {
   };
 
   // "Acabou de Chegar": pegar veículos featured que NÃO estão nos 6 destaques
-  const featuredIds = new Set((featuredVehicles || []).slice(0, 9).map(v => v.id));
+  const featuredIds = new Set((featuredVehicles || []).slice(0, 6).map(v => v.id));
   const recentVehicles = allVehicles?.filter(v => v.images && v.images.length > 0 && !featuredIds.has(v.id)).slice(0, 4) || [];
 
   return (
@@ -139,7 +139,7 @@ export default function Home() {
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
             >
-              {featuredVehicles.filter(v => v.images && v.images.length > 0).slice(0, 9).map((vehicle, index) => (
+              {featuredVehicles.filter(v => v.images && v.images.length > 0).slice(0, 6).map((vehicle, index) => (
                 <motion.div key={vehicle.id} variants={staggerItem}>
                   <PublicVehicleCard vehicle={vehicle} index={index} />
                 </motion.div>

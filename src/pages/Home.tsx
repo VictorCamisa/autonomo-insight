@@ -139,7 +139,7 @@ export default function Home() {
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
             >
-              {featuredVehicles.filter(v => v.images && v.images.length > 0).slice(0, 6).map((vehicle, index) => (
+              {featuredVehicles.map((vehicle, index) => (
                 <motion.div key={vehicle.id} variants={staggerItem}>
                   <PublicVehicleCard vehicle={vehicle} index={index} />
                 </motion.div>

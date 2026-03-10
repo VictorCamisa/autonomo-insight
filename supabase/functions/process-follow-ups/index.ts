@@ -129,14 +129,46 @@ serve(async (req) => {
       console.log('🔧 Force execution requested (manual trigger)');
     }
 
-    // 1. Primeiro, mover negociações stale para follow_up (>24h sem resposta em negociando)
+    // 1. Primeiro, mover negociações stale para follow_up (>24h sem resposta em negociando/atendimento_ia)
     console.log('🔄 Moving stale negotiations to follow_up...');
     const { error: staleError } = await supabase.rpc('move_stale_negotiations_to_follow_up');
     if (staleError) {
       console.error('Error moving stale negotiations:', staleError.message);
     }
 
-    // 2. Buscar negociações no estágio follow_up
+    // 2. Buscar TODOS os fluxos ativos (independente do trigger_type)
+    const { data: flowsData, error: flowsError } = await supabase
+      .from('follow_up_flows')
+      .select('*')
+      .eq('is_active', true);
+
+    if (flowsError) throw flowsError;
+
+    if (!flowsData || flowsData.length === 0) {
+      console.log('No active follow-up flows found');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No active flows', processed: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Found ${flowsData.length} active flows`);
+
+    // 3. Coletar todos os status de negociação que os fluxos miram
+    const targetStatuses = new Set<string>();
+    // Sempre incluir follow_up como padrão
+    targetStatuses.add('follow_up');
+    
+    for (const flow of flowsData) {
+      if (flow.target_negotiation_status && flow.target_negotiation_status.length > 0) {
+        flow.target_negotiation_status.forEach((s: string) => targetStatuses.add(s));
+      }
+    }
+
+    const statusArray = Array.from(targetStatuses);
+    console.log(`Querying negotiations with statuses: ${statusArray.join(', ')}`);
+
+    // 4. Buscar negociações nos status que os fluxos miram
     const { data: negotiationsData, error: negError } = await supabase
       .from('negotiations')
       .select(`
@@ -148,44 +180,7 @@ serve(async (req) => {
           id, name, phone, status, source, assigned_to, created_at, vehicle_interest, qualification_status
         )
       `)
-      .eq('status', 'follow_up');
-
-    if (negError) throw negError;
-
-    const negotiations: Negotiation[] = (negotiationsData || []).map((n: any) => ({
-      id: n.id,
-      lead_id: n.lead_id,
-      status: n.status,
-      last_message_at: n.last_message_at,
-      lead: n.lead,
-    }));
-
-    console.log(`Found ${negotiations.length} negotiations in follow_up stage`);
-
-    if (negotiations.length === 0) {
-      console.log('No negotiations in follow_up stage');
-      return new Response(
-        JSON.stringify({ success: true, message: 'No negotiations in follow_up', processed: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 3. Buscar fluxos ativos com trigger 'negotiation_follow_up'
-    const { data: flowsData, error: flowsError } = await supabase
-      .from('follow_up_flows')
-      .select('*')
-      .eq('is_active', true)
-      .or('trigger_type.eq.negotiation_follow_up,trigger_type.eq.no_response_to_bot');
-
-    if (flowsError) throw flowsError;
-
-    if (!flowsData || flowsData.length === 0) {
-      console.log('No active follow-up flows for negotiation_follow_up trigger');
-      return new Response(
-        JSON.stringify({ success: true, message: 'No active flows', processed: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+      .in('status', statusArray);
 
     console.log(`Found ${flowsData.length} active flows`);
 

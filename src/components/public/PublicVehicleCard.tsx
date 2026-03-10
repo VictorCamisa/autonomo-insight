@@ -35,7 +35,7 @@ export function PublicVehicleCard({ vehicle, index = 0 }: PublicVehicleCardProps
     >
       <Link
         to={`/veiculos/${vehicle.id}`}
-        className="group relative block rounded-2xl overflow-hidden bg-card border border-border hover:shadow-[0_8px_40px_-12px_hsl(var(--primary)/0.12)] transition-all duration-500"
+        className="group relative block rounded-2xl overflow-hidden bg-[#0a0a0a] border border-white/10 hover:shadow-[0_8px_40px_-12px_hsl(var(--primary)/0.2)] transition-all duration-500"
       >
         {/* Image area */}
         <div className="relative aspect-[4/3] overflow-hidden bg-black">

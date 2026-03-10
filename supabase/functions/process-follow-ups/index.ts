@@ -129,14 +129,48 @@ serve(async (req) => {
       console.log('🔧 Force execution requested (manual trigger)');
     }
 
-    // 1. Primeiro, mover negociações stale para follow_up (>24h sem resposta em negociando)
+    // 1. Primeiro, mover negociações stale para follow_up (>24h sem resposta em negociando/atendimento_ia)
     console.log('🔄 Moving stale negotiations to follow_up...');
     const { error: staleError } = await supabase.rpc('move_stale_negotiations_to_follow_up');
     if (staleError) {
       console.error('Error moving stale negotiations:', staleError.message);
     }
 
-    // 2. Buscar negociações no estágio follow_up
+    // 2. Buscar TODOS os fluxos ativos (independente do trigger_type)
+    const { data: flowsData, error: flowsError } = await supabase
+      .from('follow_up_flows')
+      .select('*')
+      .eq('is_active', true);
+
+    if (flowsError) throw flowsError;
+
+    if (!flowsData || flowsData.length === 0) {
+      console.log('No active follow-up flows found');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No active flows', processed: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Found ${flowsData.length} active flows`);
+
+    // 3. Coletar todos os status de negociação que os fluxos ativos miram
+    const targetStatuses = new Set<string>();
+    
+    for (const flow of flowsData) {
+      if (flow.target_negotiation_status && flow.target_negotiation_status.length > 0) {
+        flow.target_negotiation_status.forEach((s: string) => targetStatuses.add(s));
+      } else {
+        // Se o fluxo não tem target_negotiation_status, assume follow_up
+        targetStatuses.add('follow_up');
+      }
+    }
+
+    const statusArray = Array.from(targetStatuses);
+    console.log(`Querying negotiations with statuses: ${statusArray.join(', ')}`);
+
+    // 4. Buscar negociações nos status que os fluxos miram (inativas há >1h, limite 50 por batch)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { data: negotiationsData, error: negError } = await supabase
       .from('negotiations')
       .select(`
@@ -148,7 +182,11 @@ serve(async (req) => {
           id, name, phone, status, source, assigned_to, created_at, vehicle_interest, qualification_status
         )
       `)
-      .eq('status', 'follow_up');
+      .in('status', statusArray)
+      .lt('last_message_at', oneHourAgo)
+      .not('lead.status', 'eq', 'convertido')
+      .order('last_message_at', { ascending: true })
+      .limit(50);
 
     if (negError) throw negError;
 
@@ -160,36 +198,17 @@ serve(async (req) => {
       lead: n.lead,
     }));
 
-    console.log(`Found ${negotiations.length} negotiations in follow_up stage`);
+    console.log(`Found ${negotiations.length} negotiations to process (batch of 50, inactive >1h)`);
 
     if (negotiations.length === 0) {
-      console.log('No negotiations in follow_up stage');
+      console.log('No inactive negotiations to process');
       return new Response(
-        JSON.stringify({ success: true, message: 'No negotiations in follow_up', processed: 0 }),
+        JSON.stringify({ success: true, message: 'No inactive negotiations', processed: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 3. Buscar fluxos ativos com trigger 'negotiation_follow_up'
-    const { data: flowsData, error: flowsError } = await supabase
-      .from('follow_up_flows')
-      .select('*')
-      .eq('is_active', true)
-      .or('trigger_type.eq.negotiation_follow_up,trigger_type.eq.no_response_to_bot');
-
-    if (flowsError) throw flowsError;
-
-    if (!flowsData || flowsData.length === 0) {
-      console.log('No active follow-up flows for negotiation_follow_up trigger');
-      return new Response(
-        JSON.stringify({ success: true, message: 'No active flows', processed: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`Found ${flowsData.length} active flows`);
-
-    // 4. Buscar steps de cada fluxo
+    // 5. Buscar steps de cada fluxo
     const flowIds = flowsData.map(f => f.id);
     const { data: stepsData, error: stepsError } = await supabase
       .from('follow_up_steps')
@@ -240,13 +259,23 @@ serve(async (req) => {
       const lead = negotiation.lead;
       totalProcessed++;
 
-      console.log(`\n📋 Processing: ${lead.name} (negotiation ${negotiation.id})`);
+      console.log(`\n📋 Processing: ${lead.name} (${negotiation.status}, negotiation ${negotiation.id})`);
 
       // Verificar se lead está convertido
       if (lead.status === 'convertido') {
         console.log('  ⏭️ Lead converted, skipping');
         totalSkipped++;
         continue;
+      }
+
+      // Verificar inatividade mínima - não enviar follow-up se teve mensagem recente (<1h)
+      if (negotiation.last_message_at) {
+        const minutesSinceLastMsg = (Date.now() - new Date(negotiation.last_message_at).getTime()) / (1000 * 60);
+        if (minutesSinceLastMsg < 60) {
+          console.log(`  ⏭️ Recent activity (${minutesSinceLastMsg.toFixed(0)}min ago), skipping`);
+          totalSkipped++;
+          continue;
+        }
       }
 
       // Encontrar fluxo aplicável
@@ -282,7 +311,9 @@ serve(async (req) => {
       let tracking: FollowUpTracking | null = trackingMap.get(negotiation.id) || null;
       
       if (!tracking) {
-        // Criar novo tracking
+        // Criar novo tracking - usar last_message_at como referência de início
+        // para que o delay conte desde a última atividade do lead
+        const trackingStartedAt = negotiation.last_message_at || new Date().toISOString();
         const { data: newTracking, error: createError } = await supabase
           .from('lead_follow_up_tracking')
           .insert({
@@ -291,7 +322,7 @@ serve(async (req) => {
             flow_id: applicableFlow.id,
             current_step: 0,
             status: 'active',
-            started_at: new Date().toISOString(),
+            started_at: trackingStartedAt,
           })
           .select()
           .single();
@@ -303,7 +334,7 @@ serve(async (req) => {
         }
 
         tracking = newTracking as FollowUpTracking;
-        console.log('  📝 Created new tracking');
+        console.log(`  📝 Created new tracking (started_at: ${trackingStartedAt})`);
       }
 
       // Encontrar próximo step

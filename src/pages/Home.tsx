@@ -1,8 +1,8 @@
 import { lazy, Suspense, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, FileCheck, CreditCard, ExternalLink, Car, Users, Star } from 'lucide-react';
-import { useFeaturedVehicles } from '@/hooks/usePublicVehicles';
+import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, FileCheck, CreditCard, ExternalLink, Car, Users, Star, Sparkles } from 'lucide-react';
+import { useFeaturedVehicles, useRecentVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
 import { LocationMap } from '@/components/ui/expand-map';
 import { StatsCard } from '@/components/ui/stats-card';

@@ -162,6 +162,7 @@ export default function ALMExportPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  if (isLoading) {
     return <div className="flex items-center justify-center min-h-[400px]"><span className="text-muted-foreground">Carregando veículos...</span></div>;
   }
 

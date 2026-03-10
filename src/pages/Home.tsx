@@ -1,8 +1,8 @@
 import { lazy, Suspense, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, FileCheck, CreditCard, ExternalLink, Car, Users, Star } from 'lucide-react';
-import { useFeaturedVehicles } from '@/hooks/usePublicVehicles';
+import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, FileCheck, CreditCard, ExternalLink, Car, Users, Star, Sparkles } from 'lucide-react';
+import { useFeaturedVehicles, useRecentVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
 import { LocationMap } from '@/components/ui/expand-map';
 import { StatsCard } from '@/components/ui/stats-card';
@@ -58,6 +58,7 @@ OptimizedImage.displayName = 'OptimizedImage';
 
 export default function Home() {
   const { data: featuredVehicles, isLoading } = useFeaturedVehicles(6);
+  const { data: recentVehicles, isLoading: isLoadingRecent } = useRecentVehicles(12);
 
   const openGoogleMaps = () => {
     window.open(
@@ -410,6 +411,119 @@ export default function Home() {
               <p className="text-white/50 text-lg">Nenhum veículo em destaque no momento.</p>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Acabou de Chegar - Recent Arrivals (Roma-style) */}
+      {recentVehicles && recentVehicles.length > 0 && (
+        <section className="py-24 bg-black relative overflow-hidden">
+          {/* Background image strip */}
+          <div className="absolute inset-0 opacity-10">
+            <div 
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${lojaFachada1})` }}
+            />
+            <div className="absolute inset-0 bg-black/80" />
+          </div>
+
+          <div className="container mx-auto px-6 relative z-10">
+            <motion.div
+              className="flex flex-col md:flex-row md:items-end md:justify-between mb-16 gap-6"
+              variants={fadeInUp}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-100px" }}
+            >
+              <div>
+                <motion.span 
+                  className="text-[#E53935] text-sm font-medium uppercase tracking-widest mb-4 flex items-center gap-2"
+                  variants={fadeInUp}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Novidades
+                </motion.span>
+                <h2 className="text-4xl md:text-5xl font-display font-bold text-white leading-tight">
+                  Acabou de<br />
+                  <span className="text-white/50">Chegar</span>
+                </h2>
+              </div>
+              <Link to="/veiculos">
+                <motion.button 
+                  className="group flex items-center gap-2 text-white/60 hover:text-white transition-colors"
+                  whileHover={{ x: 5 }}
+                >
+                  Ver estoque completo
+                  <ChevronRight className="w-5 h-5" />
+                </motion.button>
+              </Link>
+            </motion.div>
+
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              variants={staggerContainer}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-50px" }}
+            >
+              {recentVehicles.slice(0, 6).map((vehicle, index) => (
+                <motion.div 
+                  key={vehicle.id} 
+                  variants={staggerItem}
+                  whileHover={{ y: -8, transition: { duration: 0.3 } }}
+                >
+                  <PublicVehicleCard vehicle={vehicle} index={index} />
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </section>
+      )}
+
+      {/* Benefits Strip (Roma-style) */}
+      <section className="relative py-20 overflow-hidden">
+        <div className="absolute inset-0">
+          <div 
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${lojaFachada3})` }}
+          />
+          <div className="absolute inset-0 bg-black/85" />
+        </div>
+
+        <div className="container mx-auto px-6 relative z-10">
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                icon: Shield,
+                title: 'Laudo Aprovado',
+                desc: 'Todos os veículos com laudo cautelar 100% aprovado e histórico verificado.',
+              },
+              {
+                icon: FileCheck,
+                title: 'Documentação na Hora',
+                desc: 'Agilidade total. Documentação completa entregue no ato da compra.',
+              },
+              {
+                icon: CreditCard,
+                title: 'Facilidade de Pagamento',
+                desc: 'Financiamento, cartão e aceitamos seu carro ou moto como parte.',
+              },
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                className="text-center"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.15 }}
+              >
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#E53935]/10 border border-[#E53935]/20 flex items-center justify-center">
+                  <item.icon className="w-7 h-7 text-[#E53935]" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
+                <p className="text-white/50 leading-relaxed">{item.desc}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 

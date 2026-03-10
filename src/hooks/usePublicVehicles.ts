@@ -230,3 +230,71 @@ export function useFeaturedVehicles(limit = 6) {
     },
   });
 }
+
+export function useRecentVehicles(limit = 12) {
+  return useQuery({
+    queryKey: ['recent-vehicles', limit],
+    queryFn: async (): Promise<PublicVehicle[]> => {
+      const { data, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('status', 'disponivel')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (vehiclesError) throw vehiclesError;
+      const vehicles = data as VehicleRow[] | null;
+      if (!vehicles || vehicles.length === 0) return [];
+
+      // Filter out featured ones to show only non-featured recent arrivals
+      const recentVehicles = vehicles.filter(v => !v.featured).slice(0, limit);
+      if (recentVehicles.length === 0) return [];
+
+      const vehicleIds = recentVehicles.map(v => v.id);
+
+      let images: ImageRow[] | null = null;
+      try {
+        const { data: imgData } = await supabase
+          .from('vehicle_images')
+          .select('*')
+          .in('vehicle_id', vehicleIds)
+          .order('display_order', { ascending: true });
+        images = imgData as ImageRow[] | null;
+      } catch {
+        // Ignorar erro
+      }
+
+      return recentVehicles.map(vehicle => {
+        const vehicleImages = (images || [])
+          .filter(img => img.vehicle_id === vehicle.id)
+          .map(img => ({ id: img.id, image_url: img.image_url, is_cover: img.is_cover, display_order: img.display_order }));
+
+        const finalImages = vehicleImages.length > 0 
+          ? vehicleImages 
+          : (vehicle.images || []).map((url, idx) => ({
+              id: `img-${idx}`,
+              image_url: url,
+              is_cover: idx === 0,
+              display_order: idx
+            }));
+
+        return {
+          id: vehicle.id,
+          brand: vehicle.brand,
+          model: vehicle.model,
+          version: vehicle.version,
+          year_fabrication: vehicle.year_fabrication,
+          year_model: vehicle.year_model,
+          color: vehicle.color,
+          km: vehicle.km,
+          fuel_type: vehicle.fuel_type,
+          transmission: vehicle.transmission,
+          doors: vehicle.doors,
+          sale_price: vehicle.sale_price,
+          featured: vehicle.featured,
+          images: finalImages
+        };
+      });
+    },
+  });
+}

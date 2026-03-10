@@ -196,7 +196,7 @@ export default function ALMExportPage() {
             <TableBody>
               {filtered.map((mv, idx) => {
                 const v = mv.raw;
-                const modelsForBrand = mv.brandMatch ? INLINE_MODELOS.filter(m => m.marcaId === mv.brandMatch!.id) : [];
+                const modelsForBrand = mv.brandMatch ? loadedModelos.filter(m => m.marcaId === mv.brandMatch!.id) : [];
                 return (
                   <TableRow key={v.id} className={mv.matchLevel === 'err' ? 'bg-red-50 dark:bg-red-950/20' : mv.matchLevel === 'warn' ? 'bg-yellow-50 dark:bg-yellow-950/20' : ''}>
                     <TableCell className="font-bold text-xs">{idx + 1}</TableCell>

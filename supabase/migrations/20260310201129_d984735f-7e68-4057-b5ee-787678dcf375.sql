@@ -1,0 +1,2 @@
+-- Remove featured from vehicles without photos
+UPDATE vehicles SET featured = false WHERE featured = true AND status = 'disponivel' AND (images IS NULL OR array_length(images, 1) IS NULL OR array_length(images, 1) = 0);

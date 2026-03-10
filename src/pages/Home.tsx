@@ -203,7 +203,7 @@ export default function Home() {
       {/* ═══════════ DIFERENCIAIS ═══════════ */}
       <section className="py-10 md:py-16 relative overflow-hidden">
         <div className="absolute inset-0">
-          <img src={lojaInterior} alt="" className="w-full h-full object-cover opacity-[0.06]" />
+          <img src={lojaInterior} alt="" className="w-full h-full object-cover opacity-[0.03]" />
         </div>
         <div className="container mx-auto px-4 md:px-6 relative z-10">
           <motion.div

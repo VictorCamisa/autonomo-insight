@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useVehicles } from '@/hooks/useVehicles';
 import { ALM_MARCAS, ALM_CORES, BRAND_MAP, COLOR_MAP } from '@/lib/almExportData';
 import {
-  mapVehicle, generateJSON, generateXML, exportCSV, getPreviewData,
+  mapVehicle, generateJSON, generateSQL, exportCSV, getPreviewData,
   normStr, matchBrand, setModelos, getModelos,
   type MappedVehicle, type MatchLevel,
 } from '@/lib/almExportUtils';

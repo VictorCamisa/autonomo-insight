@@ -1,11 +1,13 @@
-import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, ChevronLeft, Search } from 'lucide-react';
+import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, Search } from 'lucide-react';
 import { useFeaturedVehicles, usePublicVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
-import useEmblaCarousel from 'embla-carousel-react';
 import logoImg from '@/assets/logo-matheus-veiculos.png';
+import lojaFachadaPrincipal from '@/assets/loja-fachada-principal.jpg';
+import lojaFachada1 from '@/assets/loja-fachada-1.jpg';
+import lojaFachada2 from '@/assets/loja-fachada-2.jpg';
+import lojaInterior from '@/assets/loja-interior.jpg';
 import lojaFachadaPrincipal from '@/assets/loja-fachada-principal.jpg';
 import lojaFachada1 from '@/assets/loja-fachada-1.jpg';
 import lojaFachada2 from '@/assets/loja-fachada-2.jpg';

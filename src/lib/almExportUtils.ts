@@ -121,19 +121,32 @@ export function matchModel(brandId: number, modelStr: string): ALMModelo | null 
   match = normalized.find(n => n.norm.startsWith(norm + ' ') || norm.startsWith(n.norm + ' '));
   if (match) return match.model;
   
-  // 3) Contains match (input is substring of model name, or model name is substring of input)
+  // 3) Exact match on just the first word(s) of the input
+  match = normalized.find(n => n.norm === norm.split(' ')[0]);
+  if (match) return match.model;
+  
+  // 4) Contains match (input is substring of model name, or model name is substring of input)
   match = normalized.find(n => n.norm.includes(norm));
   if (match) return match.model;
   match = normalized.find(n => norm.includes(n.norm));
   if (match) return match.model;
   
-  // 4) First word match (e.g. "CG" matches "CG 160 FAN")
+  // 5) First word match (e.g. "CG" matches "CG 160 FAN")
   const firstWord = norm.split(' ')[0];
   if (firstWord.length >= 2) {
     match = normalized.find(n => n.norm.split(' ')[0] === firstWord);
     if (match) return match.model;
-    // Also try if any ALM model starts with the first word
     match = normalized.find(n => n.norm.startsWith(firstWord));
+    if (match) return match.model;
+  }
+  
+  // 6) Remove hyphens/dashes and retry
+  const normNoDash = norm.replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+  if (normNoDash !== norm) {
+    match = normalized.find(n => {
+      const nNoDash = n.norm.replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+      return nNoDash === normNoDash || nNoDash.startsWith(normNoDash) || normNoDash.startsWith(nNoDash);
+    });
     if (match) return match.model;
   }
   

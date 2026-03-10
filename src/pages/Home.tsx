@@ -27,7 +27,7 @@ const staggerItem = {
 };
 
 export default function Home() {
-  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(8);
+  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(6);
   const { data: allVehicles, isLoading: loadingAll } = usePublicVehicles();
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ 

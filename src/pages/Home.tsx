@@ -218,7 +218,7 @@ export default function Home() {
               ))}
             </motion.div>
           </div>
-        </section>
+        </motion.section>
       )}
 
       {/* ═══════════ DIFERENCIAIS ═══════════ */}

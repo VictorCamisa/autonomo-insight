@@ -33,6 +33,7 @@ export default function ALMExportPage() {
   const [brandMapExtra, setBrandMapExtra] = useState<Record<string, string>>({});
   const [colorMapExtra, setColorMapExtra] = useState<Record<string, number>>({});
   const [loadedModelos, setLoadedModelos] = useState<ALMModelo[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getALMModelos().then(m => {

@@ -65,7 +65,7 @@ export default function Inventory() {
     if (!vehicles?.length) { toast.error('Nenhum veículo para exportar'); return; }
     const mapped = vehicles.map(v => mapVehicle(v));
     generateXML(mapped, true, allStatuses);
-    toast.success(`SQL exportado com ${allStatuses ? 'todos os veículos' : 'veículos disponíveis'}`);
+    toast.success(`XML exportado com ${allStatuses ? 'todos os veículos' : 'veículos disponíveis'}`);
   };
 
   const filteredVehicles = vehicles?.filter((vehicle) => {

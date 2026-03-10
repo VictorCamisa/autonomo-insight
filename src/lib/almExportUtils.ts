@@ -342,27 +342,15 @@ function sanitizeXmlText(value: string): string {
   return out.replace(/\r\n?/g, '\n');
 }
 
-export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, allStatuses = false) {
-  const data = allStatuses
+function getExportData(vehicles: MappedVehicle[], includeWarn: boolean, allStatuses = false) {
+  return allStatuses
     ? vehicles.filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'))
     : vehicles
         .filter(mv => mv.raw.status === 'disponivel')
         .filter(mv => mv.matchLevel === 'ok' || (includeWarn && mv.matchLevel === 'warn'));
-  if (!data.length) return;
+}
 
-  // Generate SQL INSERT statements for reliability (phpMyAdmin can import .sql directly)
-  const sqlEsc = (val: unknown): string => {
-    if (val === null || val === undefined || val === '') return "''";
-    const s = sanitizeXmlText(String(val));
-    return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-  };
-
-  const numOrNull = (val: unknown): string => {
-    if (val === null || val === undefined || val === '') return "''";
-    const n = Number(val);
-    return isNaN(n) ? "''" : String(n);
-  };
-
+function getCarroRows(data: MappedVehicle[]) {
   const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
   const columns = [
@@ -389,6 +377,89 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
     'UsadosbrId', 'UsadosbrPlano', 'UsadosbrPublicar', 'UsadosbrDataPublicacao', 'UsadosbrUrl'
   ];
 
+  const rows = data.map((mv, idx) => {
+    const p = mv.almPayload;
+    const v = mv.raw;
+    const statusNum = v.status === 'disponivel' ? 0 : v.status === 'vendido' ? 2 : 1;
+
+    const values: Array<string | number | null> = [
+      idx + 1,
+      p.Ano ?? null,
+      p.AnoModelo ?? null,
+      p.Km ?? 0,
+      p.QtdPortas ?? null,
+      p.Valor ?? 0,
+      p.Descricao || '',
+      p.TipoMotor || '',
+      null,
+      p.MarcaId ?? null,
+      p.ModeloId ?? null,
+      p.TipoVeiculo === 'Moto' ? 1 : 0,
+      p.Placa || '',
+      null, null, null,
+      now,
+      now,
+      null,
+      statusNum,
+      null, null, null, null,
+      p.Chassi || '',
+      null,
+      p.CombustivelId ?? null,
+      p.CorId ?? null,
+      null,
+      p.CambioId ?? null,
+      null, null, null, null, null,
+      null, null, null,
+      null, null,
+      null, null, null, null,
+      null, null, null, null, null,
+      null, null, null, null,
+      null, null, null,
+      p.ZeroKm ? 1 : 0,
+      null, null,
+      null, null, null,
+      null, null, null, null, null,
+      null, null, null, null, null,
+      null, null, null, null,
+      null, null, null, null, null,
+      (v as any).renavam || '',
+      null, null, null, null, null,
+    ];
+
+    return { values };
+  });
+
+  return { columns, rows, now };
+}
+
+function escapeXml(value: unknown): string {
+  const cleaned = sanitizeXmlText(String(value ?? ''));
+  return cleaned
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+export function generateSQL(vehicles: MappedVehicle[], includeWarn: boolean, allStatuses = false) {
+  const data = getExportData(vehicles, includeWarn, allStatuses);
+  if (!data.length) return;
+
+  const { columns, rows, now } = getCarroRows(data);
+
+  const sqlEsc = (val: unknown): string => {
+    if (val === null || val === undefined || val === '') return "''";
+    const s = sanitizeXmlText(String(val));
+    return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  };
+
+  const numOrNull = (val: unknown): string => {
+    if (val === null || val === undefined || val === '') return 'NULL';
+    const n = Number(val);
+    return Number.isNaN(n) ? 'NULL' : String(n);
+  };
+
   const lines: string[] = [
     `-- Exportacao ALM - ${now}`,
     `-- Total: ${data.length} veiculos`,
@@ -397,56 +468,18 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
     '',
   ];
 
-  data.forEach((mv, idx) => {
-    const p = mv.almPayload;
-    const v = mv.raw;
-    const statusNum = v.status === 'disponivel' ? 0 : v.status === 'vendido' ? 2 : 1;
+  rows.forEach(({ values }) => {
+    const sqlValues = values.map((value, index) => {
+      const column = columns[index];
+      const isNumeric = [
+        'Id', 'Ano', 'AnoModelo', 'Km', 'QtdPortas', 'Valor', 'MarcaId', 'ModeloId', 'TipoVeiculo',
+        'StatusVeiculo', 'CombustivelId', 'CorId', 'CambioId', 'ZeroKm'
+      ].includes(column);
 
-    const values = [
-      idx + 1,                                          // Id
-      numOrNull(p.Ano),                                 // Ano
-      numOrNull(p.AnoModelo),                           // AnoModelo
-      numOrNull(p.Km),                                  // Km
-      numOrNull(p.QtdPortas),                           // QtdPortas
-      p.Valor ? p.Valor.toFixed(2) : '0.00',           // Valor
-      sqlEsc(p.Descricao),                              // Descricao
-      sqlEsc(p.TipoMotor || ''),                         // TipoMotor
-      "''",                                             // NumeroDonos
-      numOrNull(p.MarcaId),                             // MarcaId
-      numOrNull(p.ModeloId),                            // ModeloId
-      p.TipoVeiculo === 'Moto' ? 1 : 0,                // TipoVeiculo
-      sqlEsc(p.Placa),                                  // Placa
-      "''", "''", "''",                                 // DsAutoEstoqueId, DsDataCadastro, DsDataAlteracao
-      sqlEsc(now),                                      // DataCadastro
-      sqlEsc(now),                                      // DataAlteracao
-      "''",                                             // DataInsercaoBatch
-      statusNum,                                        // StatusVeiculo
-      "''", "''", "''", "''",                           // VersaoId, CompraId, ConsignacaoId, VendaId
-      sqlEsc(p.Chassi || ''),                           // Chassi
-      "''",                                             // MercadoLibreId
-      numOrNull(p.CombustivelId),                       // CombustivelId
-      numOrNull(p.CorId),                               // CorId
-      "''",                                             // OutraCor
-      numOrNull(p.CambioId),                            // CambioId
-      "''", "''", "''", "''", "''",                     // CategoriaId..AlimentacaoId
-      "''", "''", "''",                                 // FreioId, MotorId, RefrigeracaoId
-      "''", "''",                                       // MercadoLibreDataPublicacao, MercadoLibrePlano
-      "''", "''", "''", "''",                           // Olx*
-      "''", "''", "''", "''", "''",                     // CompreCar*, OlxErros, OlxStatus, OlxOperacao
-      "''", "''", "''", "''",                           // ICarros*, MercadoLibreUrl
-      "''", "''", "''",                                 // Autoline*
-      p.ZeroKm ? 1 : 0,                                // ZeroKm
-      "''", "''",                                       // CompreCarUrl, CompreCarWarnings
-      "''", "''", "''",                                 // CarroAmericana*
-      "''", "''", "''", "''", "''",                     // Webmotors*
-      "''", "''", "''", "''", "''",                     // MeuCarroNovo*
-      "''", "''", "''", "''",                           // AutosnaWeb*
-      "''", "''", "''", "''", "''",                     // Mobiauto*
-      sqlEsc((v as any).renavam || ''),                  // Renavam
-      "''", "''", "''", "''", "''",                     // Usadosbr*
-    ];
+      return isNumeric ? numOrNull(value) : sqlEsc(value);
+    });
 
-    lines.push(`INSERT INTO \`carro\` (\`${columns.join('`, `')}\`) VALUES (${values.join(', ')});`);
+    lines.push(`INSERT INTO \`carro\` (\`${columns.join('`, `')}\`) VALUES (${sqlValues.join(', ')});`);
   });
 
   const sqlContent = lines.join('\n');
@@ -457,6 +490,39 @@ export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, all
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+export function generateXML(vehicles: MappedVehicle[], includeWarn: boolean, allStatuses = false) {
+  const data = getExportData(vehicles, includeWarn, allStatuses);
+  if (!data.length) return;
+
+  const { columns, rows } = getCarroRows(data);
+
+  const xml: string[] = [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<pma_xml_export version="1.0" xmlns:pma="https://www.phpmyadmin.net/some_doc_url/">',
+    '  <database name="db_a77b4c_vsautos">',
+  ];
+
+  rows.forEach(({ values }) => {
+    xml.push('    <table name="carro">');
+    columns.forEach((column, idx) => {
+      const value = values[idx];
+      xml.push(`      <column name="${column}">${escapeXml(value ?? '')}</column>`);
+    });
+    xml.push('    </table>');
+  });
+
+  xml.push('  </database>');
+  xml.push('</pma_xml_export>');
+
+  const blob = new Blob([xml.join('\n')], { type: 'application/xml;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'estoque_alm_export.xml';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 
 
 export function exportCSV(vehicles: MappedVehicle[]) {

@@ -7,83 +7,96 @@ const corsHeaders = {
 };
 
 // =============================================
-// TOOL DEFINITIONS (OpenAI format for Lovable AI Gateway)
+// TOOL DEFINITIONS (Anthropic format)
 // =============================================
 const toolDefinitions = [
   {
-    type: "function",
-    function: {
-      name: "search_vehicles",
-      description: "Busca veiculos disponiveis no estoque da loja. Use SEMPRE que o cliente perguntar sobre qualquer tipo de carro, marca, modelo, preco ou estoque. Para categorias como SUV, sedan, etc, use o campo 'keyword'. Se o cliente perguntar algo generico como 'o que voces tem?', use sem filtros.",
-      parameters: {
-        type: "object",
-        properties: {
-          brand: { type: "string", description: "Marca do veiculo (ex: Honda, Toyota, Volkswagen, Hyundai)" },
-          model: { type: "string", description: "Modelo do veiculo (ex: Civic, Corolla, HB20, Compass)" },
-          keyword: { type: "string", description: "Palavra-chave para busca ampla em modelo, versao e notas. Use para categorias como SUV, sedan, hatch, picape, etc." },
-          min_price: { type: "number", description: "Preco minimo" },
-          max_price: { type: "number", description: "Preco maximo" },
-          max_km: { type: "number", description: "Quilometragem maxima" },
-          year_min: { type: "number", description: "Ano minimo" },
-          color: { type: "string", description: "Cor do veiculo" },
-        },
-        required: [],
+    name: "search_vehicles",
+    description: "Busca veiculos disponiveis no estoque da loja. Use SEMPRE que o cliente perguntar sobre qualquer tipo de carro, marca, modelo, preco ou estoque. Para categorias como SUV, sedan, etc, use o campo 'keyword'. Se o cliente perguntar algo generico como 'o que voces tem?', use sem filtros.",
+    input_schema: {
+      type: "object",
+      properties: {
+        brand: { type: "string", description: "Marca do veiculo (ex: Honda, Toyota, Volkswagen, Hyundai)" },
+        model: { type: "string", description: "Modelo do veiculo (ex: Civic, Corolla, HB20, Compass)" },
+        keyword: { type: "string", description: "Palavra-chave para busca ampla em modelo, versao e notas. Use para categorias como SUV, sedan, hatch, picape, etc." },
+        min_price: { type: "number", description: "Preco minimo" },
+        max_price: { type: "number", description: "Preco maximo" },
+        max_km: { type: "number", description: "Quilometragem maxima" },
+        year_min: { type: "number", description: "Ano minimo" },
+        color: { type: "string", description: "Cor do veiculo" },
       },
+      required: [],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "get_vehicle_details",
-      description: "Obtem detalhes completos de um veiculo especifico. Busca por ID ou modelo/marca.",
-      parameters: {
-        type: "object",
-        properties: {
-          vehicle_id: { type: "string", description: "ID UUID do veiculo" },
-          model: { type: "string", description: "Nome do modelo do veiculo" },
-          brand: { type: "string", description: "Marca do veiculo" },
-        },
-        required: [],
+    name: "get_vehicle_details",
+    description: "Obtem detalhes completos de um veiculo especifico. Busca por ID ou modelo/marca.",
+    input_schema: {
+      type: "object",
+      properties: {
+        vehicle_id: { type: "string", description: "ID UUID do veiculo" },
+        model: { type: "string", description: "Nome do modelo do veiculo" },
+        brand: { type: "string", description: "Marca do veiculo" },
       },
+      required: [],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "send_vehicle_photos",
-      description: "Envia de 3 a 4 fotos de um veiculo para o cliente via WhatsApp. Use SOMENTE quando o cliente PEDIR EXPLICITAMENTE fotos. NAO envie fotos automaticamente. Quando o cliente pedir MAIS fotos, use start_index para continuar de onde parou.",
-      parameters: {
-        type: "object",
-        properties: {
-          vehicle_id: { type: "string", description: "ID do veiculo para enviar as fotos." },
-          caption: { type: "string", description: "Legenda curta das fotos" },
-          start_index: { type: "number", description: "Indice inicial das fotos (0 = primeira leva, 4 = segunda leva). Use 0 na primeira vez." },
-        },
-        required: ["vehicle_id"],
+    name: "send_vehicle_photos",
+    description: "Envia de 3 a 4 fotos de um veiculo para o cliente via WhatsApp. Use SOMENTE quando o cliente PEDIR EXPLICITAMENTE fotos. NAO envie fotos automaticamente. Quando o cliente pedir MAIS fotos, use start_index para continuar de onde parou.",
+    input_schema: {
+      type: "object",
+      properties: {
+        vehicle_id: { type: "string", description: "ID do veiculo para enviar as fotos." },
+        caption: { type: "string", description: "Legenda curta das fotos" },
+        start_index: { type: "number", description: "Indice inicial das fotos (0 = primeira leva, 4 = segunda leva). Use 0 na primeira vez." },
       },
+      required: ["vehicle_id"],
     },
   },
-  // submit_qualification will be built dynamically based on qualification level
+  {
+    name: "save_trade_in_photo",
+    description: "Salva e associa uma foto do veiculo de troca do cliente ao seu perfil. Use quando o cliente enviar uma foto do carro que quer dar na troca. A foto ja foi salva automaticamente - esta tool ASSOCIA ao lead.",
+    input_schema: {
+      type: "object",
+      properties: {
+        photo_url: { type: "string", description: "URL da foto que foi salva (fornecida no contexto da mensagem)" },
+        description: { type: "string", description: "Descricao da foto (ex: frente do carro, lateral, painel, motor)" },
+      },
+      required: ["photo_url"],
+    },
+  },
+  {
+    name: "schedule_visit",
+    description: "Agenda uma visita do cliente a loja. Use quando o cliente quiser marcar um horario para ver um veiculo ou visitar a loja. Horario de funcionamento: Seg-Sex 9h-18h, Sab 9h-13h.",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "Data da visita no formato YYYY-MM-DD" },
+        time: { type: "string", description: "Horario preferido (ex: 10:00, 14:30)" },
+        vehicle_interest: { type: "string", description: "Veiculo que o cliente quer ver" },
+        notes: { type: "string", description: "Observacoes adicionais" },
+      },
+      required: ["date", "time"],
+    },
+  },
 ];
 
 // Mark lead lost tool (static)
 const markLeadLostTool = {
-  type: "function",
-  function: {
-    name: "mark_lead_lost",
-    description: "Marca o lead como PERDIDO quando o cliente deixa claro que nao quer comprar. Use quando o cliente disser 'nao quero', 'desisto', 'ja comprei', 'sem interesse', etc.",
-    parameters: {
-      type: "object",
-      properties: {
-        loss_reason: {
-          type: "string",
-          enum: ["sem_entrada", "sem_credito", "curioso", "caro", "comprou_outro", "desistiu", "sem_contato", "outros"],
-          description: "Motivo da perda",
-        },
-        loss_notes: { type: "string", description: "Detalhes adicionais sobre o motivo" },
+  name: "mark_lead_lost",
+  description: "Marca o lead como PERDIDO quando o cliente deixa claro que nao quer comprar. Use quando o cliente disser 'nao quero', 'desisto', 'ja comprei', 'sem interesse', etc.",
+  input_schema: {
+    type: "object",
+    properties: {
+      loss_reason: {
+        type: "string",
+        enum: ["sem_entrada", "sem_credito", "curioso", "caro", "comprou_outro", "desistiu", "sem_contato", "outros"],
+        description: "Motivo da perda",
       },
-      required: ["loss_reason"],
+      loss_notes: { type: "string", description: "Detalhes adicionais sobre o motivo" },
     },
+    required: ["loss_reason"],
   },
 };
 
@@ -122,13 +135,11 @@ function buildSubmitQualificationTool(requiredFields: string[], optionalFields: 
   for (const field of allFields) {
     const prop = QUAL_FIELD_TO_TOOL_PROP[field];
     if (prop) {
-      // Map field names to tool-friendly parameter names
       properties[field] = { type: prop.type, description: prop.description };
       if (requiredFields.includes(field)) required.push(field);
     }
   }
 
-  // Always include notes
   properties.notes = { type: "string", description: "Observacoes adicionais" };
 
   const requiredLabels = requiredFields.map(f => QUAL_FIELD_LABELS[f] || f).join(', ');
@@ -138,15 +149,12 @@ function buildSubmitQualificationTool(requiredFields: string[], optionalFields: 
   if (optionalLabels) description += ` Campos opcionais (bonus): ${optionalLabels}.`;
 
   return {
-    type: "function",
-    function: {
-      name: "submit_qualification",
-      description,
-      parameters: {
-        type: "object",
-        properties,
-        required: required.length > 0 ? required : ["veiculo_interesse"],
-      },
+    name: "submit_qualification",
+    description,
+    input_schema: {
+      type: "object",
+      properties,
+      required: required.length > 0 ? required : ["veiculo_interesse"],
     },
   };
 }
@@ -169,8 +177,11 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
+
+    // Keep LOVABLE_API_KEY for summary generation (flash model)
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -206,7 +217,6 @@ serve(async (req) => {
       new Date(existingConv.updated_at).getTime() < new Date(sessionCutoff).getTime();
 
     if (isNewSession && existingConv) {
-      // Close old conversation, create new one
       await supabase.from('ai_agent_conversations').update({ status: 'closed' }).eq('id', existingConv.id);
     }
 
@@ -232,7 +242,6 @@ serve(async (req) => {
       conversationId = newConv.id;
     } else {
       conversationId = existingConv.id;
-      // Touch updated_at
       await supabase.from('ai_agent_conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
     }
 
@@ -277,13 +286,11 @@ serve(async (req) => {
       lead_id
         ? supabase.from('leads').select('id, name, phone, status, vehicle_interest').eq('id', lead_id).single()
         : Promise.resolve({ data: null }),
-      // Fetch CURRENT active qualification level
       supabase
         .from('qualification_settings')
         .select('required_fields')
         .eq('level', 'CURRENT')
         .single(),
-      // Fetch all Q1/Q2/Q3 definitions
       supabase
         .from('qualification_settings')
         .select('level, name, required_fields, optional_fields, description')
@@ -292,7 +299,7 @@ serve(async (req) => {
     ]);
 
     const conversationHistory = (historyResult.data || []).map((msg: any) => ({
-      role: msg.role,
+      role: msg.role as 'user' | 'assistant',
       content: msg.content,
     }));
 
@@ -354,7 +361,7 @@ serve(async (req) => {
     qualPromptSection += `\nSe submit_qualification ja foi chamado, NUNCA chame novamente.`;
     qualPromptSection += `\nApos qualificar, avise que um consultor vai entrar em contato.`;
 
-    // Build dynamic tools array
+    // Build dynamic tools array (Anthropic format)
     const submitQualTool = buildSubmitQualificationTool(qualRequiredFields, qualOptionalFields);
     const dynamicTools = [...toolDefinitions, submitQualTool, markLeadLostTool];
 
@@ -369,7 +376,7 @@ serve(async (req) => {
     if (userMsgError) console.error('Error saving user msg:', userMsgError);
 
     // =============================================
-    // BUILD SYSTEM PROMPT (adapted from Roma)
+    // BUILD SYSTEM PROMPT
     // =============================================
     const systemPrompt = `Voce e a Gabi, vendedora da Matheus Veiculos. Voce conversa com clientes pelo WhatsApp como uma pessoa real. Ninguem pode desconfiar que voce e uma IA. Voce e simpatica, leve, descontraida, mas profissional. Voce gosta de carros e entende do assunto.
 
@@ -443,6 +450,15 @@ Quando apresentar resultados do estoque:
 - Apos enviar fotos, SEMPRE faca uma pergunta para continuar a conversa
 - Se nao tiver fotos disponiveis, avise
 
+===== USO DE TOOLS — FOTOS DE TROCA =====
+- Se o cliente enviar uma foto do carro dele (para troca), use save_trade_in_photo para associar ao perfil
+- Agradeca e diga que vai mostrar pro avaliador
+
+===== USO DE TOOLS — AGENDAMENTO =====
+- Se o cliente quiser visitar a loja ou ver um carro pessoalmente, use schedule_visit
+- Confirme data e horario antes de agendar
+- Lembre o horario de funcionamento: Seg-Sex 9h-18h, Sab 9h-13h
+
 ===== LEAD PERDIDO =====
 - Se o cliente deixar CLARO que nao quer, chame mark_lead_lost IMEDIATAMENTE
 - Apos marcar como perdido, se despeca educadamente. Nao insista.
@@ -484,12 +500,22 @@ ${vehicleInfo}${lastVehicleContext}${sessionNote}
 Interacoes nesta sessao: ${conversationHistory.length}`;
 
     // =============================================
-    // AI API CALL WITH TOOL CALLING LOOP
+    // AI API CALL WITH TOOL CALLING LOOP (ANTHROPIC)
     // =============================================
-    const aiMessages: Array<{ role: string; content?: string; tool_calls?: any[]; tool_call_id?: string; name?: string }> = [
-      ...conversationHistory,
-      { role: 'user', content: message },
-    ];
+    // Convert conversation history to Anthropic format
+    const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [];
+    
+    for (const msg of conversationHistory) {
+      anthropicMessages.push({
+        role: msg.role === 'assistant' ? 'assistant' : 'user',
+        content: msg.content,
+      });
+    }
+    // Add current user message
+    anthropicMessages.push({ role: 'user', content: message });
+
+    // Ensure messages alternate (Anthropic requirement)
+    const sanitizedMessages = sanitizeAnthropicMessages(anthropicMessages);
 
     const temperature = Math.min(agent.temperature || 0.6, 0.7);
     const maxTokens = agent.max_tokens || 512;
@@ -502,17 +528,19 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
     try {
       while (round < MAX_ROUNDS) {
         round++;
-        console.log(`[ai-agent-chat] Round ${round}, messages: ${aiMessages.length}`);
+        console.log(`[ai-agent-chat] Round ${round}, messages: ${sanitizedMessages.length}`);
 
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-pro',
-            messages: [{ role: 'system', content: systemPrompt }, ...aiMessages],
+            model: 'claude-sonnet-4-20250514',
+            system: systemPrompt,
+            messages: sanitizedMessages,
             tools: dynamicTools,
             temperature,
             max_tokens: maxTokens,
@@ -521,49 +549,54 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
 
         if (!aiResponse.ok) {
           const errorText = await aiResponse.text();
-          console.error('[ai-agent-chat] AI error:', aiResponse.status, errorText);
+          console.error('[ai-agent-chat] Anthropic error:', aiResponse.status, errorText);
           if (aiResponse.status === 429) throw new Error("Rate limit exceeded");
           if (aiResponse.status === 402) throw new Error("Credits exhausted");
-          throw new Error(`AI error: ${aiResponse.status}`);
+          throw new Error(`Anthropic error: ${aiResponse.status}`);
         }
 
         const data = await aiResponse.json();
-        const choice = data.choices?.[0];
-        const assistantMsg = choice?.message;
+        const stopReason = data.stop_reason;
 
-        if (!assistantMsg) break;
+        // Extract text and tool_use blocks
+        const textBlocks = (data.content || []).filter((b: any) => b.type === 'text');
+        const toolUseBlocks = (data.content || []).filter((b: any) => b.type === 'tool_use');
 
-        // Check if there are tool calls
-        if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
-          // Add assistant message with tool calls to history
-          aiMessages.push({
+        if (stopReason === 'tool_use' && toolUseBlocks.length > 0) {
+          // Add assistant message with tool calls
+          sanitizedMessages.push({
             role: 'assistant',
-            content: assistantMsg.content || '',
-            tool_calls: assistantMsg.tool_calls,
+            content: data.content,
           });
 
-          // Execute each tool call
-          for (const toolCall of assistantMsg.tool_calls) {
-            const fnName = toolCall.function?.name;
-            let fnArgs: any = {};
-            try { fnArgs = JSON.parse(toolCall.function?.arguments || '{}'); } catch {}
+          // Execute each tool call and build tool_result blocks
+          const toolResultBlocks: any[] = [];
+          for (const toolUse of toolUseBlocks) {
+            const fnName = toolUse.name;
+            const fnArgs = toolUse.input || {};
 
             console.log(`[ai-agent-chat] Executing tool: ${fnName}`, fnArgs);
             toolCallsLog.push(fnName);
 
-            const toolResult = await executeToolCall(supabase, fnName, fnArgs, phone, photosToSend, agent_id, activeLevel);
+            const toolResult = await executeToolCall(supabase, fnName, fnArgs, phone, photosToSend, agent_id, activeLevel, LOVABLE_API_KEY, lead_id);
 
-            aiMessages.push({
-              role: 'tool',
+            toolResultBlocks.push({
+              type: 'tool_result',
+              tool_use_id: toolUse.id,
               content: JSON.stringify(toolResult),
-              tool_call_id: toolCall.id,
-              name: fnName,
             });
           }
+
+          // Add tool results as user message (Anthropic format)
+          sanitizedMessages.push({
+            role: 'user',
+            content: toolResultBlocks,
+          });
+
           // Continue loop to get final text
         } else {
           // No tool calls — final text response
-          responseMessage = assistantMsg.content || '';
+          responseMessage = textBlocks.map((b: any) => b.text).join('') || '';
           break;
         }
       }
@@ -571,48 +604,51 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
       // If we ran out of rounds without text, do one more call without tools
       if (!responseMessage && round >= MAX_ROUNDS) {
         console.log('[ai-agent-chat] Max rounds, getting final text...');
-        const finalResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const finalResponse = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-pro',
-            messages: [{ role: 'system', content: systemPrompt }, ...aiMessages],
+            model: 'claude-sonnet-4-20250514',
+            system: systemPrompt,
+            messages: sanitizedMessages,
             temperature,
             max_tokens: maxTokens,
           }),
         });
         if (finalResponse.ok) {
           const finalData = await finalResponse.json();
-          responseMessage = finalData.choices?.[0]?.message?.content || '';
+          const textBlocks = (finalData.content || []).filter((b: any) => b.type === 'text');
+          responseMessage = textBlocks.map((b: any) => b.text).join('') || '';
         }
       }
 
       // Retry if empty
       if (!responseMessage || responseMessage.trim().length === 0) {
         console.warn('[ai-agent-chat] Empty response, retrying with nudge...');
-        const retryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        sanitizedMessages.push({ role: 'user', content: 'IMPORTANTE: O cliente esta esperando uma resposta. Responda com texto em portugues.' });
+        const retryResponse = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-pro',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              ...aiMessages,
-              { role: 'user', content: 'IMPORTANTE: O cliente esta esperando uma resposta. Responda com texto em portugues.' },
-            ],
+            model: 'claude-sonnet-4-20250514',
+            system: systemPrompt,
+            messages: sanitizedMessages,
             temperature,
             max_tokens: maxTokens,
           }),
         });
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
-          responseMessage = retryData.choices?.[0]?.message?.content || '';
+          const textBlocks = (retryData.content || []).filter((b: any) => b.type === 'text');
+          responseMessage = textBlocks.map((b: any) => b.text).join('') || '';
         }
         if (!responseMessage) responseMessage = 'Oi! Me conta o que voce esta procurando que eu busco aqui no estoque.';
       }
@@ -623,7 +659,7 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
     }
 
     // =============================================
-    // ENFORCE RESPONSE LIMITS (from Roma)
+    // ENFORCE RESPONSE LIMITS
     // =============================================
     responseMessage = enforceResponseLimits(responseMessage, 600, 3);
 
@@ -668,6 +704,47 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
 });
 
 // =============================================
+// SANITIZE MESSAGES FOR ANTHROPIC (must alternate user/assistant)
+// =============================================
+function sanitizeAnthropicMessages(messages: Array<{ role: 'user' | 'assistant'; content: any }>): Array<{ role: 'user' | 'assistant'; content: any }> {
+  if (messages.length === 0) return messages;
+  
+  const result: Array<{ role: 'user' | 'assistant'; content: any }> = [];
+  
+  for (const msg of messages) {
+    if (result.length === 0) {
+      // First message must be user
+      if (msg.role === 'assistant') {
+        result.push({ role: 'user', content: '[inicio da conversa]' });
+      }
+      result.push(msg);
+    } else {
+      const lastRole = result[result.length - 1].role;
+      if (msg.role === lastRole) {
+        // Same role consecutive - merge content
+        const last = result[result.length - 1];
+        if (typeof last.content === 'string' && typeof msg.content === 'string') {
+          last.content = last.content + '\n' + msg.content;
+        } else {
+          // For complex content (tool results), add separator
+          result.push({ role: msg.role === 'user' ? 'assistant' : 'user', content: '[continuacao]' });
+          result.push(msg);
+        }
+      } else {
+        result.push(msg);
+      }
+    }
+  }
+  
+  // Ensure last message is user
+  if (result.length > 0 && result[result.length - 1].role !== 'user') {
+    // This shouldn't happen since we add the user message last, but safety check
+  }
+  
+  return result;
+}
+
+// =============================================
 // EXECUTE TOOL CALL
 // =============================================
 async function executeToolCall(
@@ -678,6 +755,8 @@ async function executeToolCall(
   photosToSend?: Array<{ url: string; caption: string }>,
   agentId?: string,
   qualificationLevel?: string,
+  lovableApiKey?: string,
+  leadId?: string,
 ): Promise<any> {
   console.log(`[ai-agent-chat] Executing ${functionName}:`, args);
 
@@ -702,7 +781,7 @@ async function executeToolCall(
       if (args.model) {
         const modelVariants = generateVariants(args.model);
         if (modelVariants.length > 1) {
-          query = query.or(modelVariants.map(v => `model.ilike.%${v}%`).join(','));
+          query = query.or(modelVariants.map((v: string) => `model.ilike.%${v}%`).join(','));
         } else {
           query = query.ilike('model', `%${args.model}%`);
         }
@@ -720,10 +799,10 @@ async function executeToolCall(
         const mappedModels = categoryMap[keyword];
 
         if (mappedModels) {
-          query = query.or(mappedModels.map(m => `model.ilike.%${m}%`).join(','));
+          query = query.or(mappedModels.map((m: string) => `model.ilike.%${m}%`).join(','));
         } else {
           const kwVariants = generateVariants(args.keyword);
-          const orParts = kwVariants.flatMap(v => [
+          const orParts = kwVariants.flatMap((v: string) => [
             `model.ilike.%${v}%`, `version.ilike.%${v}%`, `notes.ilike.%${v}%`, `brand.ilike.%${v}%`,
           ]);
           query = query.or(orParts.join(','));
@@ -739,7 +818,6 @@ async function executeToolCall(
 
       if (error) return { error: 'Erro ao buscar veiculos', vehicles: [] };
       if (!data || data.length === 0) {
-        // Fallback broader search
         const fallbackTerm = (args.model || args.keyword || '').replace(/[-_]/g, ' ').trim();
         if (fallbackTerm.length >= 2) {
           const { data: fallbackData } = await supabase
@@ -825,7 +903,6 @@ async function executeToolCall(
 
     case 'send_vehicle_photos':
     case 'send_vehicle_photo': {
-      // Try by ID first
       let vehicle: any = null;
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       
@@ -838,15 +915,13 @@ async function executeToolCall(
         vehicle = data;
       }
 
-      // FALLBACK: AI often hallucinates UUIDs. Search by caption/model instead.
+      // FALLBACK: AI often hallucinates UUIDs
       if (!vehicle) {
         console.log('[send_vehicle_photos] Vehicle ID not found, trying fallback search by caption:', args.caption);
         const searchTerm = args.caption || args.vehicle_id || '';
-        // Extract meaningful words (brand/model) from caption
         const words = searchTerm.split(/[\s,]+/).filter((w: string) => w.length >= 3);
         
         if (words.length > 0) {
-          // Try each word as brand or model
           const orClauses = words.flatMap((w: string) => [`model.ilike.%${w}%`, `brand.ilike.%${w}%`]);
           const { data: fallbackVehicles } = await supabase
             .from('vehicles')
@@ -864,7 +939,6 @@ async function executeToolCall(
 
       if (!vehicle) return { success: false, error: 'Veiculo nao encontrado. Use o ID retornado por search_vehicles.' };
 
-      // Try vehicle_images table first, then legacy images array
       let photoUrls: string[] = [];
       
       const { data: categorizedPhotos } = await supabase
@@ -877,7 +951,6 @@ async function executeToolCall(
         photoUrls = categorizedPhotos.map((p: any) => p.image_url).filter(Boolean);
       }
       
-      // Fallback to legacy images array
       if (photoUrls.length === 0) {
         photoUrls = vehicle.images?.filter((img: string) => img) || [];
       }
@@ -913,12 +986,126 @@ async function executeToolCall(
       };
     }
 
+    case 'save_trade_in_photo': {
+      if (!customerPhone) return { success: false, error: 'Phone not available' };
+
+      const resolvedLeadId = leadId || await findLeadByPhone(supabase, customerPhone);
+      if (!resolvedLeadId) return { success: false, error: 'Lead nao encontrado' };
+
+      // Save trade-in photo reference to lead's qualification_data
+      const { data: lead } = await supabase.from('leads').select('qualification_data').eq('id', resolvedLeadId).single();
+      const qualData = lead?.qualification_data || {};
+      const tradeInPhotos = qualData.trade_in_photos || [];
+      tradeInPhotos.push({
+        url: args.photo_url,
+        description: args.description || 'Foto do veiculo de troca',
+        saved_at: new Date().toISOString(),
+      });
+      qualData.trade_in_photos = tradeInPhotos;
+
+      await supabase.from('leads').update({
+        qualification_data: qualData,
+        updated_at: new Date().toISOString(),
+      }).eq('id', resolvedLeadId);
+
+      console.log('[save_trade_in_photo] Saved photo for lead:', resolvedLeadId, 'total:', tradeInPhotos.length);
+      return {
+        success: true,
+        total_photos: tradeInPhotos.length,
+        message: `Foto salva com sucesso. Total de fotos do veiculo de troca: ${tradeInPhotos.length}`,
+      };
+    }
+
+    case 'schedule_visit': {
+      if (!customerPhone) return { success: false, error: 'Phone not available' };
+
+      const resolvedLeadId2 = leadId || await findLeadByPhone(supabase, customerPhone);
+      if (!resolvedLeadId2) return { success: false, error: 'Lead nao encontrado' };
+
+      // Validate date/time
+      const visitDate = args.date;
+      const visitTime = args.time;
+      
+      // Check if within business hours
+      const dateObj = new Date(`${visitDate}T${visitTime}:00`);
+      const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
+      const hour = parseInt(visitTime.split(':')[0]);
+      
+      if (dayOfWeek === 0) {
+        return { success: false, error: 'A loja nao abre aos domingos. Horario: Seg-Sex 9h-18h, Sab 9h-13h.' };
+      }
+      if (dayOfWeek === 6 && (hour < 9 || hour >= 13)) {
+        return { success: false, error: 'Aos sabados o horario e das 9h as 13h.' };
+      }
+      if (dayOfWeek >= 1 && dayOfWeek <= 5 && (hour < 9 || hour >= 18)) {
+        return { success: false, error: 'O horario de funcionamento e das 9h as 18h (Seg-Sex).' };
+      }
+
+      // Save visit as lead interaction
+      await supabase.from('lead_interactions').insert({
+        lead_id: resolvedLeadId2,
+        type: 'visit_scheduled',
+        description: `Visita agendada: ${visitDate} as ${visitTime}${args.vehicle_interest ? ` - ${args.vehicle_interest}` : ''}${args.notes ? ` | ${args.notes}` : ''}`,
+      });
+
+      // Update lead notes
+      const { data: leadForVisit } = await supabase.from('leads').select('notes, assigned_to, name').eq('id', resolvedLeadId2).single();
+      const existingNotes = leadForVisit?.notes || '';
+      await supabase.from('leads').update({
+        notes: `${existingNotes}\n[VISITA AGENDADA] ${visitDate} as ${visitTime}${args.vehicle_interest ? ` - ${args.vehicle_interest}` : ''}`.trim(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', resolvedLeadId2);
+
+      // Notify assigned salesperson
+      if (leadForVisit?.assigned_to) {
+        await supabase.from('notifications').insert({
+          user_id: leadForVisit.assigned_to,
+          type: 'visit_scheduled',
+          title: 'Visita Agendada pela IA',
+          message: `${leadForVisit.name || 'Lead'} agendou visita: ${visitDate} as ${visitTime}${args.vehicle_interest ? ` - ${args.vehicle_interest}` : ''}`,
+          link: '/crm',
+        });
+
+        // Send WhatsApp to salesperson
+        try {
+          const { data: salesperson } = await supabase.from('profiles').select('phone, full_name').eq('id', leadForVisit.assigned_to).single();
+          if (salesperson?.phone) {
+            const { data: wpInstances } = await supabase
+              .from('whatsapp_instances')
+              .select('id, instance_name, api_url, api_key')
+              .eq('status', 'connected')
+              .order('is_shared', { ascending: false })
+              .limit(1);
+
+            const wpInstance = wpInstances?.[0];
+            if (wpInstance) {
+              const visitMsg = `*VISITA AGENDADA*\n\nCliente: ${leadForVisit.name || 'Lead'}\nData: ${visitDate}\nHorario: ${visitTime}${args.vehicle_interest ? `\nVeiculo: ${args.vehicle_interest}` : ''}${args.notes ? `\nObs: ${args.notes}` : ''}\n\nAgendado pela IA Gabi`;
+              const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
+
+              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
+                body: JSON.stringify({ number: salespersonJid, text: visitMsg }),
+              });
+            }
+          }
+        } catch (e) {
+          console.error('[schedule_visit] Error notifying salesperson:', e);
+        }
+      }
+
+      return {
+        success: true,
+        message: `Visita agendada para ${visitDate} as ${visitTime}. O vendedor foi notificado.`,
+      };
+    }
+
     case 'submit_qualification': {
       if (!customerPhone) return { success: false, error: 'Phone not available' };
 
       const { data: lead } = await supabase
         .from('leads')
-        .select('id, name, phone')
+        .select('id, name, phone, qualification_data')
         .eq('phone', customerPhone)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -927,8 +1114,8 @@ async function executeToolCall(
       if (!lead) return { success: false, error: 'Lead nao encontrado' };
 
       // Build qualification_data with ALL collected info (dynamic fields)
-      const qualificationData: Record<string, any> = {};
-      // Copy all args from the tool call (dynamically generated fields)
+      const existingQualData = lead.qualification_data || {};
+      const qualificationData: Record<string, any> = { ...existingQualData };
       for (const [key, val] of Object.entries(args)) {
         if (val !== undefined && val !== null && val !== '') {
           qualificationData[key] = val;
@@ -938,13 +1125,11 @@ async function executeToolCall(
       qualificationData.qualified_by = 'ai_agent';
       qualificationData.qualification_level = qualificationLevel || 'Q2';
 
-      // Determine vehicle interest from various possible field names
       const vehicleInterest = args.veiculo_interesse || args.vehicle_interest || '';
       const paymentMethod = args.forma_pagamento || args.payment_method || '';
       const hasTrade = args.tem_troca || args.has_trade_in || false;
       const tradeDetails = args.veiculo_troca || args.trade_in_details || '';
 
-      // Update lead with qualification_data
       const leadUpdate: Record<string, any> = {
         qualification_data: qualificationData,
         qualification_level: qualificationLevel || 'Q2',
@@ -954,7 +1139,6 @@ async function executeToolCall(
       if (vehicleInterest) leadUpdate.vehicle_interest = vehicleInterest;
       await supabase.from('leads').update(leadUpdate).eq('id', lead.id);
 
-      // Update negotiation
       const { data: negotiation } = await supabase
         .from('negotiations')
         .select('id')
@@ -977,7 +1161,6 @@ async function executeToolCall(
         }).eq('id', negotiation.id);
       }
 
-      // Assign via round robin
       const { data: nextSalesperson } = await supabase.rpc('get_next_round_robin_salesperson');
 
       if (nextSalesperson) {
@@ -990,7 +1173,6 @@ async function executeToolCall(
         const { data: salesperson } = await supabase.from('profiles').select('full_name, phone').eq('id', nextSalesperson).single();
         const salespersonName = salesperson?.full_name || 'nosso consultor';
 
-        // Notification in-app
         await supabase.from('notifications').insert({
           user_id: nextSalesperson,
           type: 'lead_assigned',
@@ -1002,7 +1184,6 @@ async function executeToolCall(
         // ===== SEND FICHA COMPLETA VIA WHATSAPP TO SALESPERSON =====
         if (salesperson?.phone) {
           try {
-            // Find connected WhatsApp instance
             const { data: wpInstances } = await supabase
               .from('whatsapp_instances')
               .select('id, instance_name, api_url, api_key')
@@ -1013,7 +1194,6 @@ async function executeToolCall(
 
             const wpInstance = wpInstances?.[0];
             if (wpInstance) {
-              // 1. Get conversation history for AI summary
               let conversationSummary = '';
               let messageCount = 0;
               let firstMsgTime = '';
@@ -1038,8 +1218,9 @@ async function executeToolCall(
                   if (histMsgs && histMsgs.length > 0) {
                     messageCount = histMsgs.filter((m: any) => m.role === 'user').length;
                     
-                    // Use AI to generate strategic summary
-                    const summaryPrompt = `Analise esta conversa entre um vendedor de carros e um cliente. Gere um resumo ESTRATEGICO para o vendedor que vai assumir a negociacao. Inclua:
+                    // Use Lovable AI Gateway for summary (cheaper/faster)
+                    if (lovableApiKey) {
+                      const summaryPrompt = `Analise esta conversa entre um vendedor de carros e um cliente. Gere um resumo ESTRATEGICO para o vendedor que vai assumir a negociacao. Inclua:
 1. RESUMO (2-3 frases do que aconteceu na conversa)
 2. PERFIL DO CLIENTE (o que sabemos sobre ele - urgencia, perfil financeiro, experiencia com carros)
 3. DICAS DE ABORDAGEM (como o vendedor deve abordar esse cliente baseado na conversa)
@@ -1049,23 +1230,24 @@ Seja direto e pratico. Maximo 400 caracteres no total. Sem markdown, sem asteris
 Conversa:
 ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.content}`).join('\n')}`;
 
-                    const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-                      method: "POST",
-                      headers: {
-                        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({
-                        model: 'google/gemini-2.5-flash',
-                        messages: [{ role: 'user', content: summaryPrompt }],
-                        temperature: 0.3,
-                        max_tokens: 300,
-                      }),
-                    });
+                      const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                          Authorization: `Bearer ${lovableApiKey}`,
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          model: 'google/gemini-2.5-flash',
+                          messages: [{ role: 'user', content: summaryPrompt }],
+                          temperature: 0.3,
+                          max_tokens: 300,
+                        }),
+                      });
 
-                    if (summaryResponse.ok) {
-                      const summaryData = await summaryResponse.json();
-                      conversationSummary = summaryData.choices?.[0]?.message?.content || '';
+                      if (summaryResponse.ok) {
+                        const summaryData = await summaryResponse.json();
+                        conversationSummary = summaryData.choices?.[0]?.message?.content || '';
+                      }
                     }
                   }
                 }
@@ -1073,7 +1255,6 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
                 console.error('[ai-agent-chat] Error generating summary:', summaryErr);
               }
 
-              // 2. Find similar vehicles in stock
               let similarVehicles = '';
               try {
                 const searchTerms = (vehicleInterest || '').split(/\s+/).filter((w: string) => w.length >= 3);
@@ -1096,7 +1277,6 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
                 console.error('[ai-agent-chat] Error fetching similar:', stockErr);
               }
 
-              // 3. Calculate conversation duration
               let duration = '';
               if (firstMsgTime) {
                 const mins = Math.round((Date.now() - new Date(firstMsgTime).getTime()) / 60000);
@@ -1104,7 +1284,6 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
                 else duration = `${Math.floor(mins / 60)}h ${mins % 60}min`;
               }
 
-              // 4. Build the FICHA message (dynamic based on collected data)
               const fichaLines: string[] = [
                 `━━━━━━━━━━━━━━━━━━━━━`,
                 `*LEAD QUALIFICADO PELA IA (${qualificationLevel || 'Q2'})*`,
@@ -1114,7 +1293,6 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
                 `*WhatsApp:* wa.me/${lead.phone.replace(/\D/g, '')}`,
               ];
 
-              // Add all collected qualification data dynamically
               if (args.origem) fichaLines.push(`*Origem:* ${args.origem}`);
               fichaLines.push(``);
               fichaLines.push(`━━ *DADOS COLETADOS* ━━`);
@@ -1131,10 +1309,20 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
                   }
                 }
               }
-              // Legacy field support
               if (!args.veiculo_interesse && args.vehicle_interest) fichaLines.push(`*Veiculo:* ${args.vehicle_interest}`);
               if (!args.forma_pagamento && args.payment_method) fichaLines.push(`*Pagamento:* ${args.payment_method}`);
               if (args.notes) fichaLines.push(`*Obs:* ${args.notes}`);
+
+              // Include trade-in photos in ficha
+              const tradeInPhotos = qualificationData.trade_in_photos || [];
+              if (tradeInPhotos.length > 0) {
+                fichaLines.push(``);
+                fichaLines.push(`━━ *FOTOS DO VEICULO DE TROCA* ━━`);
+                fichaLines.push(`${tradeInPhotos.length} foto(s) recebida(s)`);
+                for (const photo of tradeInPhotos) {
+                  fichaLines.push(`  - ${photo.description}: ${photo.url}`);
+                }
+              }
 
               if (conversationSummary) {
                 fichaLines.push(``);
@@ -1160,25 +1348,32 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 
               await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'apikey': wpInstance.api_key,
-                },
-                body: JSON.stringify({
-                  number: salespersonJid,
-                  text: fichaText,
-                }),
+                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
+                body: JSON.stringify({ number: salespersonJid, text: fichaText }),
               });
 
+              // Send trade-in photos as images to salesperson
+              if (tradeInPhotos.length > 0) {
+                for (const photo of tradeInPhotos.slice(0, 5)) {
+                  await fetch(`${wpInstance.api_url}message/sendMedia/${wpInstance.instance_name}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
+                    body: JSON.stringify({
+                      number: salespersonJid,
+                      mediatype: 'image',
+                      media: photo.url,
+                      caption: `Troca - ${photo.description || 'Foto do veiculo'}`,
+                    }),
+                  });
+                  await new Promise(r => setTimeout(r, 800));
+                }
+              }
+
               console.log('[ai-agent-chat] Ficha sent successfully to', salespersonName);
-            } else {
-              console.warn('[ai-agent-chat] No connected WhatsApp instance to send ficha');
             }
           } catch (fichaError) {
             console.error('[ai-agent-chat] Error sending ficha via WhatsApp:', fichaError);
           }
-        } else {
-          console.warn('[ai-agent-chat] Salesperson has no phone number, skipping WhatsApp ficha');
         }
 
         return {
@@ -1200,7 +1395,7 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 
       const { data: lostLead } = await supabase
         .from('leads')
-        .select('id, name')
+        .select('id, name, assigned_to')
         .eq('phone', customerPhone)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -1212,7 +1407,7 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 
       const { data: lostNeg } = await supabase
         .from('negotiations')
-        .select('id')
+        .select('id, salesperson_id')
         .eq('lead_id', lostLead.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -1226,6 +1421,59 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
         }).eq('id', lostNeg.id);
       }
 
+      // ===== NOTIFY SALESPERSON VIA WHATSAPP ABOUT LOST LEAD =====
+      const salespersonId = lostNeg?.salesperson_id || lostLead.assigned_to;
+      if (salespersonId) {
+        try {
+          const { data: salesperson } = await supabase.from('profiles').select('phone, full_name').eq('id', salespersonId).single();
+
+          // In-app notification
+          await supabase.from('notifications').insert({
+            user_id: salespersonId,
+            type: 'lead_lost',
+            title: 'Lead Perdido',
+            message: `${lostLead.name || 'Lead'} foi marcado como perdido pela IA. Motivo: ${args.loss_reason || 'Nao informado'}`,
+            link: '/crm',
+          });
+
+          // WhatsApp notification
+          if (salesperson?.phone) {
+            const { data: wpInstances } = await supabase
+              .from('whatsapp_instances')
+              .select('id, instance_name, api_url, api_key')
+              .eq('status', 'connected')
+              .order('is_shared', { ascending: false })
+              .limit(1);
+
+            const wpInstance = wpInstances?.[0];
+            if (wpInstance) {
+              const lossReasonLabels: Record<string, string> = {
+                sem_entrada: 'Sem entrada',
+                sem_credito: 'Sem credito',
+                curioso: 'Apenas curioso',
+                caro: 'Achou caro',
+                comprou_outro: 'Comprou em outro lugar',
+                desistiu: 'Desistiu da compra',
+                sem_contato: 'Sem contato',
+                outros: 'Outros',
+              };
+
+              const lostMsg = `*LEAD PERDIDO*\n\nCliente: ${lostLead.name || 'Lead'}\nWhatsApp: wa.me/${customerPhone.replace(/\D/g, '')}\nMotivo: ${lossReasonLabels[args.loss_reason] || args.loss_reason}\n${args.loss_notes ? `Detalhes: ${args.loss_notes}\n` : ''}\nRegistrado pela IA Gabi`;
+              const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
+
+              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
+                body: JSON.stringify({ number: salespersonJid, text: lostMsg }),
+              });
+              console.log('[mark_lead_lost] WhatsApp notification sent to salesperson');
+            }
+          }
+        } catch (notifyErr) {
+          console.error('[mark_lead_lost] Error notifying salesperson:', notifyErr);
+        }
+      }
+
       console.log('[ai-agent-chat] Lead marked as lost:', lostLead.id, 'reason:', args.loss_reason);
       return { success: true, message: 'Lead marcado como perdido. Despeca-se educadamente.' };
     }
@@ -1236,12 +1484,24 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 }
 
 // =============================================
-// ENFORCE RESPONSE LIMITS (from Roma)
+// HELPER: Find lead by phone
+// =============================================
+async function findLeadByPhone(supabase: any, phone: string): Promise<string | null> {
+  const phoneNoCountry = phone.replace(/^55/, '');
+  const candidates = [phone, phoneNoCountry, `+${phone}`, `+${phoneNoCountry}`];
+  for (const c of candidates) {
+    const { data } = await supabase.from('leads').select('id').eq('phone', c).limit(1).maybeSingle();
+    if (data?.id) return data.id;
+  }
+  return null;
+}
+
+// =============================================
+// ENFORCE RESPONSE LIMITS
 // =============================================
 function enforceResponseLimits(text: string, maxChars: number = 600, maxBlocks: number = 3): string {
   let processed = text.trim();
 
-  // FORCE split if no ||| present
   if (!processed.includes('|||') && processed.length > 40) {
     let splitIndex = -1;
     const searchEnd = Math.min(processed.length, 200);

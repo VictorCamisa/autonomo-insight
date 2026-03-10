@@ -8,10 +8,6 @@ import lojaFachadaPrincipal from '@/assets/loja-fachada-principal.jpg';
 import lojaFachada1 from '@/assets/loja-fachada-1.jpg';
 import lojaFachada2 from '@/assets/loja-fachada-2.jpg';
 import lojaInterior from '@/assets/loja-interior.jpg';
-import lojaFachadaPrincipal from '@/assets/loja-fachada-principal.jpg';
-import lojaFachada1 from '@/assets/loja-fachada-1.jpg';
-import lojaFachada2 from '@/assets/loja-fachada-2.jpg';
-import lojaInterior from '@/assets/loja-interior.jpg';
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 20 },
@@ -32,15 +28,7 @@ export default function Home() {
   const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(6);
   const { data: allVehicles, isLoading: loadingAll } = usePublicVehicles();
 
-  const [emblaRef, emblaApi] = useEmblaCarousel({ 
-    loop: true, 
-    align: 'start',
-    slidesToScroll: 1,
-    containScroll: 'trimSnaps'
-  });
-
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  const openWhatsApp = () => {
 
   const openWhatsApp = () => {
     window.open('https://wa.me/5512988973547?text=Olá! Vim pelo site e gostaria de mais informações.', '_blank');

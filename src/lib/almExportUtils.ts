@@ -5,12 +5,13 @@ import {
   type ALMMarca, type ALMModelo, type ALMCor, type ALMCombustivel, type ALMCambio,
 } from './almExportData';
 
-// We need ALM_MODELOS but it's huge - import it lazily
+// Load ALM models - import from almExportModelos
 let _almModelos: ALMModelo[] | null = null;
 export async function getALMModelos(): Promise<ALMModelo[]> {
   if (_almModelos) return _almModelos;
   const mod = await import('./almExportModelos');
   _almModelos = mod.ALM_MODELOS;
+  _syncModelos = mod.ALM_MODELOS; // Also set sync modelos immediately
   return _almModelos;
 }
 

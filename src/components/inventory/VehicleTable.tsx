@@ -184,6 +184,8 @@ export function VehicleTable({ vehicles, onVehicleClick, enabledPortals = [] }: 
                               onClick={() => {
                                 if (vehicle.alm_id) {
                                   window.open(`http://amodolo82-004-site5.jtempurl.com/index.html#!/vehicle/${vehicle.alm_id}`, '_blank');
+                                } else {
+                                  window.open('http://amodolo82-004-site5.jtempurl.com/index.html#!/vehicles', '_blank');
                                 }
                               }}
                             >

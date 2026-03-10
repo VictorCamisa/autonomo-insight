@@ -25,16 +25,16 @@ const staggerItem = {
 };
 
 export default function Home() {
-  const { data: featuredVehicles, isLoading: loadingFeatured } = useFeaturedVehicles(6);
   const { data: allVehicles, isLoading: loadingAll } = usePublicVehicles();
 
   const openWhatsApp = () => {
     window.open('https://wa.me/5512988973547?text=Olá! Vim pelo site e gostaria de mais informações.', '_blank');
   };
 
-  // "Acabou de Chegar": pegar veículos featured que NÃO estão nos 6 destaques
-  const featuredIds = new Set((featuredVehicles || []).slice(0, 6).map(v => v.id));
-  const recentVehicles = allVehicles?.filter(v => v.images && v.images.length > 0 && !featuredIds.has(v.id)).slice(0, 4) || [];
+  // Separar veículos com foto: 6 destaque + 4 recentes
+  const vehiclesWithPhotos = allVehicles?.filter(v => v.images && v.images.length > 0) || [];
+  const featuredVehicles = vehiclesWithPhotos.slice(0, 6);
+  const recentVehicles = vehiclesWithPhotos.slice(6, 10);
 
   return (
     <div className="text-foreground">

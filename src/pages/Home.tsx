@@ -4,7 +4,7 @@ import { ArrowRight, Shield, Clock, Award, MapPin, Phone, ChevronRight, Search }
 import { useFeaturedVehicles, usePublicVehicles } from '@/hooks/usePublicVehicles';
 import { PublicVehicleCard } from '@/components/public/PublicVehicleCard';
 import logoImg from '@/assets/logo-matheus-veiculos.png';
-import lojaFachadaPrincipal from '@/assets/loja-fachada-principal.jpg';
+import heroBanner from '@/assets/hero-banner.png';
 import lojaFachada1 from '@/assets/loja-fachada-1.jpg';
 import lojaFachada2 from '@/assets/loja-fachada-2.jpg';
 import lojaInterior from '@/assets/loja-interior.jpg';
@@ -41,7 +41,7 @@ export default function Home() {
       {/* ═══════════ HERO ═══════════ */}
       <section className="relative w-full overflow-hidden min-h-[85vh] md:min-h-0 flex flex-col justify-end">
         <div className="relative w-full">
-          <img src={lojaFachadaPrincipal} alt="Matheus Veículos" className="w-full h-[85vh] md:h-auto object-cover brightness-[0.5]" />
+          <img src={heroBanner} alt="Matheus Veículos" className="w-full h-[85vh] md:h-auto object-cover brightness-[0.5]" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/40" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-transparent h-1/3" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_50%,rgba(0,0,0,0.5)_100%)]" />

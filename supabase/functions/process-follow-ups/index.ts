@@ -311,7 +311,9 @@ serve(async (req) => {
       let tracking: FollowUpTracking | null = trackingMap.get(negotiation.id) || null;
       
       if (!tracking) {
-        // Criar novo tracking
+        // Criar novo tracking - usar last_message_at como referência de início
+        // para que o delay conte desde a última atividade do lead
+        const trackingStartedAt = negotiation.last_message_at || new Date().toISOString();
         const { data: newTracking, error: createError } = await supabase
           .from('lead_follow_up_tracking')
           .insert({
@@ -320,7 +322,7 @@ serve(async (req) => {
             flow_id: applicableFlow.id,
             current_step: 0,
             status: 'active',
-            started_at: new Date().toISOString(),
+            started_at: trackingStartedAt,
           })
           .select()
           .single();
@@ -332,7 +334,7 @@ serve(async (req) => {
         }
 
         tracking = newTracking as FollowUpTracking;
-        console.log('  📝 Created new tracking');
+        console.log(`  📝 Created new tracking (started_at: ${trackingStartedAt})`);
       }
 
       // Encontrar próximo step

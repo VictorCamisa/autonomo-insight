@@ -336,7 +336,7 @@ export default function ALMExportPage() {
           <Button onClick={() => generateJSON(mappedVehicles, includeWarn)} className="bg-green-700 hover:bg-green-800">
             <Download className="h-4 w-4 mr-2" />Gerar JSON
           </Button>
-          <Button onClick={() => generateXML(mappedVehicles, includeWarn)} className="bg-orange-600 hover:bg-orange-700">
+          <Button onClick={() => generateSQL(mappedVehicles, includeWarn)} className="bg-orange-600 hover:bg-orange-700">
             <FileText className="h-4 w-4 mr-2" />Gerar SQL
           </Button>
           <Button variant="outline" onClick={() => setPreviewOpen(true)}>

@@ -170,7 +170,13 @@ export default function Home() {
 
       {/* ═══════════ ACABOU DE CHEGAR ═══════════ */}
       {recentVehicles.length > 0 && (
-        <section className="py-10 md:py-24 relative overflow-hidden bg-background">
+        <motion.section 
+          className="py-10 md:py-24 relative overflow-hidden bg-background"
+          variants={sectionVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+        >
           <div className="absolute inset-0">
             <img src={lojaFachada1} alt="" className="w-full h-full object-cover opacity-[0.03]" />
           </div>

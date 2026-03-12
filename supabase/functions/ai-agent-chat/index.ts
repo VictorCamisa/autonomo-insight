@@ -538,7 +538,7 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-3-5-haiku-20241022',
             system: systemPrompt,
             messages: sanitizedMessages,
             tools: dynamicTools,

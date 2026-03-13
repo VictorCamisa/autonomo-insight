@@ -1462,8 +1462,6 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
                 console.log('[mark_lead_lost] WhatsApp notification sent to salesperson');
               }
             }
-              console.log('[mark_lead_lost] WhatsApp notification sent to salesperson');
-            }
           }
         } catch (notifyErr) {
           console.error('[mark_lead_lost] Error notifying salesperson:', notifyErr);

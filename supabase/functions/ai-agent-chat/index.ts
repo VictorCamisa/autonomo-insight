@@ -1370,18 +1370,18 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 
               console.log('[ai-agent-chat] Sending enhanced ficha to salesperson:', salespersonName);
 
-              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
+              await fetch(`${apiUrl}message/sendText/${wpInstance.instance_name}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
+                headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
                 body: JSON.stringify({ number: salespersonJid, text: fichaText }),
               });
 
               // Send trade-in photos as images to salesperson
               if (tradeInPhotos.length > 0) {
                 for (const photo of tradeInPhotos.slice(0, 5)) {
-                  await fetch(`${wpInstance.api_url}message/sendMedia/${wpInstance.instance_name}`, {
+                  await fetch(`${apiUrl}message/sendMedia/${wpInstance.instance_name}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
+                    headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
                     body: JSON.stringify({
                       number: salespersonJid,
                       mediatype: 'image',

@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
-import { useWhatsAppInstanceAction, useWhatsAppMessagesByPhone, useSendWhatsAppMessage, useWhatsAppTemplates, useUserWhatsAppInstance } from '@/hooks/useWhatsApp';
+import { useWhatsAppInstanceAction, useWhatsAppInstances, useWhatsAppMessagesByPhone, useSendWhatsAppMessage, useWhatsAppTemplates, useUserWhatsAppInstance } from '@/hooks/useWhatsApp';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';

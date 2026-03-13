@@ -3170,6 +3170,7 @@ export type Database = {
       }
       qualification_settings: {
         Row: {
+          active_level: string | null
           created_at: string
           description: string | null
           id: string
@@ -3182,6 +3183,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active_level?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -3194,6 +3196,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active_level?: string | null
           created_at?: string
           description?: string | null
           id?: string

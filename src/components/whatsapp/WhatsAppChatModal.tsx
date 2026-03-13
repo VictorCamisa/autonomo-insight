@@ -325,7 +325,7 @@ export function WhatsAppChatModal({
                 : 'WhatsApp não conectado. Vá em Configurações → Usuários para ativar.'}
             </AlertDescription>
           </Alert>
-        )
+        )}
 
         {/* Messages Area */}
         <div 

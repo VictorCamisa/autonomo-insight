@@ -159,9 +159,10 @@ export function WhatsAppChatModal({
   }, [messages]);
 
   const handleSend = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !activeInstance?.id) return;
 
     await sendMessage.mutateAsync({
+      instanceId: activeInstance.id,
       phone,
       message: message.trim(),
       leadId,

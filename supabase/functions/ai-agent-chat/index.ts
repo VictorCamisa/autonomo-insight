@@ -1408,15 +1408,17 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
     }
 
     case 'mark_lead_lost': {
-      if (!customerPhone) return { success: false, error: 'Phone not available' };
+      if (!customerPhone && !leadId) return { success: false, error: 'Phone and leadId not available' };
 
-      const { data: lostLead } = await supabase
-        .from('leads')
-        .select('id, name, assigned_to')
-        .eq('phone', customerPhone)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      let lostLead = null;
+      if (leadId) {
+        const { data } = await supabase.from('leads').select('id, name, assigned_to').eq('id', leadId).single();
+        lostLead = data;
+      }
+      if (!lostLead && customerPhone) {
+        const { data } = await supabase.from('leads').select('id, name, assigned_to').eq('phone', customerPhone).order('created_at', { ascending: false }).limit(1).single();
+        lostLead = data;
+      }
 
       if (!lostLead) return { success: false, error: 'Lead nao encontrado' };
 

@@ -197,7 +197,8 @@ serve(async (req) => {
     // =============================================
     // SESSION & CONTEXT (uses ai_agent_conversations + ai_agent_messages)
     // =============================================
-    const sessionId = `whatsapp_${phone || lead_id || crypto.randomUUID()}`;
+    const today = new Date().toISOString().split('T')[0];
+    const sessionId = `whatsapp_${phone || lead_id || crypto.randomUUID()}_${today}`;
     const SESSION_GAP_HOURS = 4;
     const sessionCutoff = new Date(Date.now() - SESSION_GAP_HOURS * 60 * 60 * 1000).toISOString();
 

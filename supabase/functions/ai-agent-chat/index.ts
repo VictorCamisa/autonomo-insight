@@ -503,7 +503,7 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: 'claude-haiku-4-5-20241022',
+            model: 'claude-haiku-4-5-20251001',
             system: systemPrompt,
             messages: sanitizedMessages,
             tools: dynamicTools,

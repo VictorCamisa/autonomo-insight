@@ -1216,6 +1216,8 @@ async function executeToolCall(
 
             const wpInstance = wpInstances?.[0];
             if (wpInstance) {
+              const apiUrl = (wpInstance.api_url || Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '') + '/';
+              const apiKey = wpInstance.api_key || Deno.env.get('EVOLUTION_API_KEY') || '';
               let conversationSummary = '';
               let messageCount = 0;
               let firstMsgTime = '';

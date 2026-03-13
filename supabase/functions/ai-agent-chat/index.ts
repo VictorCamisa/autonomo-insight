@@ -1102,15 +1102,17 @@ async function executeToolCall(
     }
 
     case 'submit_qualification': {
-      if (!customerPhone) return { success: false, error: 'Phone not available' };
+      if (!customerPhone && !leadId) return { success: false, error: 'Phone and leadId not available' };
 
-      const { data: lead } = await supabase
-        .from('leads')
-        .select('id, name, phone, qualification_data')
-        .eq('phone', customerPhone)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      let lead = null;
+      if (leadId) {
+        const { data } = await supabase.from('leads').select('id, name, phone, qualification_data').eq('id', leadId).single();
+        lead = data;
+      }
+      if (!lead && customerPhone) {
+        const { data } = await supabase.from('leads').select('id, name, phone, qualification_data').eq('phone', customerPhone).order('created_at', { ascending: false }).limit(1).single();
+        lead = data;
+      }
 
       if (!lead) return { success: false, error: 'Lead nao encontrado' };
 

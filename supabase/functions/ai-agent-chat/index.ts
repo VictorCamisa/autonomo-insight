@@ -1164,14 +1164,28 @@ async function executeToolCall(
         }).eq('id', negotiation.id);
       }
 
-      const { data: nextSalesperson } = await supabase.rpc('get_next_round_robin_salesperson');
+      // Check if lead already has an assigned salesperson (avoid double round-robin)
+      const { data: currentLead } = await supabase.from('leads').select('assigned_to').eq('id', lead.id).single();
+      let assignedSalesperson = currentLead?.assigned_to;
 
-      if (nextSalesperson) {
-        await supabase.from('leads').update({ assigned_to: nextSalesperson, updated_at: new Date().toISOString() }).eq('id', lead.id);
-        if (negotiation) {
-          await supabase.from('negotiations').update({ salesperson_id: nextSalesperson }).eq('id', negotiation.id);
+      if (!assignedSalesperson) {
+        const { data: nextSalesperson } = await supabase.rpc('get_next_round_robin_salesperson');
+        if (nextSalesperson) {
+          assignedSalesperson = nextSalesperson;
+          await supabase.from('leads').update({ assigned_to: nextSalesperson, updated_at: new Date().toISOString() }).eq('id', lead.id);
+          if (negotiation) {
+            await supabase.from('negotiations').update({ salesperson_id: nextSalesperson }).eq('id', negotiation.id);
+          }
+          await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: nextSalesperson });
         }
-        await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: nextSalesperson });
+      } else {
+        // Ensure negotiation has the salesperson
+        if (negotiation) {
+          await supabase.from('negotiations').update({ salesperson_id: assignedSalesperson }).eq('id', negotiation.id);
+        }
+      }
+
+      if (assignedSalesperson) {
 
         const { data: salesperson } = await supabase.from('profiles').select('full_name, phone').eq('id', nextSalesperson).single();
         const salespersonName = salesperson?.full_name || 'nosso consultor';

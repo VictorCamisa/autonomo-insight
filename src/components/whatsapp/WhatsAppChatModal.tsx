@@ -80,12 +80,14 @@ export function WhatsAppChatModal({
   leadName, 
   lastCustomerMessageAt 
 }: WhatsAppChatModalProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isManager = role === 'gerente';
   const queryClient = useQueryClient();
 
   const { data: messages = [], isLoading } = useWhatsAppMessagesByPhone(phone);
   const { data: templates = [] } = useWhatsAppTemplates();
-  const { data: userInstance, isLoading: isLoadingInstance } = useUserWhatsAppInstance(user?.id || '');
+  const { data: userInstance, isLoading: isLoadingUserInstance } = useUserWhatsAppInstance(user?.id || '');
+  const { data: allInstances = [], isLoading: isLoadingAllInstances } = useWhatsAppInstances();
   const instanceAction = useWhatsAppInstanceAction();
   const sendMessage = useSendWhatsAppMessage();
 
@@ -96,18 +98,26 @@ export function WhatsAppChatModal({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const didAttemptWebhookRef = useRef(false);
 
-  const isConnected = userInstance?.status === 'connected';
+  const sharedInstances = allInstances.filter((instance) => instance.status === 'connected' && instance.is_shared);
+  const connectedInstances = allInstances.filter((instance) => instance.status === 'connected');
+
+  const activeInstance = userInstance?.status === 'connected'
+    ? userInstance
+    : sharedInstances[0] || (isManager ? connectedInstances[0] : null);
+
+  const isConnected = activeInstance?.status === 'connected';
+  const isLoadingInstance = isManager ? isLoadingAllInstances : isLoadingUserInstance;
 
   // Ensure Evolution webhook is configured
   useEffect(() => {
-    if (!userInstance?.id || !isConnected) return;
+    if (!activeInstance?.id || !isConnected) return;
     if (didAttemptWebhookRef.current) return;
 
-    if (!userInstance.webhook_url) {
+    if (!activeInstance.webhook_url) {
       didAttemptWebhookRef.current = true;
-      instanceAction.mutate({ action: 'setWebhook', instanceId: userInstance.id });
+      instanceAction.mutate({ action: 'setWebhook', instanceId: activeInstance.id });
     }
-  }, [userInstance?.id, userInstance?.webhook_url, isConnected]);
+  }, [activeInstance?.id, activeInstance?.webhook_url, isConnected, instanceAction]);
 
   // Realtime updates
   useEffect(() => {

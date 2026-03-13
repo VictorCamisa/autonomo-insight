@@ -1187,11 +1187,11 @@ async function executeToolCall(
 
       if (assignedSalesperson) {
 
-        const { data: salesperson } = await supabase.from('profiles').select('full_name, phone').eq('id', nextSalesperson).single();
+        const { data: salesperson } = await supabase.from('profiles').select('full_name, phone').eq('id', assignedSalesperson).single();
         const salespersonName = salesperson?.full_name || 'nosso consultor';
 
         await supabase.from('notifications').insert({
-          user_id: nextSalesperson,
+          user_id: assignedSalesperson,
           type: 'lead_assigned',
           title: 'Novo Lead Qualificado pela IA',
           message: `Lead qualificado (${qualificationLevel}): ${vehicleInterest || 'N/A'}${paymentMethod ? ' | Pagamento: ' + paymentMethod : ''}`,

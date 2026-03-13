@@ -320,10 +320,12 @@ export function WhatsAppChatModal({
           <Alert variant="destructive" className="mx-4 mt-3 rounded-lg">
             <WifiOff className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              WhatsApp não conectado. Vá em Configurações → Usuários para ativar.
+              {isManager
+                ? 'Nenhuma instância WhatsApp conectada. Peça para um vendedor conectar o WhatsApp.'
+                : 'WhatsApp não conectado. Vá em Configurações → Usuários para ativar.'}
             </AlertDescription>
           </Alert>
-        )}
+        )
 
         {/* Messages Area */}
         <div 

@@ -518,9 +518,9 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
     // Ensure messages alternate (Anthropic requirement)
     const sanitizedMessages = sanitizeAnthropicMessages(anthropicMessages);
 
-    const temperature = Math.min(agent.temperature || 0.6, 0.7);
-    const maxTokens = agent.max_tokens || 512;
-    const MAX_ROUNDS = 3;
+    const temperature = agent.temperature || 0.3;
+    const maxTokens = agent.max_tokens || 1024;
+    const MAX_ROUNDS = 5;
     let round = 0;
     let responseMessage = '';
     let photosToSend: Array<{ url: string; caption: string }> = [];

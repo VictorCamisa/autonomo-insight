@@ -1473,25 +1473,31 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 
             const wpInstance = wpInstances?.[0];
             if (wpInstance) {
-              const lossReasonLabels: Record<string, string> = {
-                sem_entrada: 'Sem entrada',
-                sem_credito: 'Sem credito',
-                curioso: 'Apenas curioso',
-                caro: 'Achou caro',
-                comprou_outro: 'Comprou em outro lugar',
-                desistiu: 'Desistiu da compra',
-                sem_contato: 'Sem contato',
-                outros: 'Outros',
-              };
+              const apiUrl = (wpInstance.api_url || Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '') + '/';
+              const apiKey = wpInstance.api_key || Deno.env.get('EVOLUTION_API_KEY') || '';
+              if (apiUrl && apiKey) {
+                const lossReasonLabels: Record<string, string> = {
+                  sem_entrada: 'Sem entrada',
+                  sem_credito: 'Sem credito',
+                  curioso: 'Apenas curioso',
+                  caro: 'Achou caro',
+                  comprou_outro: 'Comprou em outro lugar',
+                  desistiu: 'Desistiu da compra',
+                  sem_contato: 'Sem contato',
+                  outros: 'Outros',
+                };
 
-              const lostMsg = `*LEAD PERDIDO*\n\nCliente: ${lostLead.name || 'Lead'}\nWhatsApp: wa.me/${customerPhone.replace(/\D/g, '')}\nMotivo: ${lossReasonLabels[args.loss_reason] || args.loss_reason}\n${args.loss_notes ? `Detalhes: ${args.loss_notes}\n` : ''}\nRegistrado pela IA Gabi`;
-              const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
+                const lostMsg = `*LEAD PERDIDO*\n\nCliente: ${lostLead.name || 'Lead'}\nWhatsApp: wa.me/${(customerPhone || lostLead.phone || '').replace(/\D/g, '')}\nMotivo: ${lossReasonLabels[args.loss_reason] || args.loss_reason}\n${args.loss_notes ? `Detalhes: ${args.loss_notes}\n` : ''}\nRegistrado pela IA Gabi`;
+                const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
 
-              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
-                body: JSON.stringify({ number: salespersonJid, text: lostMsg }),
-              });
+                await fetch(`${apiUrl}message/sendText/${wpInstance.instance_name}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+                  body: JSON.stringify({ number: salespersonJid, text: lostMsg }),
+                });
+                console.log('[mark_lead_lost] WhatsApp notification sent to salesperson');
+              }
+            }
               console.log('[mark_lead_lost] WhatsApp notification sent to salesperson');
             }
           }

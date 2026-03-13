@@ -1,0 +1,2 @@
+ALTER TABLE public.qualification_settings ADD COLUMN active_level TEXT DEFAULT 'Q2';
+UPDATE public.qualification_settings SET active_level = CASE WHEN required_fields IS NOT NULL AND jsonb_array_length(required_fields) > 0 THEN required_fields->>0 ELSE 'Q2' END WHERE level = 'CURRENT';

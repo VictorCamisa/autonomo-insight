@@ -197,7 +197,8 @@ serve(async (req) => {
     // =============================================
     // SESSION & CONTEXT (uses ai_agent_conversations + ai_agent_messages)
     // =============================================
-    const sessionId = `whatsapp_${phone || lead_id || crypto.randomUUID()}`;
+    const today = new Date().toISOString().split('T')[0];
+    const sessionId = `whatsapp_${phone || lead_id || crypto.randomUUID()}_${today}`;
     const SESSION_GAP_HOURS = 4;
     const sessionCutoff = new Date(Date.now() - SESSION_GAP_HOURS * 60 * 60 * 1000).toISOString();
 
@@ -288,7 +289,7 @@ serve(async (req) => {
         : Promise.resolve({ data: null }),
       supabase
         .from('qualification_settings')
-        .select('required_fields')
+        .select('active_level, required_fields')
         .eq('level', 'CURRENT')
         .single(),
       supabase
@@ -334,7 +335,7 @@ serve(async (req) => {
     // =============================================
     // QUALIFICATION LEVEL CONFIGURATION (dynamic from DB)
     // =============================================
-    const activeLevel = qualCurrentResult.data?.required_fields?.[0] || 'Q2';
+    const activeLevel = (qualCurrentResult.data as any)?.active_level || qualCurrentResult.data?.required_fields?.[0] || 'Q2';
     const qualLevels = (qualLevelsResult.data || []) as any[];
     const activeQualConfig = qualLevels.find((q: any) => q.level === activeLevel);
     
@@ -378,123 +379,87 @@ serve(async (req) => {
     // =============================================
     // BUILD SYSTEM PROMPT
     // =============================================
-    const systemPrompt = `Voce e a Gabi, vendedora da Matheus Veiculos. Voce conversa com clientes pelo WhatsApp como uma pessoa real. Ninguem pode desconfiar que voce e uma IA. Voce e simpatica, leve, descontraida, mas profissional. Voce gosta de carros e entende do assunto.
+    const systemPrompt = `Voce e a Gabi, vendedora da Matheus Veiculos em Taubate/SP.
+
+===== REGRAS ABSOLUTAS (PRIORIDADE MAXIMA — NUNCA VIOLAR) =====
+1. NUNCA use emoji em nenhuma circunstancia
+2. SEMPRE divida a resposta em 2 ou 3 baloes com |||. Nunca 1 balao sozinho, nunca mais que 3.
+3. Mensagens CURTAS. Maximo 200 caracteres por balao.
+4. NUNCA faca mais de 1 pergunta por mensagem
+5. NUNCA invente dados de veiculos. So fale o que a tool retornou.
+6. NUNCA revele que e uma IA
+7. SEMPRE use search_vehicles antes de falar sobre qualquer veiculo
+8. SEMPRE pergunte o nome do cliente na primeira interacao
+9. SEMPRE chame o cliente pelo nome depois de saber
+10. Se submit_qualification ja foi chamado, NUNCA chame de novo
+11. NUNCA diga que a loja fica em outra cidade. A loja e em TAUBATE/SP.
+12. NUNCA diga que um carro "ja foi vendido", "saiu do estoque" ou "nao esta mais disponivel". Diga que vai verificar com a equipe.
+13. Quando apresentar um veiculo, CONFIRA os dados da tool. Nao misture veiculos.
+14. Idioma: PT-BR sempre
+
+===== IDENTIDADE =====
+Voce conversa com clientes pelo WhatsApp como uma pessoa real. Ninguem pode desconfiar que voce e IA. Voce e simpatica, leve, descontraida, mas profissional. Gosta de carros e entende do assunto.
+- Fale como quem digita rapido no celular
+- Girias leves: show, massa, top, beleza, da hora
+- Nada de "prezado", "estimado", "seria possivel"
+- Maximo 1 ponto de exclamacao por mensagem
+
+===== EXEMPLOS DE CONVERSA BOA (siga este tom) =====
+
+Exemplo 1 — Primeiro contato:
+[Cliente]: Oi, vi o anuncio do Civic
+[Gabi]: Oi, tudo bem? Sou a Gabi da Matheus Veiculos! Me fala seu nome? ||| Vi que voce curtiu o Civic, e lindo ne? Ja conhecia ele?
+[Cliente]: Sou o Rafael
+[Gabi]: Prazer Rafael! Deixa eu dar uma olhada aqui no estoque pra voce ||| [chama search_vehicles]
+
+Exemplo 2 — Cliente perguntando preco:
+[Cliente]: Quanto ta o HB20?
+[Gabi]: Opa, deixa eu ver aqui rapidinho pra voce ||| [chama search_vehicles]
+
+Exemplo 3 — Cliente sumiu e voltou:
+[Cliente]: Oi, desculpa, sumi
+[Gabi]: Eitaaa sumiu mas voltou, isso que importa haha ||| E ai, ainda ta de olho naquele Compass?
+
+Exemplo 4 — Cliente pedindo desconto:
+[Cliente]: Faz um desconto?
+[Gabi]: Haha quem dera eu pudesse ne ||| Vou passar pro gerente dar uma olhada, ele que manda nessa parte
 
 ===== SOBRE A LOJA =====
-- Matheus Veiculos vende CARROS
-- Endereco: Avenida Major Joaquim Monteiro Patto, 25, Chacara do Visconde - Taubate/SP, CEP 12050-620
-- A loja fica em TAUBATE, SAO PAULO. NUNCA diga que a loja fica em outra cidade.
-- Aceita veiculo na troca
-- Formas de pagamento: financiamento, a vista, consorcio
-- Horario: Segunda a Sexta das 9h as 18h / Sabado das 9h as 13h
+- Matheus Veiculos — Av. Major Joaquim Monteiro Patto, 25, Chacara do Visconde - Taubate/SP, CEP 12050-620
+- Aceita troca, financiamento, a vista, consorcio
+- Horario: Seg-Sex 9h-18h / Sab 9h-13h
 
-===== COMO VOCE FALA (PRIORIDADE MAXIMA) =====
-Voce fala como uma pessoa real no WhatsApp. Isso significa:
-- Mensagens CURTAS. Maximo 200 caracteres por balao.
-- SEMPRE divida sua resposta em 2 ou 3 baloes usando |||. Nunca mande 1 balao sozinho e nunca mande mais que 3.
-- Exemplo do ritmo certo:
-  "Oi Victor, tudo bem? Sou a Gabi da Matheus Veiculos! ||| Vi que voce curtiu o City, bonito demais ne? Ja conhecia ele?"
-- Outro exemplo:
-  "Achei aqui pra voce! Tem um City 2013 automatico, ta novinho ||| Quer que eu mande umas fotos pra voce dar uma olhada?"
-- Fale como se estivesse digitando rapido no celular
-- Use girias leves quando fizer sentido: show, massa, top, beleza, da hora
-- NUNCA use emoji em nenhuma circunstancia
-- NUNCA faca mais de 1 pergunta por mensagem. Escolha a mais importante.
-- Nao use linguagem formal. Nada de "prezado", "estimado", "seria possivel".
-- Nao use pontos de exclamacao demais. Maximo 1 por mensagem.
-
-===== PRIMEIRA MENSAGEM =====
-Quando um cliente falar com voce pela primeira vez:
-1. Cumprimente de forma natural e se apresente
-2. Pergunte o NOME do cliente (isso e obrigatorio, sempre pergunte o nome antes de qualquer coisa)
-3. Se o cliente ja mencionou um veiculo, pergunte o nome E ja demonstre que sabe qual carro ele viu
-Exemplo: "Oi, tudo bem? Sou a Gabi da Matheus Veiculos! Me fala seu nome? ||| Vi que voce curtiu o Civic, e lindo ne?"
-IMPORTANTE: Mesmo que o sistema ja tenha um nome cadastrado, SEMPRE pergunte o nome. O nome cadastrado pode estar errado.
-
-===== COMO VOCE VENDE (VENDA CONSULTIVA) =====
-Voce NAO e uma vendedora insistente. Voce e uma consultora que ajuda o cliente a encontrar o veiculo certo.
-
-O fluxo natural de uma conversa e:
+===== FLUXO DE VENDA CONSULTIVA =====
 1. RAPPORT: Cumprimentar, pegar o nome, criar conexao
 2. DESCOBERTA: Entender o que o cliente busca
-3. APRESENTACAO: Mostrar opcoes reais do estoque
-4. APROFUNDAMENTO: Coletar informacoes para qualificacao (veja secao QUALIFICACAO abaixo)
-5. QUALIFICACAO: Quando tiver TODOS os campos obrigatorios, chamar submit_qualification
-6. HANDOFF: Avisar que um consultor vai continuar o atendimento
+3. APRESENTACAO: Mostrar opcoes reais do estoque (search_vehicles)
+4. APROFUNDAMENTO: Coletar info para qualificacao (1 por mensagem)
+5. QUALIFICACAO: Quando tiver TODOS campos obrigatorios, chamar submit_qualification UMA VEZ
+6. HANDOFF: Avisar que consultor vai continuar
 
-REGRAS DO FLUXO:
-- NUNCA pule etapas. Nao pergunte sobre troca antes de apresentar o veiculo.
-- Cada mensagem do cliente e uma oportunidade de colher 1 informacao nova. Nao tente pegar tudo de uma vez.
-- Se o cliente der uma resposta curta (ta, ok, sim), avance naturalmente.
+REGRAS: Nao pule etapas. 1 info nova por mensagem. Resposta curta do cliente = avance.
 
 ${qualPromptSection}
 
-===== USO DE TOOLS — ESTOQUE =====
-REGRA CRITICA: Se o cliente mencionar QUALQUER veiculo, voce DEVE chamar search_vehicles IMEDIATAMENTE.
-- NAO pergunte "qual modelo?" antes de buscar. Busque primeiro e mostre as opcoes.
-- Se o cliente diz "gostei do Honda" → busque todos os Honda
-- Se o cliente diz "quero um SUV" → busque SUVs
-- Se o cliente diz "to procurando algo ate 80 mil" → busque veiculos nessa faixa
+===== CRITERIOS DE HANDOFF PARA HUMANO =====
+Transfira para humano (avise que um consultor vai assumir) quando:
+- Cliente pediu desconto pela 2a vez
+- Cliente mencionou financiamento e quer simular parcelas especificas
+- Cliente demonstra irritacao ou insatisfacao
+- Cliente quer negociar valor de troca
+- Apos submit_qualification: SEMPRE avise que o consultor vai entrar em contato
 
-Quando apresentar resultados do estoque:
-- Use APENAS dados reais retornados pela tool
-- NUNCA invente preco, km, cor ou qualquer dado
-- Apresente 1 ou 2 opcoes por mensagem (nao jogue uma lista)
-- Se a busca NAO retornar resultados para um modelo especifico, NUNCA diga que "nao temos" ou que "nao esta disponivel". Diga que nao encontrou nesse momento na lista e que pode verificar com a equipe. Sugira modelos similares que apareceram na busca.
-- NUNCA afirme que um carro foi vendido ou que saiu do estoque. Voce nao tem essa informacao.
-- Quando sugerir veiculos, use SOMENTE os dados retornados pela tool. Confira marca, modelo, ano e preco antes de falar.
-
-===== USO DE TOOLS — FOTOS =====
-- NAO envie fotos automaticamente. Envie APENAS quando o cliente pedir.
-- Quando o cliente pedir fotos, use send_vehicle_photos com o vehicle_id correto
-- Apos enviar fotos, SEMPRE faca uma pergunta para continuar a conversa
-- Se nao tiver fotos disponiveis, avise
-
-===== USO DE TOOLS — FOTOS DE TROCA =====
-- Se o cliente enviar uma foto do carro dele (para troca), use save_trade_in_photo para associar ao perfil
-- Agradeca e diga que vai mostrar pro avaliador
-
-===== USO DE TOOLS — AGENDAMENTO =====
-- Se o cliente quiser visitar a loja ou ver um carro pessoalmente, use schedule_visit
-- Confirme data e horario antes de agendar
-- Lembre o horario de funcionamento: Seg-Sex 9h-18h, Sab 9h-13h
-
-===== LEAD PERDIDO =====
-- Se o cliente deixar CLARO que nao quer, chame mark_lead_lost IMEDIATAMENTE
-- Apos marcar como perdido, se despeca educadamente. Nao insista.
-
-===== SITUACOES ESPECIAIS =====
-CLIENTE PEDE DESCONTO:
-- Voce nao tem poder pra dar desconto. Faca uma brincadeira leve.
-- Diga que vai passar pro gerente avaliar.
-
-CLIENTE SUMIU E VOLTOU:
-- Faca uma brincadeira leve pra quebrar o gelo
-- Retome de onde parou
-
-CLIENTE PERGUNTA ALGO QUE VOCE NAO SABE:
-- NUNCA invente. Diga que vai confirmar com a equipe.
-- NUNCA revele que e uma IA
-
-===== REGRAS ABSOLUTAS (NUNCA VIOLAR) =====
-1. SEMPRE pergunte o nome do cliente na primeira interacao
-2. SEMPRE use search_vehicles antes de falar sobre qualquer veiculo
-3. NUNCA invente dados de veiculos. So fale o que a tool retornou.
-4. NUNCA revele que e uma IA
-5. NUNCA use emoji
-6. NUNCA faca mais de 1 pergunta por mensagem
-7. SEMPRE divida a resposta em 2 ou 3 baloes com |||
-8. SEMPRE chame o cliente pelo nome depois de saber
-9. Idioma: PT-BR sempre
-10. Se submit_qualification ja foi chamado, NUNCA chame de novo
-11. NUNCA diga que a loja fica em outra cidade. A loja e em TAUBATE/SP. Se o cliente perguntar onde fica, informe o endereco completo.
-12. NUNCA diga que um carro "ja foi vendido", "saiu do estoque" ou "nao esta mais disponivel". Diga que vai verificar com a equipe.
-13. Quando apresentar um veiculo, CONFIRA os dados retornados pela tool. Nao misture dados de veiculos diferentes.
+===== USO DE TOOLS =====
+ESTOQUE: Se o cliente mencionar QUALQUER veiculo, chame search_vehicles IMEDIATAMENTE. Nao pergunte antes.
+FOTOS: Envie APENAS quando o cliente pedir. Use send_vehicle_photos com vehicle_id correto.
+TROCA: Se o cliente enviar foto do carro dele, use save_trade_in_photo.
+AGENDAMENTO: Confirme data/horario, use schedule_visit. Horario: Seg-Sex 9h-18h, Sab 9h-13h.
+LEAD PERDIDO: Se o cliente deixar claro que nao quer, chame mark_lead_lost.
 
 ===== ESTOQUE ATUAL =====
-${inventoryContext || 'Use a ferramenta search_vehicles para consultar o estoque atualizado.'}
+${inventoryContext || 'Use search_vehicles para consultar.'}
 
-===== CONTEXTO DO LEAD =====
+===== CONTEXTO =====
 ${leadInfo}
 ${vehicleInfo}${lastVehicleContext}${sessionNote}
 Interacoes nesta sessao: ${conversationHistory.length}`;
@@ -517,9 +482,9 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
     // Ensure messages alternate (Anthropic requirement)
     const sanitizedMessages = sanitizeAnthropicMessages(anthropicMessages);
 
-    const temperature = Math.min(agent.temperature || 0.6, 0.7);
-    const maxTokens = agent.max_tokens || 512;
-    const MAX_ROUNDS = 3;
+    const temperature = agent.temperature || 0.3;
+    const maxTokens = agent.max_tokens || 1024;
+    const MAX_ROUNDS = 5;
     let round = 0;
     let responseMessage = '';
     let photosToSend: Array<{ url: string; caption: string }> = [];
@@ -1079,14 +1044,19 @@ async function executeToolCall(
 
             const wpInstance = wpInstances?.[0];
             if (wpInstance) {
-              const visitMsg = `*VISITA AGENDADA*\n\nCliente: ${leadForVisit.name || 'Lead'}\nData: ${visitDate}\nHorario: ${visitTime}${args.vehicle_interest ? `\nVeiculo: ${args.vehicle_interest}` : ''}${args.notes ? `\nObs: ${args.notes}` : ''}\n\nAgendado pela IA Gabi`;
-              const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
+              const apiUrl = (wpInstance.api_url || Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '') + '/';
+              const apiKey = wpInstance.api_key || Deno.env.get('EVOLUTION_API_KEY') || '';
+              if (!apiUrl || !apiKey) { console.warn('[schedule_visit] No api_url/api_key available'); }
+              else {
+                const visitMsg = `*VISITA AGENDADA*\n\nCliente: ${leadForVisit.name || 'Lead'}\nData: ${visitDate}\nHorario: ${visitTime}${args.vehicle_interest ? `\nVeiculo: ${args.vehicle_interest}` : ''}${args.notes ? `\nObs: ${args.notes}` : ''}\n\nAgendado pela IA Gabi`;
+                const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
 
-              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
-                body: JSON.stringify({ number: salespersonJid, text: visitMsg }),
-              });
+                await fetch(`${apiUrl}message/sendText/${wpInstance.instance_name}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+                  body: JSON.stringify({ number: salespersonJid, text: visitMsg }),
+                });
+              }
             }
           }
         } catch (e) {
@@ -1101,15 +1071,17 @@ async function executeToolCall(
     }
 
     case 'submit_qualification': {
-      if (!customerPhone) return { success: false, error: 'Phone not available' };
+      if (!customerPhone && !leadId) return { success: false, error: 'Phone and leadId not available' };
 
-      const { data: lead } = await supabase
-        .from('leads')
-        .select('id, name, phone, qualification_data')
-        .eq('phone', customerPhone)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      let lead = null;
+      if (leadId) {
+        const { data } = await supabase.from('leads').select('id, name, phone, qualification_data').eq('id', leadId).single();
+        lead = data;
+      }
+      if (!lead && customerPhone) {
+        const { data } = await supabase.from('leads').select('id, name, phone, qualification_data').eq('phone', customerPhone).order('created_at', { ascending: false }).limit(1).single();
+        lead = data;
+      }
 
       if (!lead) return { success: false, error: 'Lead nao encontrado' };
 
@@ -1161,20 +1133,34 @@ async function executeToolCall(
         }).eq('id', negotiation.id);
       }
 
-      const { data: nextSalesperson } = await supabase.rpc('get_next_round_robin_salesperson');
+      // Check if lead already has an assigned salesperson (avoid double round-robin)
+      const { data: currentLead } = await supabase.from('leads').select('assigned_to').eq('id', lead.id).single();
+      let assignedSalesperson = currentLead?.assigned_to;
 
-      if (nextSalesperson) {
-        await supabase.from('leads').update({ assigned_to: nextSalesperson, updated_at: new Date().toISOString() }).eq('id', lead.id);
-        if (negotiation) {
-          await supabase.from('negotiations').update({ salesperson_id: nextSalesperson }).eq('id', negotiation.id);
+      if (!assignedSalesperson) {
+        const { data: nextSalesperson } = await supabase.rpc('get_next_round_robin_salesperson');
+        if (nextSalesperson) {
+          assignedSalesperson = nextSalesperson;
+          await supabase.from('leads').update({ assigned_to: nextSalesperson, updated_at: new Date().toISOString() }).eq('id', lead.id);
+          if (negotiation) {
+            await supabase.from('negotiations').update({ salesperson_id: nextSalesperson }).eq('id', negotiation.id);
+          }
+          await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: nextSalesperson });
         }
-        await supabase.rpc('increment_round_robin_counters', { p_salesperson_id: nextSalesperson });
+      } else {
+        // Ensure negotiation has the salesperson
+        if (negotiation) {
+          await supabase.from('negotiations').update({ salesperson_id: assignedSalesperson }).eq('id', negotiation.id);
+        }
+      }
 
-        const { data: salesperson } = await supabase.from('profiles').select('full_name, phone').eq('id', nextSalesperson).single();
+      if (assignedSalesperson) {
+
+        const { data: salesperson } = await supabase.from('profiles').select('full_name, phone').eq('id', assignedSalesperson).single();
         const salespersonName = salesperson?.full_name || 'nosso consultor';
 
         await supabase.from('notifications').insert({
-          user_id: nextSalesperson,
+          user_id: assignedSalesperson,
           type: 'lead_assigned',
           title: 'Novo Lead Qualificado pela IA',
           message: `Lead qualificado (${qualificationLevel}): ${vehicleInterest || 'N/A'}${paymentMethod ? ' | Pagamento: ' + paymentMethod : ''}`,
@@ -1194,6 +1180,8 @@ async function executeToolCall(
 
             const wpInstance = wpInstances?.[0];
             if (wpInstance) {
+              const apiUrl = (wpInstance.api_url || Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '') + '/';
+              const apiKey = wpInstance.api_key || Deno.env.get('EVOLUTION_API_KEY') || '';
               let conversationSummary = '';
               let messageCount = 0;
               let firstMsgTime = '';
@@ -1346,18 +1334,18 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 
               console.log('[ai-agent-chat] Sending enhanced ficha to salesperson:', salespersonName);
 
-              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
+              await fetch(`${apiUrl}message/sendText/${wpInstance.instance_name}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
+                headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
                 body: JSON.stringify({ number: salespersonJid, text: fichaText }),
               });
 
               // Send trade-in photos as images to salesperson
               if (tradeInPhotos.length > 0) {
                 for (const photo of tradeInPhotos.slice(0, 5)) {
-                  await fetch(`${wpInstance.api_url}message/sendMedia/${wpInstance.instance_name}`, {
+                  await fetch(`${apiUrl}message/sendMedia/${wpInstance.instance_name}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
+                    headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
                     body: JSON.stringify({
                       number: salespersonJid,
                       mediatype: 'image',
@@ -1391,15 +1379,17 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
     }
 
     case 'mark_lead_lost': {
-      if (!customerPhone) return { success: false, error: 'Phone not available' };
+      if (!customerPhone && !leadId) return { success: false, error: 'Phone and leadId not available' };
 
-      const { data: lostLead } = await supabase
-        .from('leads')
-        .select('id, name, assigned_to')
-        .eq('phone', customerPhone)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      let lostLead = null;
+      if (leadId) {
+        const { data } = await supabase.from('leads').select('id, name, assigned_to').eq('id', leadId).single();
+        lostLead = data;
+      }
+      if (!lostLead && customerPhone) {
+        const { data } = await supabase.from('leads').select('id, name, assigned_to').eq('phone', customerPhone).order('created_at', { ascending: false }).limit(1).single();
+        lostLead = data;
+      }
 
       if (!lostLead) return { success: false, error: 'Lead nao encontrado' };
 
@@ -1447,26 +1437,30 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 
             const wpInstance = wpInstances?.[0];
             if (wpInstance) {
-              const lossReasonLabels: Record<string, string> = {
-                sem_entrada: 'Sem entrada',
-                sem_credito: 'Sem credito',
-                curioso: 'Apenas curioso',
-                caro: 'Achou caro',
-                comprou_outro: 'Comprou em outro lugar',
-                desistiu: 'Desistiu da compra',
-                sem_contato: 'Sem contato',
-                outros: 'Outros',
-              };
+              const apiUrl = (wpInstance.api_url || Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '') + '/';
+              const apiKey = wpInstance.api_key || Deno.env.get('EVOLUTION_API_KEY') || '';
+              if (apiUrl && apiKey) {
+                const lossReasonLabels: Record<string, string> = {
+                  sem_entrada: 'Sem entrada',
+                  sem_credito: 'Sem credito',
+                  curioso: 'Apenas curioso',
+                  caro: 'Achou caro',
+                  comprou_outro: 'Comprou em outro lugar',
+                  desistiu: 'Desistiu da compra',
+                  sem_contato: 'Sem contato',
+                  outros: 'Outros',
+                };
 
-              const lostMsg = `*LEAD PERDIDO*\n\nCliente: ${lostLead.name || 'Lead'}\nWhatsApp: wa.me/${customerPhone.replace(/\D/g, '')}\nMotivo: ${lossReasonLabels[args.loss_reason] || args.loss_reason}\n${args.loss_notes ? `Detalhes: ${args.loss_notes}\n` : ''}\nRegistrado pela IA Gabi`;
-              const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
+                const lostMsg = `*LEAD PERDIDO*\n\nCliente: ${lostLead.name || 'Lead'}\nWhatsApp: wa.me/${(customerPhone || lostLead.phone || '').replace(/\D/g, '')}\nMotivo: ${lossReasonLabels[args.loss_reason] || args.loss_reason}\n${args.loss_notes ? `Detalhes: ${args.loss_notes}\n` : ''}\nRegistrado pela IA Gabi`;
+                const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
 
-              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
-                body: JSON.stringify({ number: salespersonJid, text: lostMsg }),
-              });
-              console.log('[mark_lead_lost] WhatsApp notification sent to salesperson');
+                await fetch(`${apiUrl}message/sendText/${wpInstance.instance_name}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+                  body: JSON.stringify({ number: salespersonJid, text: lostMsg }),
+                });
+                console.log('[mark_lead_lost] WhatsApp notification sent to salesperson');
+              }
             }
           }
         } catch (notifyErr) {

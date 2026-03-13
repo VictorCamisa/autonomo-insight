@@ -335,7 +335,7 @@ serve(async (req) => {
     // =============================================
     // QUALIFICATION LEVEL CONFIGURATION (dynamic from DB)
     // =============================================
-    const activeLevel = qualCurrentResult.data?.required_fields?.[0] || 'Q2';
+    const activeLevel = (qualCurrentResult.data as any)?.active_level || qualCurrentResult.data?.required_fields?.[0] || 'Q2';
     const qualLevels = (qualLevelsResult.data || []) as any[];
     const activeQualConfig = qualLevels.find((q: any) => q.level === activeLevel);
     

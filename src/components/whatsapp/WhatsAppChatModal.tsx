@@ -435,10 +435,11 @@ export function WhatsAppChatModal({
             {/* Message Input */}
             <div className="flex-1 relative">
               <Textarea
-                placeholder="Digite sua mensagem..."
+                placeholder={isConnected ? 'Digite sua mensagem...' : 'WhatsApp não conectado'}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
+                disabled={!isConnected || sendMessage.isPending}
                 className="min-h-[44px] max-h-[120px] resize-none pr-10 rounded-2xl bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-emerald-500"
                 rows={1}
               />

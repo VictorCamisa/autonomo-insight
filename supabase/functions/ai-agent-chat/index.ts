@@ -289,7 +289,7 @@ serve(async (req) => {
         : Promise.resolve({ data: null }),
       supabase
         .from('qualification_settings')
-        .select('required_fields')
+        .select('active_level, required_fields')
         .eq('level', 'CURRENT')
         .single(),
       supabase

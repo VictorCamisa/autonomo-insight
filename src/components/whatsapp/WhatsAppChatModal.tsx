@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
-import { useWhatsAppInstanceAction, useWhatsAppMessagesByPhone, useSendWhatsAppMessage, useWhatsAppTemplates, useUserWhatsAppInstance } from '@/hooks/useWhatsApp';
+import { useWhatsAppInstanceAction, useWhatsAppInstances, useWhatsAppMessagesByPhone, useSendWhatsAppMessage, useWhatsAppTemplates, useUserWhatsAppInstance } from '@/hooks/useWhatsApp';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
@@ -80,12 +80,14 @@ export function WhatsAppChatModal({
   leadName, 
   lastCustomerMessageAt 
 }: WhatsAppChatModalProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isManager = role === 'gerente';
   const queryClient = useQueryClient();
 
   const { data: messages = [], isLoading } = useWhatsAppMessagesByPhone(phone);
   const { data: templates = [] } = useWhatsAppTemplates();
-  const { data: userInstance, isLoading: isLoadingInstance } = useUserWhatsAppInstance(user?.id || '');
+  const { data: userInstance, isLoading: isLoadingUserInstance } = useUserWhatsAppInstance(user?.id || '');
+  const { data: allInstances = [], isLoading: isLoadingAllInstances } = useWhatsAppInstances();
   const instanceAction = useWhatsAppInstanceAction();
   const sendMessage = useSendWhatsAppMessage();
 
@@ -96,18 +98,26 @@ export function WhatsAppChatModal({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const didAttemptWebhookRef = useRef(false);
 
-  const isConnected = userInstance?.status === 'connected';
+  const sharedInstances = allInstances.filter((instance) => instance.status === 'connected' && instance.is_shared);
+  const connectedInstances = allInstances.filter((instance) => instance.status === 'connected');
+
+  const activeInstance = userInstance?.status === 'connected'
+    ? userInstance
+    : sharedInstances[0] || (isManager ? connectedInstances[0] : null);
+
+  const isConnected = activeInstance?.status === 'connected';
+  const isLoadingInstance = isManager ? isLoadingAllInstances : isLoadingUserInstance;
 
   // Ensure Evolution webhook is configured
   useEffect(() => {
-    if (!userInstance?.id || !isConnected) return;
+    if (!activeInstance?.id || !isConnected) return;
     if (didAttemptWebhookRef.current) return;
 
-    if (!userInstance.webhook_url) {
+    if (!activeInstance.webhook_url) {
       didAttemptWebhookRef.current = true;
-      instanceAction.mutate({ action: 'setWebhook', instanceId: userInstance.id });
+      instanceAction.mutate({ action: 'setWebhook', instanceId: activeInstance.id });
     }
-  }, [userInstance?.id, userInstance?.webhook_url, isConnected]);
+  }, [activeInstance?.id, activeInstance?.webhook_url, isConnected, instanceAction]);
 
   // Realtime updates
   useEffect(() => {
@@ -149,9 +159,10 @@ export function WhatsAppChatModal({
   }, [messages]);
 
   const handleSend = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !activeInstance?.id) return;
 
     await sendMessage.mutateAsync({
+      instanceId: activeInstance.id,
       phone,
       message: message.trim(),
       leadId,
@@ -309,7 +320,9 @@ export function WhatsAppChatModal({
           <Alert variant="destructive" className="mx-4 mt-3 rounded-lg">
             <WifiOff className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              WhatsApp não conectado. Vá em Configurações → Usuários para ativar.
+              {isManager
+                ? 'Nenhuma instância WhatsApp conectada. Peça para um vendedor conectar o WhatsApp.'
+                : 'WhatsApp não conectado. Vá em Configurações → Usuários para ativar.'}
             </AlertDescription>
           </Alert>
         )}
@@ -422,10 +435,11 @@ export function WhatsAppChatModal({
             {/* Message Input */}
             <div className="flex-1 relative">
               <Textarea
-                placeholder="Digite sua mensagem..."
+                placeholder={isConnected ? 'Digite sua mensagem...' : 'WhatsApp não conectado'}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
+                disabled={!isConnected || sendMessage.isPending}
                 className="min-h-[44px] max-h-[120px] resize-none pr-10 rounded-2xl bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-emerald-500"
                 rows={1}
               />

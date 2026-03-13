@@ -1080,14 +1080,19 @@ async function executeToolCall(
 
             const wpInstance = wpInstances?.[0];
             if (wpInstance) {
-              const visitMsg = `*VISITA AGENDADA*\n\nCliente: ${leadForVisit.name || 'Lead'}\nData: ${visitDate}\nHorario: ${visitTime}${args.vehicle_interest ? `\nVeiculo: ${args.vehicle_interest}` : ''}${args.notes ? `\nObs: ${args.notes}` : ''}\n\nAgendado pela IA Gabi`;
-              const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
+              const apiUrl = (wpInstance.api_url || Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '') + '/';
+              const apiKey = wpInstance.api_key || Deno.env.get('EVOLUTION_API_KEY') || '';
+              if (!apiUrl || !apiKey) { console.warn('[schedule_visit] No api_url/api_key available'); }
+              else {
+                const visitMsg = `*VISITA AGENDADA*\n\nCliente: ${leadForVisit.name || 'Lead'}\nData: ${visitDate}\nHorario: ${visitTime}${args.vehicle_interest ? `\nVeiculo: ${args.vehicle_interest}` : ''}${args.notes ? `\nObs: ${args.notes}` : ''}\n\nAgendado pela IA Gabi`;
+                const salespersonJid = salesperson.phone.replace(/\D/g, '') + '@s.whatsapp.net';
 
-              await fetch(`${wpInstance.api_url}message/sendText/${wpInstance.instance_name}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': wpInstance.api_key },
-                body: JSON.stringify({ number: salespersonJid, text: visitMsg }),
-              });
+                await fetch(`${apiUrl}message/sendText/${wpInstance.instance_name}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+                  body: JSON.stringify({ number: salespersonJid, text: visitMsg }),
+                });
+              }
             }
           }
         } catch (e) {

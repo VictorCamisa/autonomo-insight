@@ -159,6 +159,19 @@ function buildSubmitQualificationTool(requiredFields: string[], optionalFields: 
   };
 }
 
+// Tool for requesting human takeover
+const requestHumanTakeoverTool = {
+  name: "request_human_takeover",
+  description: "Transfere o atendimento para um consultor humano e PÁRA de responder. Use SOMENTE quando o cliente pedir desconto que não pode ser dado, estiver irritado, pedir para falar com vendedor, ou nas outras condições de handoff.",
+  input_schema: {
+    type: "object",
+    properties: {
+      reason: { type: "string", description: "O motivo da transferência (ex: 'Cliente pediu desconto', 'Cliente irritado', 'Dúvida complexa')" }
+    },
+    required: ["reason"]
+  }
+};
+
 serve(async (req) => {
   console.log('[ai-agent-chat] Request received');
 
@@ -277,7 +290,7 @@ serve(async (req) => {
         .from('ai_agent_messages')
         .select('role, content')
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false }) // Busque as úmtimas N mensagens (descendente)
         .limit(contextWindowSize),
       supabase
         .from('vehicles')
@@ -299,7 +312,8 @@ serve(async (req) => {
         .order('level', { ascending: true }),
     ]);
 
-    const conversationHistory = (historyResult.data || []).map((msg: any) => ({
+    // Reverse history back to chronological order (oldest first) so the AI understands the flow
+    const conversationHistory = (historyResult.data || []).reverse().map((msg: any) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     }));
@@ -364,7 +378,7 @@ serve(async (req) => {
 
     // Build dynamic tools array (Anthropic format)
     const submitQualTool = buildSubmitQualificationTool(qualRequiredFields, qualOptionalFields);
-    const dynamicTools = [...toolDefinitions, submitQualTool, markLeadLostTool];
+    const dynamicTools = [...toolDefinitions, submitQualTool, markLeadLostTool, requestHumanTakeoverTool];
 
     console.log('[ai-agent-chat] Conversation:', conversationId, 'history:', conversationHistory.length);
 
@@ -543,7 +557,7 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
             console.log(`[ai-agent-chat] Executing tool: ${fnName}`, fnArgs);
             toolCallsLog.push(fnName);
 
-            const toolResult = await executeToolCall(supabase, fnName, fnArgs, phone, photosToSend, agent_id, activeLevel, LOVABLE_API_KEY, lead_id);
+            const toolResult = await executeToolCall(supabase, fnName, fnArgs, phone, photosToSend, agent_id, activeLevel, LOVABLE_API_KEY, lead_id, conversationId);
 
             toolResultBlocks.push({
               type: 'tool_result',
@@ -722,6 +736,7 @@ async function executeToolCall(
   qualificationLevel?: string,
   lovableApiKey?: string,
   leadId?: string,
+  conversationId?: string,
 ): Promise<any> {
   console.log(`[ai-agent-chat] Executing ${functionName}:`, args);
 
@@ -1470,6 +1485,47 @@ ${histMsgs.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Gabi'}: ${m.conte
 
       console.log('[ai-agent-chat] Lead marked as lost:', lostLead.id, 'reason:', args.loss_reason);
       return { success: true, message: 'Lead marcado como perdido. Despeca-se educadamente.' };
+    }
+
+    case 'request_human_takeover': {
+      if (!conversationId) return { success: false, error: 'Conversation ID not available' };
+      
+      const reason = args.reason || 'Solicitado pela IA';
+      
+      // Bloquear na tabela ai_agent_human_takeover
+      await supabase.from('ai_agent_human_takeover').insert({
+        conversation_id: conversationId,
+        reason: reason,
+      });
+      
+      // Atualizar o status do Lead (se houver) e enviar notif ao vendedor
+      if (leadId || customerPhone) {
+        let handoffLead = null;
+        if (leadId) {
+          const { data } = await supabase.from('leads').select('id, name, assigned_to').eq('id', leadId).single();
+          handoffLead = data;
+        }
+        if (!handoffLead && customerPhone) {
+          const { data } = await supabase.from('leads').select('id, name, assigned_to').eq('phone', customerPhone).order('created_at', { ascending: false }).limit(1).single();
+          handoffLead = data;
+        }
+
+        if (handoffLead?.assigned_to) {
+          await supabase.from('notifications').insert({
+            user_id: handoffLead.assigned_to,
+            type: 'human_takeover',
+            title: 'Atendimento Transferido pela IA',
+            message: `A IA encerrou o atendimento de ${handoffLead.name || 'Lead'}. Motivo: ${reason}`,
+            link: '/crm',
+          });
+        }
+      }
+      
+      console.log('[ai-agent-chat] Human takeover requested for conversation:', conversationId, 'reason:', reason);
+      return { 
+        success: true, 
+        message: 'A transferência foi registrada com sucesso. VOCÊ AGORA DEVE AVISAR O CLIENTE QUE UM ATENDENTE VAI CONTINUAR E ENCERRAR A MENSAGEM.'
+      };
     }
 
     default:

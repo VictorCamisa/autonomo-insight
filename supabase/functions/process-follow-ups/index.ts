@@ -169,8 +169,8 @@ serve(async (req) => {
     const statusArray = Array.from(targetStatuses);
     console.log(`Querying negotiations with statuses: ${statusArray.join(', ')}`);
 
-    // 4. Buscar negociações nos status que os fluxos miram (inativas há >1h, limite 50 por batch)
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    // 4. Buscar negociações nos status que os fluxos miram (inativas há >10m, limite 50 por batch)
+    const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data: negotiationsData, error: negError } = await supabase
       .from('negotiations')
       .select(`
@@ -183,7 +183,7 @@ serve(async (req) => {
         )
       `)
       .in('status', statusArray)
-      .lt('last_message_at', oneHourAgo)
+      .lt('last_message_at', tenMinsAgo)
       .not('lead.status', 'eq', 'convertido')
       .order('last_message_at', { ascending: true })
       .limit(50);

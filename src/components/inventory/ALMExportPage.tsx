@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ALM_MARCAS, ALM_CORES, BRAND_MAP, COLOR_MAP } from '@/lib/almExportData';
 import {
-  mapVehicle, generateJSON, generateSQL, exportCSV, getPreviewData,
+  mapVehicle, generateJSON, generateSQL, generateXML, exportCSV, getPreviewData,
   normStr, matchBrand, setModelos, getModelos,
   type MappedVehicle, type MatchLevel,
 } from '@/lib/almExportUtils';
@@ -361,6 +361,9 @@ export default function ALMExportPage() {
           </Button>
           <Button onClick={() => { generateSQL(mappedVehicles, includeWarn); saveAlmIds(mappedVehicles); }} className="bg-orange-600 hover:bg-orange-700">
             <FileText className="h-4 w-4 mr-2" />Gerar SQL
+          </Button>
+          <Button onClick={() => { generateXML(mappedVehicles, includeWarn); saveAlmIds(mappedVehicles); }} className="bg-blue-600 hover:bg-blue-700">
+            <FileText className="h-4 w-4 mr-2" />Gerar XML
           </Button>
           <Button variant="outline" onClick={() => setPreviewOpen(true)}>
             <Eye className="h-4 w-4 mr-2" />Pré-visualizar

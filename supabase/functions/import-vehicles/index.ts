@@ -104,6 +104,25 @@ function getFieldValue(row: string, fieldName: string): string | null {
   return null
 }
 
+// Parse XML field value array (for tags like <Fotos><Foto>url</Foto></Fotos>)
+function getPhotosUrl(rowXml: string): string[] {
+  const fotosMatch = rowXml.match(/<Fotos>([\s\S]*?)<\/Fotos>/i)
+  if (!fotosMatch) return []
+  
+  const fotosHtml = fotosMatch[1]
+  const urlRegex = /<Foto>([^<]+)<\/Foto>/gi
+  const urls: string[] = []
+  let match
+  
+  while ((match = urlRegex.exec(fotosHtml)) !== null) {
+    if (match[1] && match[1].trim()) {
+      urls.push(match[1].trim())
+    }
+  }
+  
+  return urls
+}
+
 // Parse single vehicle row
 function parseVehicleRow(rowXml: string): Record<string, any> | null {
   const statusVeiculo = getFieldValue(rowXml, 'StatusVeiculo')
@@ -130,6 +149,7 @@ function parseVehicleRow(rowXml: string): Record<string, any> | null {
   const cambioId = getFieldValue(rowXml, 'CambioId')
   const mercadoLibreId = getFieldValue(rowXml, 'MercadoLibreId')
   const tipoMotor = getFieldValue(rowXml, 'TipoMotor')
+  const images = getPhotosUrl(rowXml)
   
   return {
     brand,
@@ -148,6 +168,7 @@ function parseVehicleRow(rowXml: string): Record<string, any> | null {
     transmission: cambioId ? (CAMBIO_MAP[cambioId] || 'manual') : 'manual',
     mercadolibre_id: mercadoLibreId,
     notes: descricao.substring(0, 500), // Limit notes length
+    images: images.length > 0 ? images : null,
     status: 'disponivel',
     featured: false,
   }

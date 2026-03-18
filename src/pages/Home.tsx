@@ -49,8 +49,14 @@ export default function Home() {
       {/* ═══════════ HERO ═══════════ */}
       <section className="relative w-full overflow-hidden h-screen flex flex-col justify-end">
         <div className="absolute inset-0">
-          <img src={heroBanner} alt="Matheus Veículos" className="hidden md:block w-full h-full object-cover brightness-[0.5]" />
-          <img src={heroBannerMobile} alt="Matheus Veículos" className="block md:hidden w-full h-full object-cover brightness-[0.5]" />
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="w-full h-full object-cover brightness-[0.45]"
+            src="/videos/hero-video.mp4"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/40" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-transparent h-1/3" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_50%,rgba(0,0,0,0.5)_100%)]" />

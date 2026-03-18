@@ -30,7 +30,6 @@ export default function PublicEstoque() {
   };
 
   const filteredVehicles = vehicles?.filter(v => {
-    // Só exibir veículos com foto
     if (!v.images || v.images.length === 0) return false;
     const searchLower = search.toLowerCase();
     const matchesSearch =
@@ -52,19 +51,19 @@ export default function PublicEstoque() {
   });
 
   return (
-    <div className="bg-background min-h-screen pt-16 md:pt-24">
+    <div className="bg-black min-h-screen pt-16 md:pt-24 text-white">
       {/* Header */}
-      <section className="bg-card py-8 md:py-16 border-b border-border">
+      <section className="bg-zinc-950 py-8 md:py-16 border-b border-white/10">
         <div className="container mx-auto px-4">
           <motion.h1
-            className="text-3xl md:text-5xl font-bold text-foreground font-['Oswald'] text-center"
+            className="text-3xl md:text-5xl font-bold text-white font-['Oswald'] text-center"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            Nosso <span className="text-primary">Estoque</span>
+            Nosso <span className="text-[#E53935]">Estoque</span>
           </motion.h1>
           <motion.p
-            className="text-muted-foreground text-center mt-2 md:mt-4 max-w-xl mx-auto text-sm md:text-base"
+            className="text-white/50 text-center mt-2 md:mt-4 max-w-xl mx-auto text-sm md:text-base"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
@@ -75,29 +74,29 @@ export default function PublicEstoque() {
       </section>
 
       {/* Filters & Search */}
-      <section className="sticky top-16 md:top-16 z-40 bg-card/95 backdrop-blur-xl border-b border-border shadow-sm py-3 md:py-4">
+      <section className="sticky top-16 md:top-16 z-40 bg-zinc-950/95 backdrop-blur-xl border-b border-white/10 shadow-sm py-3 md:py-4">
         <div className="container mx-auto px-4">
           <div className="flex flex-col gap-3">
             <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-white/40" />
               <Input
                 placeholder="Buscar por marca, modelo..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="pl-9 md:pl-10 bg-muted border-border text-foreground placeholder:text-muted-foreground focus:border-primary h-10 md:h-11 text-sm"
+                className="pl-9 md:pl-10 bg-zinc-900 border-white/10 text-white placeholder:text-white/30 focus:border-[#E53935]/50 h-10 md:h-11 text-sm"
               />
               {search && (
                 <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                  <X className="h-4 w-4 text-white/40 hover:text-white" />
                 </button>
               )}
             </div>
             <div className="flex gap-2 w-full">
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="flex-1 md:w-48 bg-muted border-border text-foreground h-10 text-sm">
+                <SelectTrigger className="flex-1 md:w-48 bg-zinc-900 border-white/10 text-white h-10 text-sm">
                   <SelectValue placeholder="Ordenar por" />
                 </SelectTrigger>
-                <SelectContent className="bg-card border-border">
+                <SelectContent className="bg-zinc-900 border-white/10">
                   <SelectItem value="recent">Mais recentes</SelectItem>
                   <SelectItem value="price-asc">Menor preço</SelectItem>
                   <SelectItem value="price-desc">Maior preço</SelectItem>
@@ -109,11 +108,11 @@ export default function PublicEstoque() {
                 variant="outline"
                 size="icon"
                 onClick={() => setShowFilters(!showFilters)}
-                className={`border-border bg-muted text-foreground hover:bg-muted/80 h-10 w-10 flex-shrink-0 relative ${showFilters ? 'border-primary bg-primary/10' : ''}`}
+                className={`border-white/10 bg-zinc-900 text-white hover:bg-zinc-800 h-10 w-10 flex-shrink-0 relative ${showFilters ? 'border-[#E53935] bg-[#E53935]/10' : ''}`}
               >
                 <SlidersHorizontal className="h-4 w-4" />
                 {hasActiveFilters && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-primary rounded-full" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#E53935] rounded-full" />
                 )}
               </Button>
             </div>
@@ -128,12 +127,12 @@ export default function PublicEstoque() {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border">
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
                     <Select value={filterBrand} onValueChange={setFilterBrand}>
-                      <SelectTrigger className="bg-muted border-border text-foreground h-9 text-xs">
+                      <SelectTrigger className="bg-zinc-900 border-white/10 text-white h-9 text-xs">
                         <SelectValue placeholder="Marca" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card border-border">
+                      <SelectContent className="bg-zinc-900 border-white/10">
                         <SelectItem value="all">Todas marcas</SelectItem>
                         {brands.map(b => (
                           <SelectItem key={b} value={b}>{b}</SelectItem>
@@ -141,10 +140,10 @@ export default function PublicEstoque() {
                       </SelectContent>
                     </Select>
                     <Select value={filterFuel} onValueChange={setFilterFuel}>
-                      <SelectTrigger className="bg-muted border-border text-foreground h-9 text-xs">
+                      <SelectTrigger className="bg-zinc-900 border-white/10 text-white h-9 text-xs">
                         <SelectValue placeholder="Combustível" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card border-border">
+                      <SelectContent className="bg-zinc-900 border-white/10">
                         <SelectItem value="all">Todos</SelectItem>
                         <SelectItem value="flex">Flex</SelectItem>
                         <SelectItem value="gasolina">Gasolina</SelectItem>
@@ -153,10 +152,10 @@ export default function PublicEstoque() {
                       </SelectContent>
                     </Select>
                     <Select value={filterTransmission} onValueChange={setFilterTransmission}>
-                      <SelectTrigger className="bg-muted border-border text-foreground h-9 text-xs">
+                      <SelectTrigger className="bg-zinc-900 border-white/10 text-white h-9 text-xs">
                         <SelectValue placeholder="Câmbio" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card border-border">
+                      <SelectContent className="bg-zinc-900 border-white/10">
                         <SelectItem value="all">Todos</SelectItem>
                         <SelectItem value="manual">Manual</SelectItem>
                         <SelectItem value="automatico">Automático</SelectItem>
@@ -165,7 +164,7 @@ export default function PublicEstoque() {
                   </div>
                   {hasActiveFilters && (
                     <div className="pt-2">
-                      <button onClick={clearFilters} className="text-xs text-primary hover:underline">
+                      <button onClick={clearFilters} className="text-xs text-[#E53935] hover:underline">
                         Limpar filtros
                       </button>
                     </div>
@@ -183,12 +182,12 @@ export default function PublicEstoque() {
           {isLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-muted rounded-xl h-[280px] md:h-[400px] animate-pulse" />
+                <div key={i} className="bg-zinc-900 rounded-xl h-[280px] md:h-[400px] animate-pulse" />
               ))}
             </div>
           ) : filteredVehicles && filteredVehicles.length > 0 ? (
             <>
-              <p className="text-muted-foreground mb-4 md:mb-6 text-sm">{filteredVehicles.length} veículo(s) encontrado(s)</p>
+              <p className="text-white/50 mb-4 md:mb-6 text-sm">{filteredVehicles.length} veículo(s) encontrado(s)</p>
               <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                 {filteredVehicles.map((vehicle, index) => (
                   <PublicVehicleCard key={vehicle.id} vehicle={vehicle} index={index} />
@@ -197,9 +196,9 @@ export default function PublicEstoque() {
             </>
           ) : (
             <div className="text-center py-20">
-              <p className="text-muted-foreground text-lg">Nenhum veículo encontrado.</p>
+              <p className="text-white/50 text-lg">Nenhum veículo encontrado.</p>
               {(search || hasActiveFilters) && (
-                <Button variant="link" onClick={() => { setSearch(''); clearFilters(); }} className="text-primary mt-2">
+                <Button variant="link" onClick={() => { setSearch(''); clearFilters(); }} className="text-[#E53935] mt-2">
                   Limpar busca e filtros
                 </Button>
               )}

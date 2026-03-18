@@ -32,7 +32,7 @@ export function PublicFooter() {
                 </Link>
               </li>
               <li>
-                <Link to="/estoque" className="text-gray-400 hover:text-public-primary transition-colors">
+                <Link to="/veiculos" className="text-gray-400 hover:text-public-primary transition-colors">
                   Estoque
                 </Link>
               </li>

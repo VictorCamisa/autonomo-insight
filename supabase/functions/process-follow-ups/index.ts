@@ -293,6 +293,9 @@ serve(async (req) => {
 
       // Encontrar fluxo aplicável
       const applicableFlow = flows.find(flow => {
+        // SALVAGUARDA: Nunca aplicar follow-up externo em atendimento_ia
+        if (negotiation.status === 'atendimento_ia') return false;
+
         // Verificar filtros do fluxo
         if (flow.exclude_converted_leads && lead.status === 'convertido') return false;
         if (flow.exclude_lost_leads && lead.status === 'perdido') return false;

@@ -137,6 +137,7 @@ serve(async (req) => {
     }
 
     // 2. Buscar TODOS os fluxos ativos (independente do trigger_type)
+    // SALVAGUARDA: Nunca buscar fluxos que miram atendimento_ia — a IA gerencia esse estágio
     const { data: flowsData, error: flowsError } = await supabase
       .from('follow_up_flows')
       .select('*')

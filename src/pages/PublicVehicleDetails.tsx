@@ -44,7 +44,7 @@ async function createLeadInCRM(data: {
       name: data.name.trim().slice(0, 100),
       phone: data.phone.trim().slice(0, 20),
       email: data.email?.trim().slice(0, 255) || null,
-      source: 'site',
+      source: 'website',
       status: 'novo',
       vehicle_interest: vehicleInfo,
       notes,

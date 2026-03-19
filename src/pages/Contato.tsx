@@ -66,7 +66,7 @@ export default function Contato() {
         name: formName.trim().slice(0, 100),
         phone: formPhone.replace(/\D/g, '').slice(0, 20),
         email: formEmail.trim().slice(0, 255) || null,
-        source: 'site',
+        source: 'website',
         status: 'novo',
         notes,
       });

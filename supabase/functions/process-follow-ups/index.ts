@@ -156,19 +156,31 @@ serve(async (req) => {
     console.log(`Found ${flowsData.length} active flows`);
 
     // 3. Coletar todos os status de negociação que os fluxos ativos miram
+    // SALVAGUARDA CRÍTICA: Remover 'atendimento_ia' — a IA (Gabi) gerencia esse estágio
     const targetStatuses = new Set<string>();
     
     for (const flow of flowsData) {
       if (flow.target_negotiation_status && flow.target_negotiation_status.length > 0) {
-        flow.target_negotiation_status.forEach((s: string) => targetStatuses.add(s));
+        flow.target_negotiation_status
+          .filter((s: string) => s !== 'atendimento_ia')
+          .forEach((s: string) => targetStatuses.add(s));
       } else {
         // Se o fluxo não tem target_negotiation_status, assume follow_up
         targetStatuses.add('follow_up');
       }
     }
 
+    // Se após filtrar atendimento_ia não sobrou nenhum status, não há nada a processar
+    if (targetStatuses.size === 0) {
+      console.log('⚠️ All flows target atendimento_ia only — skipping (AI manages this stage)');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No applicable flows (AI manages atendimento_ia)', processed: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const statusArray = Array.from(targetStatuses);
-    console.log(`Querying negotiations with statuses: ${statusArray.join(', ')}`);
+    console.log(`Querying negotiations with statuses: ${statusArray.join(', ')} (atendimento_ia always excluded)`);
 
     // 4. Buscar negociações nos status que os fluxos miram (inativas há >10m, limite 50 por batch)
     const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();

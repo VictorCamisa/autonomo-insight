@@ -1,11 +1,35 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Car, Phone, Calendar, TrendingUp, User, UserCircle, Clock, Zap } from 'lucide-react';
+import { Car, Phone, Calendar, TrendingUp, User, UserCircle, Clock, Zap, Globe, MessageSquare, CalendarPlus } from 'lucide-react';
 import type { Negotiation } from '@/types/negotiations';
 import { negotiationStatusLabels, negotiationStatusColors } from '@/types/negotiations';
-import { format, differenceInHours } from 'date-fns';
+import { format, differenceInHours, differenceInMinutes, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDate } from '@/lib/utils';
+
+const leadSourceLabels: Record<string, string> = {
+  website: 'Site',
+  whatsapp: 'WhatsApp',
+  indicacao: 'Indicação',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  google_ads: 'Google Ads',
+  olx: 'OLX',
+  webmotors: 'Webmotors',
+  outros: 'Outros',
+};
+
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const mins = differenceInMinutes(now, date);
+  if (mins < 60) return `${mins}min`;
+  const hrs = differenceInHours(now, date);
+  if (hrs < 24) return `${hrs}h`;
+  const days = differenceInDays(now, date);
+  if (days < 30) return `${days}d`;
+  return `${Math.floor(days / 30)}m`;
+}
 
 interface NegotiationCardProps {
   negotiation: Negotiation;

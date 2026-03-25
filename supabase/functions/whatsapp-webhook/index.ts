@@ -136,7 +136,35 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
 
   try {
     // =============================================
-    // LEAD / CONTACT MANAGEMENT
+    // SELLER INSTANCE: ONLY SAVE MESSAGE, NO CRM
+    // =============================================
+    if (!isAIInstance) {
+      console.log('Seller instance - saving message only, NO lead/CRM processing');
+      // Only save the raw message for the WhatsApp chat panel
+      const contact = phone ? await findOrCreateContact(supabase, phone, pushName, null) : null;
+      await supabase.from('whatsapp_messages').insert({
+        instance_id: whatsappInstance.id,
+        contact_id: contact?.id,
+        remote_jid: remoteJidToStore || remoteJid || `${phone}@s.whatsapp.net`,
+        message_id: messageId,
+        direction: 'incoming',
+        message_type: messageType,
+        content: messageText || '[Media]',
+        status: 'delivered',
+        lead_id: null, // NEVER link to leads on seller instances
+      });
+      if (contact) {
+        await supabase.from('whatsapp_contacts').update({
+          last_message_at: new Date().toISOString(),
+          unread_count: (contact.unread_count || 0) + 1,
+          name: pushName || undefined,
+        }).eq('id', contact.id);
+      }
+      return; // STOP HERE - no leads, no negotiations, no AI
+    }
+
+    // =============================================
+    // AI INSTANCE: FULL CRM PROCESSING
     // =============================================
     let leadId = phone ? await findLeadIdByPhone(supabase, phone) : null;
 
@@ -204,14 +232,6 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
         type: 'whatsapp',
         description: `Mensagem recebida: ${(messageText || '').substring(0, 200)}`,
       });
-    }
-
-    // =============================================
-    // AI AGENT PROCESSING
-    // =============================================
-    if (!isAIInstance) {
-      console.log('Seller instance - skipping AI');
-      return;
     }
 
     // Check negotiation stage & reactivation

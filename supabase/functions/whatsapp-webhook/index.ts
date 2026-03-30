@@ -89,16 +89,24 @@ async function handleNewMessage(supabase: any, data: any, instanceName: string, 
     return;
   }
 
-  // Check if this instance has an AI agent linked to it
-  const { data: linkedAgent } = await supabase
-    .from('ai_agents')
-    .select('id, whatsapp_auto_reply')
-    .eq('whatsapp_instance_id', whatsappInstance.id)
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle();
+  // ===========================================
+  // GABI DESATIVADA - Kill switch manual
+  // Para reativar, remova este bloco e descomente o código abaixo
+  // ===========================================
+  const linkedAgent = null;
+  const isAIInstance = false;
+  console.log('[KILL SWITCH] Gabi está DESATIVADA. Mensagens serão apenas salvas, sem resposta da IA.');
 
-  const isAIInstance = !!(linkedAgent && linkedAgent.whatsapp_auto_reply);
+  // Check if this instance has an AI agent linked to it
+  // const { data: linkedAgent } = await supabase
+  //   .from('ai_agents')
+  //   .select('id, whatsapp_auto_reply')
+  //   .eq('whatsapp_instance_id', whatsappInstance.id)
+  //   .eq('status', 'active')
+  //   .limit(1)
+  //   .maybeSingle();
+
+  // const isAIInstance = !!(linkedAgent && linkedAgent.whatsapp_auto_reply);
 
   // =============================================
   // MESSAGE DEDUPLICATION

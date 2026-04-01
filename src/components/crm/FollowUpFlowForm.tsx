@@ -92,10 +92,10 @@ function convertToPipelineStages(leadStatus?: string[], negotiationStatus?: stri
   if (leadStatus?.includes('novo')) stages.push('lead_novo');
   if (leadStatus?.includes('contato_inicial')) stages.push('lead_contato_inicial');
   if (leadStatus?.includes('qualificado')) stages.push('lead_qualificado');
-  if (negotiationStatus?.includes('em_andamento')) stages.push('negociacao_andamento');
-  if (negotiationStatus?.includes('proposta_enviada')) stages.push('negociacao_proposta');
-  if (negotiationStatus?.includes('negociando')) stages.push('negociacao_fechamento');
-  if (negotiationStatus?.includes('pausado')) stages.push('negociacao_pausada');
+  if (negotiationStatus?.includes('atendimento_ia')) stages.push('negociacao_atendimento_ia');
+  if (negotiationStatus?.includes('negociando')) stages.push('negociacao_negociando');
+  if (negotiationStatus?.includes('follow_up')) stages.push('negociacao_follow_up');
+  if (negotiationStatus?.includes('perdido')) stages.push('negociacao_perdido');
   
   return stages;
 }

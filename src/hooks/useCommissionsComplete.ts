@@ -696,7 +696,7 @@ export function useCommissionProjections() {
       const { data: negotiations, error: negError } = await supabase
         .from('negotiations')
         .select('estimated_value, probability, salesperson_id')
-        .in('status', ['em_andamento', 'proposta_enviada', 'negociando']);
+        .in('status', ['atendimento_ia', 'negociando', 'follow_up']);
 
       if (negError) throw negError;
 

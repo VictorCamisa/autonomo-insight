@@ -53,12 +53,11 @@ export function SalesMetricsPage() {
   ].filter(i => i.value > 0);
 
   const negotiationsByStatus = [
-    { name: 'Em Andamento', value: negotiations?.filter(n => n.status === 'em_andamento').length || 0 },
-    { name: 'Proposta', value: negotiations?.filter(n => n.status === 'proposta_enviada').length || 0 },
+    { name: 'Atendimento IA', value: negotiations?.filter(n => n.status === 'atendimento_ia').length || 0 },
     { name: 'Negociando', value: negotiations?.filter(n => n.status === 'negociando').length || 0 },
+    { name: 'Follow-up', value: negotiations?.filter(n => n.status === 'follow_up').length || 0 },
     { name: 'Ganhas', value: negotiations?.filter(n => n.status === 'ganho').length || 0 },
     { name: 'Perdidas', value: negotiations?.filter(n => n.status === 'perdido').length || 0 },
-    { name: 'Pausadas', value: negotiations?.filter(n => n.status === 'pausado').length || 0 },
   ].filter(i => i.value > 0);
 
   return (

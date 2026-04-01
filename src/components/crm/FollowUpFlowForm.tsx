@@ -42,11 +42,11 @@ const pipelineStages = [
   { value: 'lead_novo', label: 'Lead Novo', description: 'Lead acabou de entrar, sem contato', group: 'lead' },
   { value: 'lead_contato_inicial', label: 'Contato Inicial', description: 'Primeiro contato realizado', group: 'lead' },
   { value: 'lead_qualificado', label: 'Lead Qualificado', description: 'Lead qualificado, sem negociação', group: 'lead' },
-  // Em negociação com vendedor
-  { value: 'negociacao_andamento', label: 'Em Negociação', description: 'Negociação iniciada', group: 'negotiation' },
-  { value: 'negociacao_proposta', label: 'Proposta Enviada', description: 'Aguardando retorno', group: 'negotiation' },
-  { value: 'negociacao_fechamento', label: 'Fechando Negócio', description: 'Fase final de fechamento', group: 'negotiation' },
-  { value: 'negociacao_pausada', label: 'Pausada', description: 'Cliente pediu tempo', group: 'negotiation' },
+  // Pipeline de negociações (estágios atuais)
+  { value: 'negociacao_atendimento_ia', label: 'Atendimento IA', description: 'Em atendimento pela Gabi', group: 'negotiation' },
+  { value: 'negociacao_negociando', label: 'Negociando', description: 'Em negociação com vendedor', group: 'negotiation' },
+  { value: 'negociacao_follow_up', label: 'Follow-up', description: 'Aguardando resposta do cliente', group: 'negotiation' },
+  { value: 'negociacao_perdido', label: 'Perdido', description: 'Lead perdido', group: 'negotiation' },
 ];
 
 const formSchema = z.object({
@@ -92,10 +92,10 @@ function convertToPipelineStages(leadStatus?: string[], negotiationStatus?: stri
   if (leadStatus?.includes('novo')) stages.push('lead_novo');
   if (leadStatus?.includes('contato_inicial')) stages.push('lead_contato_inicial');
   if (leadStatus?.includes('qualificado')) stages.push('lead_qualificado');
-  if (negotiationStatus?.includes('em_andamento')) stages.push('negociacao_andamento');
-  if (negotiationStatus?.includes('proposta_enviada')) stages.push('negociacao_proposta');
-  if (negotiationStatus?.includes('negociando')) stages.push('negociacao_fechamento');
-  if (negotiationStatus?.includes('pausado')) stages.push('negociacao_pausada');
+  if (negotiationStatus?.includes('atendimento_ia')) stages.push('negociacao_atendimento_ia');
+  if (negotiationStatus?.includes('negociando')) stages.push('negociacao_negociando');
+  if (negotiationStatus?.includes('follow_up')) stages.push('negociacao_follow_up');
+  if (negotiationStatus?.includes('perdido')) stages.push('negociacao_perdido');
   
   return stages;
 }
@@ -114,10 +114,10 @@ export function convertFromPipelineStages(pipelineStages: string[]): {
     if (stage === 'lead_novo') leadStatus.push('novo');
     if (stage === 'lead_contato_inicial') leadStatus.push('contato_inicial');
     if (stage === 'lead_qualificado') leadStatus.push('qualificado');
-    if (stage === 'negociacao_andamento') negotiationStatus.push('em_andamento');
-    if (stage === 'negociacao_proposta') negotiationStatus.push('proposta_enviada');
-    if (stage === 'negociacao_fechamento') negotiationStatus.push('negociando');
-    if (stage === 'negociacao_pausada') negotiationStatus.push('pausado');
+    if (stage === 'negociacao_atendimento_ia') negotiationStatus.push('atendimento_ia');
+    if (stage === 'negociacao_negociando') negotiationStatus.push('negociando');
+    if (stage === 'negociacao_follow_up') negotiationStatus.push('follow_up');
+    if (stage === 'negociacao_perdido') negotiationStatus.push('perdido');
   });
   
   return {

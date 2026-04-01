@@ -42,11 +42,11 @@ const pipelineStages = [
   { value: 'lead_novo', label: 'Lead Novo', description: 'Lead acabou de entrar, sem contato', group: 'lead' },
   { value: 'lead_contato_inicial', label: 'Contato Inicial', description: 'Primeiro contato realizado', group: 'lead' },
   { value: 'lead_qualificado', label: 'Lead Qualificado', description: 'Lead qualificado, sem negociação', group: 'lead' },
-  // Em negociação com vendedor
-  { value: 'negociacao_andamento', label: 'Em Negociação', description: 'Negociação iniciada', group: 'negotiation' },
-  { value: 'negociacao_proposta', label: 'Proposta Enviada', description: 'Aguardando retorno', group: 'negotiation' },
-  { value: 'negociacao_fechamento', label: 'Fechando Negócio', description: 'Fase final de fechamento', group: 'negotiation' },
-  { value: 'negociacao_pausada', label: 'Pausada', description: 'Cliente pediu tempo', group: 'negotiation' },
+  // Pipeline de negociações (estágios atuais)
+  { value: 'negociacao_atendimento_ia', label: 'Atendimento IA', description: 'Em atendimento pela Gabi', group: 'negotiation' },
+  { value: 'negociacao_negociando', label: 'Negociando', description: 'Em negociação com vendedor', group: 'negotiation' },
+  { value: 'negociacao_follow_up', label: 'Follow-up', description: 'Aguardando resposta do cliente', group: 'negotiation' },
+  { value: 'negociacao_perdido', label: 'Perdido', description: 'Lead perdido', group: 'negotiation' },
 ];
 
 const formSchema = z.object({

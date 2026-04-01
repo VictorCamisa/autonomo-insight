@@ -92,7 +92,7 @@ export function useAutomotiveKPIs(dateRange: DateRange) {
 
       // Pipeline value
       const pipelineValue = negotiations
-        ?.filter(n => n.status === 'em_andamento' || n.status === 'proposta_enviada')
+        ?.filter(n => n.status === 'atendimento_ia' || n.status === 'negociando' || n.status === 'follow_up')
         .reduce((sum, n) => sum + (n.estimated_value || 0), 0) || 0;
 
       // Calculate margins for CAC Payback (assume 15% avg margin)

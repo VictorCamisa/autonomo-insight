@@ -16,8 +16,8 @@ const modules = [
     description: "Gestão completa de leads e negociações",
     routes: ["/crm", "/crm/leads", "/crm/follow-ups", "/crm/perdas", "/crm/analytics"],
     features: [
-      "Pipeline de leads com status: novo, contactado, qualificado, negociando, convertido, perdido",
-      "Pipeline de negociações com stages: contato_inicial, visita_agendada, proposta_enviada, fechamento, ganho, perdido",
+      "Pipeline de leads com status: novo, contactado, qualificado, negociando, convertido, perdido, reativado",
+      "Pipeline de negociações com stages: atendimento_ia, negociando, follow_up, ganho, perdido",
       "Registro de interações (ligação, whatsapp, email, visita, proposta)",
       "Sistema de follow-ups automatizados com fluxos configuráveis",
       "Recuperação de perdas com regras automáticas",

@@ -114,10 +114,10 @@ export function convertFromPipelineStages(pipelineStages: string[]): {
     if (stage === 'lead_novo') leadStatus.push('novo');
     if (stage === 'lead_contato_inicial') leadStatus.push('contato_inicial');
     if (stage === 'lead_qualificado') leadStatus.push('qualificado');
-    if (stage === 'negociacao_andamento') negotiationStatus.push('em_andamento');
-    if (stage === 'negociacao_proposta') negotiationStatus.push('proposta_enviada');
-    if (stage === 'negociacao_fechamento') negotiationStatus.push('negociando');
-    if (stage === 'negociacao_pausada') negotiationStatus.push('pausado');
+    if (stage === 'negociacao_atendimento_ia') negotiationStatus.push('atendimento_ia');
+    if (stage === 'negociacao_negociando') negotiationStatus.push('negociando');
+    if (stage === 'negociacao_follow_up') negotiationStatus.push('follow_up');
+    if (stage === 'negociacao_perdido') negotiationStatus.push('perdido');
   });
   
   return {

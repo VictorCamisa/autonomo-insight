@@ -76,12 +76,6 @@ export function StageTransitionModal({
           description: 'Registre o motivo da perda.',
           requireLossReason: true,
         };
-      case 'follow_up':
-        return {
-          title: 'Mover para Follow-up',
-          description: 'Este lead será monitorado para reativação automática.',
-          showNotes: true,
-        };
       default:
         return null;
     }
@@ -198,7 +192,7 @@ export function StageTransitionModal({
             </div>
           )}
 
-          {/* Notes for negociando and follow_up */}
+          {/* Notes for negociando */}
           {config.showNotes && (
             <div className="space-y-2">
               <Label>Observações</Label>

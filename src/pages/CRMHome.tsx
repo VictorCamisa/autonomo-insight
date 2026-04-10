@@ -19,7 +19,7 @@ import { CustomerDetailSheet } from '@/components/crm/CustomerDetailSheet';
 import { QualificationLevelSelector } from '@/components/crm/QualificationLevelSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Lead, LeadStatus, LeadSource } from '@/types/crm';
-import type { Negotiation } from '@/types/negotiations';
+import type { Negotiation, NegotiationStatus } from '@/types/negotiations';
 
 export default function CRMHome() {
   const { role } = useAuth();
@@ -140,7 +140,7 @@ export default function CRMHome() {
       lead_id: (preSelectedLeadId || data.lead_id) as string,
       vehicle_id: vehicleId && vehicleId !== '' ? vehicleId : undefined,
       salesperson_id: data.salesperson_id as string,
-      status: data.status as 'atendimento_ia' | 'negociando' | 'ganho' | 'follow_up' | 'perdido',
+      status: data.status as NegotiationStatus,
       estimated_value: data.estimated_value ? Number(data.estimated_value) : undefined,
       probability: data.probability ? Number(data.probability) : undefined,
       expected_close_date: data.expected_close_date as string | undefined,
@@ -163,7 +163,7 @@ export default function CRMHome() {
       id: selectedNegotiation.id,
       salesperson_id: salespersonId && salespersonId !== '' ? salespersonId : null,
       vehicle_id: vehicleId && vehicleId !== '' ? vehicleId : null,
-      status: data.status as 'atendimento_ia' | 'negociando' | 'ganho' | 'follow_up' | 'perdido',
+      status: data.status as NegotiationStatus,
       estimated_value: data.estimated_value ? Number(data.estimated_value) : null,
       probability: data.probability ? Number(data.probability) : null,
       expected_close_date: expectedCloseDate && expectedCloseDate !== '' ? expectedCloseDate : null,

@@ -172,12 +172,6 @@ export function useDeleteLeadComplete() {
         .delete()
         .eq('lead_id', leadId);
 
-      // 8. Delete follow-up tracking
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('lead_follow_up_tracking')
-        .delete()
-        .eq('lead_id', leadId);
 
       // 9. Delete negotiations
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

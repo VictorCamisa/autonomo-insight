@@ -505,15 +505,6 @@ function NegotiationCard({ negotiation }: { negotiation: any }) {
           <span>
             {format(new Date(negotiation.created_at), "dd/MM/yyyy", { locale: ptBR })}
           </span>
-          {negotiation.next_follow_up && !isWon && !isLost && (
-            <>
-              <span className="mx-1">•</span>
-              <Clock className="h-3 w-3 text-amber-500" />
-              <span className="text-amber-600">
-                Follow-up: {format(new Date(negotiation.next_follow_up), "dd/MM", { locale: ptBR })}
-              </span>
-            </>
-          )}
         </div>
 
         {negotiation.loss_reason && (

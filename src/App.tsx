@@ -31,7 +31,7 @@ const BulkPhotoUpload = lazy(() => import("./pages/BulkPhotoUpload"));
 const ALMExportPage = lazy(() => import("@/components/inventory/ALMExportPage"));
 const CRMHome = lazy(() => import("./pages/CRMHome"));
 const CRMAnalytics = lazy(() => import("./pages/CRMAnalytics"));
-const FollowUp = lazy(() => import("./pages/FollowUp"));
+
 const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Reports = lazy(() => import("./pages/Reports"));
@@ -177,7 +177,7 @@ const App = () => (
                   }>
                     <Route index element={<CRMHome />} />
                     <Route path="contatos" element={<Leads />} />
-                    <Route path="follow-up" element={<FollowUp />} />
+                    
                     <Route path="analytics" element={<CRMAnalytics />} />
                   </Route>
                   

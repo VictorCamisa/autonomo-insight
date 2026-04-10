@@ -501,7 +501,7 @@ const enums = [
   { name: "lead_source", values: ["website", "whatsapp", "facebook", "instagram", "google_ads", "indicacao", "olx", "webmotors", "outros"] },
   { name: "lead_status", values: ["novo", "contactado", "qualificado", "negociando", "convertido", "perdido", "reativado"] },
   { name: "qualification_status", values: ["hot", "warm", "cold"] },
-  { name: "negotiation_status", values: ["atendimento_ia", "negociando", "follow_up", "ganho", "perdido"] },
+  { name: "negotiation_status", values: ["atendimento_ia", "negociando", "ganho", "perdido"] },
   { name: "loss_reason_type", values: ["preco", "financiamento", "concorrencia", "desistencia", "veiculo_inadequado", "sem_resposta", "outro"] },
   { name: "vehicle_status", values: ["disponivel", "reservado", "vendido"] },
   { name: "payment_method", values: ["a_vista", "financiamento", "consorcio", "troca", "troca_financiamento"] },

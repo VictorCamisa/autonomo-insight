@@ -19,7 +19,7 @@ import { CustomerDetailSheet } from '@/components/crm/CustomerDetailSheet';
 import { QualificationLevelSelector } from '@/components/crm/QualificationLevelSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Lead, LeadStatus, LeadSource } from '@/types/crm';
-import type { Negotiation } from '@/types/negotiations';
+import type { Negotiation, NegotiationStatus } from '@/types/negotiations';
 
 export default function CRMHome() {
   const { role } = useAuth();

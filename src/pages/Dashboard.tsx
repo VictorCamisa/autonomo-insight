@@ -177,7 +177,7 @@ export default function Dashboard() {
       leadSourceData,
       topSalespeople,
       totalNegotiations: negotiations?.length || 0,
-      activeNegotiations: (negotiationsByStatus.atendimento_ia + negotiationsByStatus.negociando + negotiationsByStatus.follow_up),
+      activeNegotiations: (negotiationsByStatus.atendimento_ia + negotiationsByStatus.negociando),
     };
   }, [leads, vehicles, negotiations, teamMetrics]);
 
@@ -264,7 +264,6 @@ export default function Dashboard() {
       { name: 'Atend. IA', value: dashboardMetrics.negotiationsByStatus.atendimento_ia, color: CHART_COLORS.blue },
       { name: 'Negociando', value: dashboardMetrics.negotiationsByStatus.negociando, color: CHART_COLORS.amber },
       { name: 'Ganhas', value: dashboardMetrics.negotiationsByStatus.ganho, color: CHART_COLORS.emerald },
-      { name: 'Follow-up', value: dashboardMetrics.negotiationsByStatus.follow_up, color: CHART_COLORS.violet },
       { name: 'Perdidas', value: dashboardMetrics.negotiationsByStatus.perdido, color: CHART_COLORS.rose },
     ];
   }, [dashboardMetrics.negotiationsByStatus]);

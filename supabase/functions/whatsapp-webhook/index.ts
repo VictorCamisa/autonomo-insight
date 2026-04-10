@@ -456,9 +456,9 @@ async function handleNegotiationStage(supabase: any, leadId: string | null) {
     return;
   }
 
-  // Reactivation from follow_up or perdido
-  if (['follow_up', 'perdido'].includes(negotiation.status)) {
-    console.log('Lead reactivating from', negotiation.status);
+  // Reactivation from perdido
+  if (negotiation.status === 'perdido') {
+    console.log('Lead reactivating from perdido');
     await supabase.from('negotiations').update({
       status: 'atendimento_ia',
       last_message_at: new Date().toISOString(),
@@ -466,10 +466,6 @@ async function handleNegotiationStage(supabase: any, leadId: string | null) {
     }).eq('id', negotiation.id);
 
     await supabase.from('leads').update({ status: 'reativado', updated_at: new Date().toISOString() }).eq('id', leadId);
-
-    await supabase.from('lead_follow_up_tracking').update({
-      status: 'paused', updated_at: new Date().toISOString(),
-    }).eq('lead_id', leadId).in('status', ['active', 'pending']);
 
     if (negotiation.salesperson_id) {
       const { data: lead } = await supabase.from('leads').select('name').eq('id', leadId).single();

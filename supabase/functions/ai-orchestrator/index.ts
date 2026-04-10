@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface OrchestratorAction {
-  type: 'move_stage' | 'trigger_follow_up' | 'create_alert' | 'assign_salesperson';
+  type: 'move_stage' | 'create_alert' | 'assign_salesperson';
   payload: Record<string, unknown>;
 }
 

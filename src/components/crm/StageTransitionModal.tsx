@@ -192,7 +192,7 @@ export function StageTransitionModal({
             </div>
           )}
 
-          {/* Notes for negociando and follow_up */}
+          {/* Notes for negociando */}
           {config.showNotes && (
             <div className="space-y-2">
               <Label>Observações</Label>

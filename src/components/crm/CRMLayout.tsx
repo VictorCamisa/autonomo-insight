@@ -4,7 +4,6 @@ import {
   Users,
   LayoutDashboard,
   Contact,
-  MessageSquare,
   BarChart3,
 } from 'lucide-react';
 

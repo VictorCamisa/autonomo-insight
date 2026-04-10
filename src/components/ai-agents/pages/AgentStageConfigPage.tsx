@@ -272,27 +272,8 @@ export function AgentStageConfigPage() {
                   />
                 </div>
 
-                <Separator />
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <Label>Iniciar follow-up automático</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Inicia o fluxo de reativação configurado
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={stage.actions.triggerFollowUp}
-                    onCheckedChange={(checked) => updateStage(stage.id, {
-                      actions: { ...stage.actions, triggerFollowUp: checked }
-                    })}
-                  />
-                </div>
 
-                <Separator />
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

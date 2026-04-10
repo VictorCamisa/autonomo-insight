@@ -74,7 +74,9 @@ export function NegotiationCard({ negotiation, onClick, showSalesperson }: Negot
             <Badge variant="outline" className="text-xs">
               {negotiationStatusLabels[negotiation.status]}
             </Badge>
-            
+          </div>
+        </div>
+
         {negotiation.customer && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
             <UserCircle className="h-3 w-3" />
@@ -137,6 +139,3 @@ export function NegotiationCard({ negotiation, onClick, showSalesperson }: Negot
     </Card>
   );
 }
-
-// Exporta a função para uso em outros componentes
-export { getFollowUpType };

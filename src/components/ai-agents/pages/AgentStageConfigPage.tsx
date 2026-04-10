@@ -34,7 +34,6 @@ interface StageConfig {
   };
   actions: {
     notifySalesperson: boolean;
-    triggerFollowUp: boolean;
     syncCRM: boolean;
   };
 }
@@ -59,7 +58,6 @@ Objetivos:
     },
     actions: {
       notifySalesperson: true,
-      triggerFollowUp: false,
       syncCRM: true,
     },
   },
@@ -76,36 +74,12 @@ Objetivos:
 - Auxiliar em simulações de financiamento
 - Manter o lead engajado`,
     autoTransitions: {
-      enabled: true,
-      targetStage: 'follow_up',
-      condition: 'Sem resposta por 24 horas',
+      enabled: false,
+      targetStage: '',
+      condition: '',
     },
     actions: {
       notifySalesperson: true,
-      triggerFollowUp: false,
-      syncCRM: true,
-    },
-  },
-  {
-    id: 'follow_up',
-    name: 'follow_up',
-    label: 'Follow-up',
-    color: 'bg-orange-500',
-    icon: <Clock className="h-4 w-4" />,
-    prompt: `O lead está em follow-up (não respondeu há algum tempo).
-Objetivos:
-- Reengajar o lead de forma sutil
-- Perguntar se ainda tem interesse
-- Oferecer novidades ou promoções
-- Tentar reagendar contato`,
-    autoTransitions: {
-      enabled: true,
-      targetStage: 'atendimento_ia',
-      condition: 'Quando lead responder',
-    },
-    actions: {
-      notifySalesperson: false,
-      triggerFollowUp: true,
       syncCRM: true,
     },
   },
@@ -128,7 +102,6 @@ Objetivos:
     },
     actions: {
       notifySalesperson: true,
-      triggerFollowUp: false,
       syncCRM: true,
     },
   },
@@ -151,7 +124,6 @@ Objetivos:
     },
     actions: {
       notifySalesperson: false,
-      triggerFollowUp: false,
       syncCRM: true,
     },
   },

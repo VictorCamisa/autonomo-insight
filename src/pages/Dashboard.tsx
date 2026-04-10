@@ -146,7 +146,6 @@ export default function Dashboard() {
       atendimento_ia: negotiations?.filter(n => n.status === 'atendimento_ia').length || 0,
       negociando: negotiations?.filter(n => n.status === 'negociando').length || 0,
       ganho: negotiations?.filter(n => n.status === 'ganho').length || 0,
-      follow_up: negotiations?.filter(n => n.status === 'follow_up').length || 0,
       perdido: negotiations?.filter(n => n.status === 'perdido').length || 0,
     };
     

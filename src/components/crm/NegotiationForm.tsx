@@ -25,7 +25,7 @@ const negotiationFormSchema = z.object({
   lead_id: z.string().min(1, 'Selecione um lead'),
   vehicle_id: z.string().optional(),
   salesperson_id: z.string().min(1, 'Selecione um vendedor'),
-  status: z.enum(['atendimento_ia', 'negociando', 'ganho', 'follow_up', 'perdido'] as const),
+  status: z.enum(['atendimento_ia', 'negociando', 'ganho', 'perdido'] as const),
   estimated_value: z.string().optional(),
   probability: z.string().optional(),
   expected_close_date: z.string().optional(),

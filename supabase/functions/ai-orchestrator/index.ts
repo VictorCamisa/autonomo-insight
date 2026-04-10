@@ -323,53 +323,8 @@ ${messages.map((m: any) => `${m.role === 'user' ? 'Cliente' : 'IA'}: ${m.content
       }
 
       case 'check_stale_negotiations': {
-        // Verificar negociações paradas há mais de 24h
-        const { data: staleNegotiations } = await supabase
-          .from('negotiations')
-          .select('id, lead_id, salesperson_id')
-          .eq('status', 'negociando')
-          .lt('last_message_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-        if (staleNegotiations && staleNegotiations.length > 0) {
-          console.log(`[ai-orchestrator] Found ${staleNegotiations.length} stale negotiations`);
-
-          for (const neg of staleNegotiations) {
-            // Mover para follow_up
-            await supabase
-              .from('negotiations')
-              .update({ status: 'follow_up' })
-              .eq('id', neg.id);
-
-            result.actions_taken.push({
-              type: 'move_stage',
-              payload: { negotiation_id: neg.id, from: 'negociando', to: 'follow_up' }
-            });
-
-            // Iniciar tracking de follow-up
-            const { data: defaultFlow } = await supabase
-              .from('follow_up_flows')
-              .select('id')
-              .eq('is_active', true)
-              .eq('trigger_type', 'no_response')
-              .limit(1)
-              .single();
-
-            if (defaultFlow) {
-              await supabase.from('lead_follow_up_tracking').insert({
-                lead_id: neg.lead_id,
-                negotiation_id: neg.id,
-                flow_id: defaultFlow.id,
-                current_step: 0,
-                status: 'active',
-              });
-
-              result.actions_taken.push({
-                type: 'trigger_follow_up',
-                payload: { negotiation_id: neg.id, flow_id: defaultFlow.id }
-              });
-            }
-          }
-        }
+        // No-op: follow-up system removed
+        console.log('[ai-orchestrator] check_stale_negotiations is disabled (follow-up removed)');
         break;
       }
 

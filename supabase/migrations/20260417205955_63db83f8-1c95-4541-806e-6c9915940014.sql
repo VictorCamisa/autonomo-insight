@@ -1,0 +1,1 @@
+UPDATE negotiations SET status = 'negociando' WHERE status = 'follow_up';

@@ -68,11 +68,10 @@ export const negotiationStatusColors: Record<NegotiationStatus, string> = {
   perdido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
 };
 
-// Ordem das colunas no pipeline
+// Ordem das colunas no pipeline (follow_up é exibido junto com negociando)
 export const pipelineColumns: NegotiationStatus[] = [
   'atendimento_ia',
   'negociando',
-  'follow_up',
   'ganho',
   'perdido',
 ];

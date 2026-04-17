@@ -65,6 +65,10 @@ export function NegotiationPipeline({
   } | null>(null);
 
   const getNegotiationsByStatus = (status: NegotiationStatus) => {
+    // "negociando" agrega negociando + follow_up (legado)
+    if (status === 'negociando') {
+      return negotiations.filter(n => n.status === 'negociando' || n.status === 'follow_up');
+    }
     return negotiations.filter(n => n.status === status);
   };
 

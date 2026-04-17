@@ -1,4 +1,4 @@
-export type NegotiationStatus = 'atendimento_ia' | 'negociando' | 'ganho' | 'perdido';
+export type NegotiationStatus = 'atendimento_ia' | 'negociando' | 'follow_up' | 'ganho' | 'perdido';
 export type LossReasonType = 'sem_entrada' | 'sem_credito' | 'curioso' | 'caro' | 'comprou_outro' | 'desistiu' | 'sem_contato' | 'veiculo_vendido' | 'outros';
 
 export interface Negotiation {
@@ -55,6 +55,7 @@ export interface Negotiation {
 export const negotiationStatusLabels: Record<NegotiationStatus, string> = {
   atendimento_ia: 'Em Atendimento IA',
   negociando: 'Negociando',
+  follow_up: 'Follow-up',
   ganho: 'Ganho',
   perdido: 'Perdido',
 };
@@ -62,6 +63,7 @@ export const negotiationStatusLabels: Record<NegotiationStatus, string> = {
 export const negotiationStatusColors: Record<NegotiationStatus, string> = {
   atendimento_ia: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
   negociando: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+  follow_up: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   ganho: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   perdido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
 };
@@ -70,6 +72,7 @@ export const negotiationStatusColors: Record<NegotiationStatus, string> = {
 export const pipelineColumns: NegotiationStatus[] = [
   'atendimento_ia',
   'negociando',
+  'follow_up',
   'ganho',
   'perdido',
 ];

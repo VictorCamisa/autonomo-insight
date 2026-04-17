@@ -50,12 +50,30 @@ export function NegotiationCard({ negotiation, onClick, showSalesperson }: Negot
   const timeInStage = formatTimeAgo(negotiation.updated_at);
   const leadSource = negotiation.lead?.source ? (leadSourceLabels[negotiation.lead.source] || negotiation.lead.source) : null;
 
+  // Destaque para leads sem resposta há mais de 24h (follow-up necessário)
+  const isActiveStage = negotiation.status === 'negociando' || negotiation.status === 'follow_up' || negotiation.status === 'atendimento_ia';
+  const lastActivity = negotiation.last_message_at || negotiation.updated_at;
+  const hoursSinceLastMessage = lastActivity ? differenceInHours(new Date(), new Date(lastActivity)) : 0;
+  const needsFollowUp = isActiveStage && hoursSinceLastMessage >= 24;
+
   return (
     <Card 
-      className="cursor-pointer hover:shadow-md transition-shadow border-border/50 bg-card"
+      className={`cursor-pointer hover:shadow-md transition-shadow bg-card ${
+        needsFollowUp 
+          ? 'border-orange-400 dark:border-orange-600 border-l-4 ring-1 ring-orange-200 dark:ring-orange-900/50' 
+          : 'border-border/50'
+      }`}
       onClick={onClick}
     >
       <CardContent className="p-3 space-y-1.5">
+        {/* Follow-up alert badge */}
+        {needsFollowUp && (
+          <div className="flex items-center gap-1 text-xs text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-950/40 rounded px-2 py-1 font-medium">
+            <Clock className="h-3 w-3" />
+            <span>Follow-up: sem resposta há {hoursSinceLastMessage >= 24 ? `${Math.floor(hoursSinceLastMessage / 24)}d` : `${hoursSinceLastMessage}h`}</span>
+          </div>
+        )}
+
         {/* Header: Name + Status */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">

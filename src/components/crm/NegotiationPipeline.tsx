@@ -3,7 +3,7 @@ import { NegotiationCard } from './NegotiationCard';
 import type { Negotiation, NegotiationStatus } from '@/types/negotiations';
 import { negotiationStatusLabels, pipelineColumns } from '@/types/negotiations';
 import { useUpdateNegotiation } from '@/hooks/useNegotiations';
-import { Plus, Target, Bot, Handshake, Trophy, XCircle } from 'lucide-react';
+import { Plus, Target, Bot, Handshake, Clock, Trophy, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SaleFromNegotiationModal } from '@/components/sales/SaleFromNegotiationModal';
 import { StageTransitionModal, StageTransitionData } from './StageTransitionModal';
@@ -28,6 +28,11 @@ const stageConfig: Record<NegotiationStatus, { icon: React.ReactNode; color: str
     icon: <Handshake className="h-4 w-4" />,
     color: 'text-yellow-600 dark:text-yellow-400',
     bgColor: 'bg-yellow-50 dark:bg-yellow-950/50 border-yellow-200 dark:border-yellow-800',
+  },
+  follow_up: {
+    icon: <Clock className="h-4 w-4" />,
+    color: 'text-orange-600 dark:text-orange-400',
+    bgColor: 'bg-orange-50 dark:bg-orange-950/50 border-orange-200 dark:border-orange-800',
   },
   ganho: {
     icon: <Trophy className="h-4 w-4" />,

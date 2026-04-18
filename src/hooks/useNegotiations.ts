@@ -17,7 +17,7 @@ export function useNegotiations() {
           salesperson:profiles!negotiations_salesperson_id_fkey(full_name),
           customer:customers(id, name, phone, email)
         `)
-        .eq('show_in_pipeline', true) // Only show main negotiations in pipeline
+        .or('show_in_pipeline.eq.true,status.eq.follow_up')
         .order('updated_at', { ascending: false });
 
       if (error) throw error;

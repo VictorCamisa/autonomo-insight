@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NegotiationCard } from './NegotiationCard';
 import type { Negotiation, NegotiationStatus } from '@/types/negotiations';
 import { negotiationStatusLabels, pipelineColumns } from '@/types/negotiations';
@@ -64,12 +64,23 @@ export function NegotiationPipeline({
     targetStatus: NegotiationStatus;
   } | null>(null);
 
+  const pipelineNegotiations = useMemo(() => {
+    const visible = negotiations.filter((negotiation) => {
+      if (negotiation.status === 'follow_up') return true;
+      return pipelineColumns.includes(negotiation.status);
+    });
+
+    return visible.filter(
+      (negotiation, index, list) =>
+        list.findIndex((item) => item.id === negotiation.id) === index
+    );
+  }, [negotiations]);
+
   const getNegotiationsByStatus = (status: NegotiationStatus) => {
-    // "negociando" agrega negociando + follow_up (legado)
     if (status === 'negociando') {
-      return negotiations.filter(n => n.status === 'negociando' || n.status === 'follow_up');
+      return pipelineNegotiations.filter(n => n.status === 'negociando' || n.status === 'follow_up');
     }
-    return negotiations.filter(n => n.status === status);
+    return pipelineNegotiations.filter(n => n.status === status);
   };
 
   const handleDragStart = (e: React.DragEvent, negotiationId: string) => {
@@ -90,7 +101,7 @@ export function NegotiationPipeline({
     const negotiationId = e.dataTransfer.getData('negotiationId');
     if (!negotiationId) return;
 
-    const negotiation = negotiations.find(n => n.id === negotiationId);
+    const negotiation = pipelineNegotiations.find(n => n.id === negotiationId);
     if (!negotiation) return;
 
     // Se mesmo status, não faz nada
@@ -154,11 +165,11 @@ export function NegotiationPipeline({
     }).format(value);
   };
 
-  const totalPipelineValue = negotiations
+  const totalPipelineValue = pipelineNegotiations
     .filter(n => !['ganho', 'perdido'].includes(n.status))
     .reduce((sum, n) => sum + (n.estimated_value || 0), 0);
 
-  const activeNegotiationsCount = negotiations.filter(n => !['ganho', 'perdido'].includes(n.status)).length;
+  const activeNegotiationsCount = pipelineNegotiations.filter(n => !['ganho', 'perdido'].includes(n.status)).length;
 
   return (
     <div className="h-full w-full flex flex-col overflow-hidden">

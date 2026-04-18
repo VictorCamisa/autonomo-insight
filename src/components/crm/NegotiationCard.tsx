@@ -1,8 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Car, Phone, Calendar, TrendingUp, User, UserCircle, Clock, Zap, Globe, MessageSquare, CalendarPlus } from 'lucide-react';
+import { Car, Phone, Calendar, TrendingUp, User, UserCircle, Clock, MessageSquare } from 'lucide-react';
 import type { Negotiation } from '@/types/negotiations';
-import { negotiationStatusLabels, negotiationStatusColors } from '@/types/negotiations';
+import { negotiationStatusLabels } from '@/types/negotiations';
 import { format, differenceInHours, differenceInMinutes, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDate } from '@/lib/utils';
@@ -43,13 +43,6 @@ export function NegotiationCard({ negotiation, onClick, showSalesperson }: Negot
     if (!value) return '-';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
-
-  
-
-  const createdDate = new Date(negotiation.created_at);
-  const timeInStage = formatTimeAgo(negotiation.updated_at);
-  const leadSource = negotiation.lead?.source ? (leadSourceLabels[negotiation.lead.source] || negotiation.lead.source) : null;
-
   // Destaque para leads sem resposta há mais de 24h (follow-up necessário)
   const isActiveStage = negotiation.status === 'negociando' || negotiation.status === 'follow_up' || negotiation.status === 'atendimento_ia';
   const lastActivity = negotiation.last_message_at || negotiation.updated_at;

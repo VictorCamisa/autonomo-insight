@@ -2,155 +2,175 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Modern Luxury Design System - Matheus Veículos
-   All colors MUST be HSL.
-   Primary brand color: Vermelho #E53935 (0 73% 55%)
-   Typography: Playfair Display (headings) + Plus Jakarta Sans (body)
-*/
+/* ══════════════════════════════════════════════════════════════
+   AUTONOMO INSIGHT — Premium Design System v2
+   Marca: Vermelho #E53935 · Preto absoluto · Branco cristalino
+   Tipografia: Plus Jakarta Sans (corpo) · Playfair Display (display)
+   Filosofia: precisão Apple, contraste extremo, fluidez total
+   ══════════════════════════════════════════════════════════════ */
 
 @layer base {
   :root {
-    /* Light mode - Dark theme (same as dark for public consistency) */
-    --background: 0 0% 7%;
-    --foreground: 0 0% 92%;
+    /* ── Base ────────────────────────────────────── */
+    --background:           0 0% 5%;
+    --foreground:           0 0% 95%;
 
-    --card: 0 0% 10%;
-    --card-foreground: 0 0% 92%;
+    --card:                 0 0% 8%;
+    --card-foreground:      0 0% 95%;
 
-    --popover: 0 0% 10%;
-    --popover-foreground: 0 0% 92%;
+    --popover:              0 0% 9%;
+    --popover-foreground:   0 0% 95%;
 
-    --primary: 0 73% 55%;
-    --primary-foreground: 0 0% 100%;
+    /* ── Marca (Vermelho) ────────────────────────── */
+    --primary:              0 73% 55%;
+    --primary-foreground:   0 0% 100%;
 
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 85%;
+    /* ── Neutros ─────────────────────────────────── */
+    --secondary:            0 0% 12%;
+    --secondary-foreground: 0 0% 82%;
 
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 55%;
+    --muted:                0 0% 11%;
+    --muted-foreground:     0 0% 50%;
 
-    --accent: 0 73% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent:               0 0% 12%;
+    --accent-foreground:    0 0% 90%;
 
-    --destructive: 0 73% 55%;
+    /* ── Semântico ───────────────────────────────── */
+    --destructive:          0 86% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 0 73% 55%;
-    --success-foreground: 0 0% 100%;
+    --success:              142 71% 45%;
+    --success-foreground:   0 0% 100%;
 
-    --warning: 0 73% 55%;
-    --warning-foreground: 0 0% 100%;
+    --warning:              38 90% 55%;
+    --warning-foreground:   0 0% 100%;
 
-    --border: 0 0% 16%;
-    --input: 0 0% 16%;
-    --ring: 0 73% 55%;
+    /* ── Estrutura ───────────────────────────────── */
+    --border:               0 0% 13%;
+    --input:                0 0% 11%;
+    --ring:                 0 73% 55%;
+    --radius:               0.5rem;
 
-    /* Surface levels for depth */
-    --surface-1: 0 0% 10%;
-    --surface-2: 0 0% 12%;
-    --surface-3: 0 0% 14%;
+    /* ── Sidebar (preto quase puro) ─────────────── */
+    --sidebar-background:          0 0% 4%;
+    --sidebar-foreground:          0 0% 70%;
+    --sidebar-primary:             0 73% 55%;
+    --sidebar-primary-foreground:  0 0% 100%;
+    --sidebar-accent:              0 0% 10%;
+    --sidebar-accent-foreground:   0 0% 88%;
+    --sidebar-border:              0 0% 11%;
+    --sidebar-ring:                0 73% 55%;
 
-    /* Text hierarchy */
-    --text-primary: 0 0% 95%;
+    /* ── Superfícies ─────────────────────────────── */
+    --surface-1: 0 0% 8%;
+    --surface-2: 0 0% 10%;
+    --surface-3: 0 0% 13%;
+
+    /* ── Hierarquia de texto ─────────────────────── */
+    --text-primary:   0 0% 95%;
     --text-secondary: 0 0% 65%;
-    --text-muted: 0 0% 50%;
+    --text-muted:     0 0% 45%;
 
-    /* Auth page colors */
-    --auth-bg: 0 0% 97%;
-    --auth-surface: 0 0% 100%;
-    --auth-muted-surface: 0 0% 96%;
-    --auth-border: 0 0% 90%;
-    --auth-text-secondary: 0 0% 50%;
-    --auth-text-primary: 0 0% 20%;
-    --auth-heading: 0 0% 10%;
+    /* ── Auth ────────────────────────────────────── */
+    --auth-bg:             0 0% 4%;
+    --auth-surface:        0 0% 8%;
+    --auth-muted-surface:  0 0% 11%;
+    --auth-border:         0 0% 16%;
+    --auth-text-secondary: 0 0% 52%;
+    --auth-text-primary:   0 0% 82%;
+    --auth-heading:        0 0% 96%;
 
-    /* Public website theme - Matheus Veículos */
-    --public-primary: 0 73% 55%;
-    --public-primary-dark: 0 73% 45%;
-    --public-primary-light: 0 73% 65%;
+    /* ── Site público (Matheus Veículos) ─────────── */
+    --public-primary:            0 73% 55%;
+    --public-primary-dark:       0 73% 42%;
+    --public-primary-light:      0 73% 68%;
     --public-primary-foreground: 0 0% 100%;
-    --public-background: 0 0% 100%;
-    --public-foreground: 0 0% 10%;
-    --public-surface: 0 0% 98%;
-    --public-muted: 0 0% 96%;
-    --public-border: 0 0% 90%;
+    --public-background:         0 0% 100%;
+    --public-foreground:         0 0% 8%;
+    --public-surface:            0 0% 97%;
+    --public-muted:              0 0% 94%;
+    --public-border:             0 0% 88%;
   }
 
   .dark {
-    /* Dark mode - Vermelho, Branco e Preto */
-    --background: 0 0% 7%;
-    --foreground: 0 0% 92%;
+    /* ── Base ────────────────────────────────────── */
+    --background:           0 0% 5%;
+    --foreground:           0 0% 95%;
 
-    --card: 0 0% 10%;
-    --card-foreground: 0 0% 92%;
+    --card:                 0 0% 8%;
+    --card-foreground:      0 0% 95%;
 
-    --popover: 0 0% 10%;
-    --popover-foreground: 0 0% 92%;
+    --popover:              0 0% 9%;
+    --popover-foreground:   0 0% 95%;
 
-    --primary: 0 73% 55%;
-    --primary-foreground: 0 0% 100%;
+    /* ── Marca ───────────────────────────────────── */
+    --primary:              0 73% 55%;
+    --primary-foreground:   0 0% 100%;
 
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 85%;
+    /* ── Neutros ─────────────────────────────────── */
+    --secondary:            0 0% 12%;
+    --secondary-foreground: 0 0% 82%;
 
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 55%;
+    --muted:                0 0% 11%;
+    --muted-foreground:     0 0% 50%;
 
-    --accent: 0 73% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent:               0 0% 12%;
+    --accent-foreground:    0 0% 90%;
 
-    --destructive: 0 73% 55%;
+    /* ── Semântico ───────────────────────────────── */
+    --destructive:          0 86% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 0 73% 55%;
-    --success-foreground: 0 0% 100%;
+    --success:              142 71% 45%;
+    --success-foreground:   0 0% 100%;
 
-    --warning: 0 73% 55%;
-    --warning-foreground: 0 0% 100%;
+    --warning:              38 90% 55%;
+    --warning-foreground:   0 0% 100%;
 
-    --border: 0 0% 16%;
-    --input: 0 0% 16%;
-    --ring: 0 73% 55%;
+    /* ── Estrutura ───────────────────────────────── */
+    --border:               0 0% 13%;
+    --input:                0 0% 11%;
+    --ring:                 0 73% 55%;
 
-    /* Sidebar - Dark */
-    --sidebar-background: 0 0% 8%;
-    --sidebar-foreground: 0 0% 75%;
-    --sidebar-primary: 0 73% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 13%;
-    --sidebar-accent-foreground: 0 0% 90%;
-    --sidebar-border: 0 0% 14%;
-    --sidebar-ring: 0 73% 55%;
+    /* ── Sidebar ─────────────────────────────────── */
+    --sidebar-background:          0 0% 4%;
+    --sidebar-foreground:          0 0% 70%;
+    --sidebar-primary:             0 73% 55%;
+    --sidebar-primary-foreground:  0 0% 100%;
+    --sidebar-accent:              0 0% 10%;
+    --sidebar-accent-foreground:   0 0% 88%;
+    --sidebar-border:              0 0% 11%;
+    --sidebar-ring:                0 73% 55%;
 
-    /* Surface levels for depth */
-    --surface-1: 0 0% 10%;
-    --surface-2: 0 0% 12%;
-    --surface-3: 0 0% 14%;
+    /* ── Superfícies ─────────────────────────────── */
+    --surface-1: 0 0% 8%;
+    --surface-2: 0 0% 10%;
+    --surface-3: 0 0% 13%;
 
-    /* Text hierarchy */
-    --text-primary: 0 0% 95%;
+    /* ── Hierarquia de texto ─────────────────────── */
+    --text-primary:   0 0% 95%;
     --text-secondary: 0 0% 65%;
-    --text-muted: 0 0% 50%;
+    --text-muted:     0 0% 45%;
 
-    /* Auth page colors */
-    --auth-bg: 0 0% 5%;
-    --auth-surface: 0 0% 10%;
-    --auth-muted-surface: 0 0% 14%;
-    --auth-border: 0 0% 18%;
-    --auth-text-secondary: 0 0% 55%;
-    --auth-text-primary: 0 0% 80%;
-    --auth-heading: 0 0% 95%;
+    /* ── Auth ────────────────────────────────────── */
+    --auth-bg:             0 0% 4%;
+    --auth-surface:        0 0% 8%;
+    --auth-muted-surface:  0 0% 11%;
+    --auth-border:         0 0% 16%;
+    --auth-text-secondary: 0 0% 52%;
+    --auth-text-primary:   0 0% 82%;
+    --auth-heading:        0 0% 96%;
 
-    /* Public website theme - Matheus Veículos (dark mode) */
-    --public-primary: 0 73% 55%;
-    --public-primary-dark: 0 73% 45%;
-    --public-primary-light: 0 73% 65%;
+    /* ── Site público (dark mode) ────────────────── */
+    --public-primary:            0 73% 55%;
+    --public-primary-dark:       0 73% 42%;
+    --public-primary-light:      0 73% 68%;
     --public-primary-foreground: 0 0% 100%;
-    --public-background: 0 0% 5%;
-    --public-foreground: 0 0% 95%;
-    --public-surface: 0 0% 8%;
-    --public-muted: 0 0% 12%;
-    --public-border: 0 0% 18%;
+    --public-background:         0 0% 5%;
+    --public-foreground:         0 0% 95%;
+    --public-surface:            0 0% 8%;
+    --public-muted:              0 0% 11%;
+    --public-border:             0 0% 16%;
   }
 }
 
@@ -168,9 +188,19 @@
   body {
     @apply min-h-full bg-background text-foreground m-0 p-0 font-sans;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    letter-spacing: -0.011em;
     overflow-x: hidden;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+    letter-spacing: -0.025em;
+  }
+
+  button, a, [role="button"] {
+    @apply transition-all duration-200 ease-out;
   }
 
   #root {
@@ -178,7 +208,6 @@
     overflow-x: hidden;
   }
 
-  /* Safe area padding for mobile devices */
   @supports (padding-top: env(safe-area-inset-top)) {
     body {
       padding-top: env(safe-area-inset-top);
@@ -189,20 +218,14 @@
   }
 }
 
-/* Auth card styling */
+/* Auth card */
 .auth-card {
-  box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.15),
+  box-shadow:
+    0 32px 64px -16px rgba(0, 0, 0, 0.7),
     0 0 0 1px hsl(var(--border));
 }
 
-.dark .auth-card {
-  box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.5),
-    0 0 0 1px hsl(var(--border));
-}
-
-/* Glass effect utilities */
+/* Utilities */
 @layer utilities {
   .glass {
     @apply bg-card/80 backdrop-blur-xl border border-border/50;
@@ -222,7 +245,7 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(135deg, hsl(var(--primary) / 0.3), transparent);
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.4), transparent 60%);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
@@ -231,27 +254,39 @@
   }
 
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent-foreground;
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--foreground)) 0%, hsl(var(--primary)) 100%);
+  }
+
+  .text-gradient-red {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(0 73% 68%) 0%, hsl(0 73% 48%) 100%);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 20px -4px hsl(var(--primary) / 0.45);
+  }
+
+  .glow-red-lg {
+    box-shadow: 0 0 40px -8px hsl(var(--primary) / 0.5);
+  }
+
+  .surface-elevated {
+    background: linear-gradient(180deg, hsl(var(--surface-2)) 0%, hsl(var(--surface-1)) 100%);
   }
 
   .animate-fade-in {
-    animation: fadeIn 0.5s ease-out forwards;
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     opacity: 0;
   }
 
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0);   }
   }
 }
 
-/* Smooth transitions for theme switching */
+/* Theme transitions */
 html.transitioning,
 html.transitioning *,
 html.transitioning *::before,

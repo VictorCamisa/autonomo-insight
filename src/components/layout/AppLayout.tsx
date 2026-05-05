@@ -2,6 +2,9 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { AppHeader } from './AppHeader';
+import { AppSidebar } from './AppSidebar';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { SidebarProvider } from '@/contexts/SidebarContext';
 
 export default function AppLayout() {
   const { user, loading } = useAuth();
@@ -22,13 +25,22 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col w-full bg-background">
-      <AppHeader />
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
-          <Outlet />
+    <TooltipProvider>
+      <SidebarProvider>
+        <div className="flex h-screen w-full overflow-hidden bg-background">
+          <div className="hidden lg:flex">
+            <AppSidebar />
+          </div>
+          <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
+            <AppHeader />
+            <main className="flex-1 overflow-y-auto overflow-x-hidden">
+              <div className="px-4 py-5 sm:px-6 lg:px-8 lg:py-6 max-w-[1400px] mx-auto w-full">
+                <Outlet />
+              </div>
+            </main>
+          </div>
         </div>
-      </main>
-    </div>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }

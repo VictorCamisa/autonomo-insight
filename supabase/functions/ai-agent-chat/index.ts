@@ -190,11 +190,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
-
-    // Keep LOVABLE_API_KEY for summary generation (flash model)
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const AI_MODEL = Deno.env.get("AI_MODEL") || "google/gemini-3-flash-preview";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -479,22 +477,27 @@ ${vehicleInfo}${lastVehicleContext}${sessionNote}
 Interacoes nesta sessao: ${conversationHistory.length}`;
 
     // =============================================
-    // AI API CALL WITH TOOL CALLING LOOP (ANTHROPIC)
+    // AI API CALL WITH TOOL CALLING LOOP (Lovable AI Gateway / OpenAI-compatible)
     // =============================================
-    // Convert conversation history to Anthropic format
-    const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [];
-    
+    // Convert Anthropic-style tool defs to OpenAI function format
+    const openaiTools = dynamicTools.map((t: any) => ({
+      type: 'function',
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.input_schema,
+      },
+    }));
+
+    // Build OpenAI-format messages: system + history + current
+    const oaiMessages: any[] = [{ role: 'system', content: systemPrompt }];
     for (const msg of conversationHistory) {
-      anthropicMessages.push({
+      oaiMessages.push({
         role: msg.role === 'assistant' ? 'assistant' : 'user',
-        content: msg.content,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
       });
     }
-    // Add current user message
-    anthropicMessages.push({ role: 'user', content: message });
-
-    // Ensure messages alternate (Anthropic requirement)
-    const sanitizedMessages = sanitizeAnthropicMessages(anthropicMessages);
+    oaiMessages.push({ role: 'user', content: message });
 
     const temperature = agent.temperature || 0.3;
     const maxTokens = agent.max_tokens || 1024;
@@ -504,78 +507,76 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
     let photosToSend: Array<{ url: string; caption: string }> = [];
     let toolCallsLog: string[] = [];
 
+    const callGateway = async (msgs: any[], withTools: boolean) => {
+      return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: AI_MODEL,
+          messages: msgs,
+          ...(withTools ? { tools: openaiTools } : {}),
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      });
+    };
+
     try {
       while (round < MAX_ROUNDS) {
         round++;
-        console.log(`[ai-agent-chat] Round ${round}, messages: ${sanitizedMessages.length}`);
+        console.log(`[ai-agent-chat] Round ${round}, messages: ${oaiMessages.length}, model: ${AI_MODEL}`);
 
-        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5',
-            system: systemPrompt,
-            messages: sanitizedMessages,
-            tools: dynamicTools,
-            temperature,
-            max_tokens: maxTokens,
-          }),
-        });
+        const aiResponse = await callGateway(oaiMessages, true);
 
         if (!aiResponse.ok) {
           const errorText = await aiResponse.text();
-          console.error('[ai-agent-chat] Anthropic error:', aiResponse.status, errorText);
+          console.error('[ai-agent-chat] Gateway error:', aiResponse.status, errorText);
           if (aiResponse.status === 429) throw new Error("Rate limit exceeded");
-          if (aiResponse.status === 402) throw new Error("Credits exhausted");
-          throw new Error(`Anthropic error: ${aiResponse.status}`);
+          if (aiResponse.status === 402) throw new Error("Credits exhausted - add funds to Lovable AI workspace");
+          throw new Error(`Gateway error: ${aiResponse.status}`);
         }
 
         const data = await aiResponse.json();
-        const stopReason = data.stop_reason;
+        const choice = data.choices?.[0];
+        const msg = choice?.message;
+        const toolCalls = msg?.tool_calls || [];
 
-        // Extract text and tool_use blocks
-        const textBlocks = (data.content || []).filter((b: any) => b.type === 'text');
-        const toolUseBlocks = (data.content || []).filter((b: any) => b.type === 'tool_use');
-
-        if (stopReason === 'tool_use' && toolUseBlocks.length > 0) {
-          // Add assistant message with tool calls
-          sanitizedMessages.push({
+        if (toolCalls.length > 0) {
+          // Push assistant message containing tool_calls
+          oaiMessages.push({
             role: 'assistant',
-            content: data.content,
+            content: msg.content || '',
+            tool_calls: toolCalls,
           });
 
-          // Execute each tool call and build tool_result blocks
-          const toolResultBlocks: any[] = [];
-          for (const toolUse of toolUseBlocks) {
-            const fnName = toolUse.name;
-            const fnArgs = toolUse.input || {};
+          // Execute each tool call sequentially
+          for (const tc of toolCalls) {
+            const fnName = tc.function?.name;
+            let fnArgs: any = {};
+            try {
+              fnArgs = tc.function?.arguments ? JSON.parse(tc.function.arguments) : {};
+            } catch {
+              fnArgs = {};
+            }
 
             console.log(`[ai-agent-chat] Executing tool: ${fnName}`, fnArgs);
             toolCallsLog.push(fnName);
 
             const toolResult = await executeToolCall(supabase, fnName, fnArgs, phone, photosToSend, agent_id, activeLevel, LOVABLE_API_KEY, lead_id, conversationId);
 
-            toolResultBlocks.push({
-              type: 'tool_result',
-              tool_use_id: toolUse.id,
+            oaiMessages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
               content: JSON.stringify(toolResult),
             });
           }
-
-          // Add tool results as user message (Anthropic format)
-          sanitizedMessages.push({
-            role: 'user',
-            content: toolResultBlocks,
-          });
-
           // Continue loop to get final text
         } else {
-          // No tool calls — final text response
-          responseMessage = textBlocks.map((b: any) => b.text).join('') || '';
+          // Final text response
+          responseMessage = msg?.content || '';
           break;
         }
       }
@@ -583,51 +584,21 @@ Interacoes nesta sessao: ${conversationHistory.length}`;
       // If we ran out of rounds without text, do one more call without tools
       if (!responseMessage && round >= MAX_ROUNDS) {
         console.log('[ai-agent-chat] Max rounds, getting final text...');
-        const finalResponse = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5',
-            system: systemPrompt,
-            messages: sanitizedMessages,
-            temperature,
-            max_tokens: maxTokens,
-          }),
-        });
+        const finalResponse = await callGateway(oaiMessages, false);
         if (finalResponse.ok) {
           const finalData = await finalResponse.json();
-          const textBlocks = (finalData.content || []).filter((b: any) => b.type === 'text');
-          responseMessage = textBlocks.map((b: any) => b.text).join('') || '';
+          responseMessage = finalData.choices?.[0]?.message?.content || '';
         }
       }
 
       // Retry if empty
       if (!responseMessage || responseMessage.trim().length === 0) {
         console.warn('[ai-agent-chat] Empty response, retrying with nudge...');
-        sanitizedMessages.push({ role: 'user', content: 'IMPORTANTE: O cliente esta esperando uma resposta. Responda com texto em portugues.' });
-        const retryResponse = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5',
-            system: systemPrompt,
-            messages: sanitizedMessages,
-            temperature,
-            max_tokens: maxTokens,
-          }),
-        });
+        oaiMessages.push({ role: 'user', content: 'IMPORTANTE: O cliente esta esperando uma resposta. Responda com texto em portugues.' });
+        const retryResponse = await callGateway(oaiMessages, false);
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
-          const textBlocks = (retryData.content || []).filter((b: any) => b.type === 'text');
-          responseMessage = textBlocks.map((b: any) => b.text).join('') || '';
+          responseMessage = retryData.choices?.[0]?.message?.content || '';
         }
         if (!responseMessage) responseMessage = 'Oi! Me conta o que voce esta procurando que eu busco aqui no estoque.';
       }

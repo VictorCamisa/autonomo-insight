@@ -161,8 +161,11 @@ async function generateFollowUpMessage(
   hint: string,
   attemptNumber: number
 ): Promise<string | null> {
-  const openaiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openaiKey) return null;
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!lovableKey) {
+    console.error("[follow-up] LOVABLE_API_KEY not set");
+    return null;
+  }
 
   // Buscar últimas msgs para contexto
   const { data: recent } = await supabase
@@ -198,20 +201,22 @@ ${transcript || "(sem historico)"}
 Gere APENAS a mensagem final (com ||| separando os 2 baloes). Nada mais.`;
 
   try {
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.8,
-        max_tokens: 200,
+        model: "google/gemini-3-flash-preview",
         messages: [{ role: "user", content: prompt }],
       }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) {
+      console.error("[follow-up] Lovable AI error:", r.status, await r.text());
+      return null;
+    }
     const data = await r.json();
     return data.choices?.[0]?.message?.content?.trim() || null;
-  } catch {
+  } catch (e) {
+    console.error("[follow-up] generate error:", e);
     return null;
   }
 }

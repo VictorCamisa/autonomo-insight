@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Bot,
   Sparkles,
+  Briefcase,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -79,11 +80,12 @@ export function AppSidebar() {
       title: 'Gestão',
       requiredModules: ['comissoes', 'marketing', 'configuracoes'],
       items: [
+        { label: 'Gestão Comercial', href: '/gestao-comercial', icon: Briefcase, requiredModule: 'configuracoes' },
         { label: 'Comissões', href: '/comissoes', icon: Wallet, requiredModule: 'comissoes' },
         { label: 'Marketing', href: '/marketing', icon: Megaphone, requiredModule: 'marketing' },
         { label: 'Relatórios', href: '/relatorios', icon: FileText, requiredModule: 'marketing' },
         { label: 'WhatsApp', href: '/whatsapp', icon: MessageSquare, requiredModule: 'configuracoes' },
-        { label: 'IA / Agentes', href: '/ia-agentes', icon: Bot, requiredModule: 'configuracoes' },
+        { label: 'IA / Agentes', href: '/ai-agents', icon: Bot, requiredModule: 'configuracoes' },
       ],
     },
   ];

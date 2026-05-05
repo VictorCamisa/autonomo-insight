@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { UserCircle, User2, Pencil, Trash2, Search, Filter, CalendarDays } from 'lucide-react';
+import { UserCircle, User2, Pencil, Trash2, Search, Filter, CalendarDays, Sparkles } from 'lucide-react';
+import { RepescagemQuickPanel } from '@/components/repescagem/RepescagemQuickPanel';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';

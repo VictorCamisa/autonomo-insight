@@ -3,14 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Lead, LeadStatus, LeadSource, QualificationStatus } from '@/types/crm';
 import { toast } from 'sonner';
 
-// Clear all conversation history for a lead (for testing purposes)
 export function useClearLeadHistory() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (leadId: string) => {
-      // 1. Get all AI conversations for this lead
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: conversations } = await (supabase as any)
         .from('ai_agent_conversations')
         .select('id')
@@ -18,45 +15,33 @@ export function useClearLeadHistory() {
 
       const conversationIds = (conversations || []).map((c: any) => c.id);
 
-      // 2. Delete AI messages for these conversations
       if (conversationIds.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('ai_agent_messages')
           .delete()
           .in('conversation_id', conversationIds);
 
-        // 3. Delete conversation embeddings
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('conversation_embeddings')
           .delete()
           .in('conversation_id', conversationIds);
       }
 
-      // 4. Delete lead-level embeddings
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('conversation_embeddings')
         .delete()
         .eq('lead_id', leadId);
 
-      // 5. Delete AI conversations
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('ai_agent_conversations')
         .delete()
         .eq('lead_id', leadId);
 
-      // 6. Delete lead qualification data
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('lead_qualification_data')
         .delete()
         .eq('lead_id', leadId);
 
-      // 7. Delete WhatsApp messages for this lead's contacts
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: contacts } = await (supabase as any)
         .from('whatsapp_contacts')
         .select('id')
@@ -64,15 +49,12 @@ export function useClearLeadHistory() {
 
       const contactIds = (contacts || []).map((c: any) => c.id);
       if (contactIds.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('whatsapp_messages')
           .delete()
           .in('contact_id', contactIds);
       }
 
-      // 8. Reset lead qualification status
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('leads')
         .update({
@@ -98,14 +80,11 @@ export function useClearLeadHistory() {
   });
 }
 
-// Delete lead and all related data completely
 export function useDeleteLeadComplete() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (leadId: string) => {
-      // 1. Get all AI conversations for this lead
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: conversations } = await (supabase as any)
         .from('ai_agent_conversations')
         .select('id')
@@ -113,44 +92,33 @@ export function useDeleteLeadComplete() {
 
       const conversationIds = (conversations || []).map((c: any) => c.id);
 
-      // 2. Delete AI messages
       if (conversationIds.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('ai_agent_messages')
           .delete()
           .in('conversation_id', conversationIds);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('conversation_embeddings')
           .delete()
           .in('conversation_id', conversationIds);
       }
 
-      // 3. Delete lead embeddings
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('conversation_embeddings')
         .delete()
         .eq('lead_id', leadId);
 
-      // 4. Delete AI conversations
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('ai_agent_conversations')
         .delete()
         .eq('lead_id', leadId);
 
-      // 5. Delete lead qualification data
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('lead_qualification_data')
         .delete()
         .eq('lead_id', leadId);
 
-      // 6. Delete WhatsApp messages and contacts
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: contacts } = await (supabase as any)
         .from('whatsapp_contacts')
         .select('id')
@@ -158,37 +126,27 @@ export function useDeleteLeadComplete() {
 
       const contactIds = (contacts || []).map((c: any) => c.id);
       if (contactIds.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('whatsapp_messages')
           .delete()
           .in('contact_id', contactIds);
       }
 
-      // 7. Delete WhatsApp contacts
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('whatsapp_contacts')
         .delete()
         .eq('lead_id', leadId);
 
-
-      // 9. Delete negotiations
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('negotiations')
         .delete()
         .eq('lead_id', leadId);
 
-      // 10. Delete lead assignments
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('lead_assignments')
         .delete()
         .eq('lead_id', leadId);
 
-      // 11. Finally delete the lead itself
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('leads')
         .delete()
@@ -209,10 +167,9 @@ export function useDeleteLeadComplete() {
   });
 }
 
-// Shared query options for better caching
 const leadQueryOptions = {
-  staleTime: 1000 * 60 * 3, // 3 minutes
-  gcTime: 1000 * 60 * 10, // 10 minutes
+  staleTime: 1000 * 60 * 3,
+  gcTime: 1000 * 60 * 10,
   refetchOnWindowFocus: false,
   refetchOnMount: false,
 };
@@ -221,8 +178,6 @@ export function useLeads() {
   return useQuery({
     queryKey: ['leads'],
     queryFn: async (): Promise<Lead[]> => {
-      // 1) Buscar leads sem join (evita erro do PostgREST por falta de FK leads.assigned_to -> profiles.id)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from('leads')
         .select(`
@@ -235,21 +190,18 @@ export function useLeads() {
 
       const leads = (data || []) as Lead[];
 
-      // 2) Enriquecer com assigned_profile via uma segunda query (mantém o campo usado no UI)
       const assignedIds = Array.from(
         new Set(leads.map((l) => l.assigned_to).filter(Boolean) as string[])
       );
 
       if (!assignedIds.length) return leads;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: profiles, error: profilesError } = await (supabase as any)
         .from('profiles')
         .select('id, full_name')
         .in('id', assignedIds);
 
       if (profilesError) {
-        // Não quebra a tela por falha de join; apenas retorna os leads sem o nome do responsável
         console.warn('[useLeads] Falha ao buscar profiles:', profilesError);
         return leads;
       }
@@ -271,7 +223,6 @@ export function useLead(id: string) {
   return useQuery({
     queryKey: ['leads', id],
     queryFn: async (): Promise<Lead | null> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from('leads')
         .select(`
@@ -288,7 +239,6 @@ export function useLead(id: string) {
 
       if (!lead.assigned_to) return lead;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: profile, error: profileError } = await (supabase as any)
         .from('profiles')
         .select('id, full_name')
@@ -324,9 +274,7 @@ interface CreateLeadInput {
   qualification_reason?: string;
 }
 
-// Check for duplicate leads/customers before creating
 async function checkDuplicates(phone: string, email?: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existingLeads } = await (supabase as any)
     .from('leads')
     .select('id, name, phone, status')
@@ -336,7 +284,6 @@ async function checkDuplicates(phone: string, email?: string) {
     return { type: 'lead' as const, existing: existingLeads[0] };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existingCustomers } = await (supabase as any)
     .from('customers')
     .select('id, name, phone')
@@ -347,7 +294,6 @@ async function checkDuplicates(phone: string, email?: string) {
   }
 
   if (email) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: leadsByEmail } = await (supabase as any)
       .from('leads')
       .select('id, name, email, phone')
@@ -374,7 +320,6 @@ export function useCreateLead() {
 
       const { data: { user } } = await supabase.auth.getUser();
       
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from('leads')
         .insert({
@@ -427,7 +372,6 @@ export function useUpdateLead() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: UpdateLeadInput) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from('leads')
         .update(input)
@@ -436,6 +380,21 @@ export function useUpdateLead() {
         .single();
 
       if (error) throw error;
+
+      // Fire-and-forget WhatsApp notifications when a salesperson is assigned to a qualified lead
+      const salespersonId = input.assigned_to;
+      const isQualified =
+        input.qualification_status === 'qualificado' ||
+        data.qualification_status === 'qualificado';
+
+      if (salespersonId && isQualified) {
+        supabase.functions
+          .invoke('notify-lead-assignment', {
+            body: { lead_id: id, salesperson_id: salespersonId },
+          })
+          .catch((err: unknown) => console.warn('[useUpdateLead] Notification error:', err));
+      }
+
       return data;
     },
     onSuccess: () => {
@@ -453,7 +412,6 @@ export function useDeleteLead() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('leads')
         .delete()

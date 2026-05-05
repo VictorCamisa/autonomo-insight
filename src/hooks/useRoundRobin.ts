@@ -72,28 +72,24 @@ export function useSalespeopleWithRoles() {
   return useQuery({
     queryKey: ['salespeople-with-roles'],
     queryFn: async (): Promise<SalespersonWithRole[]> => {
-      // Get all profiles
       const { data: profiles, error: profilesError } = await (supabase as any)
         .from('profiles')
         .select('id, full_name');
 
       if (profilesError) throw profilesError;
 
-      // Get all roles
       const { data: roles, error: rolesError } = await (supabase as any)
         .from('user_roles')
         .select('user_id, role');
 
       if (rolesError) throw rolesError;
 
-      // Get round robin configs
       const { data: rrConfigs, error: rrError } = await (supabase as any)
         .from('round_robin_config')
         .select('*');
 
       if (rrError) throw rrError;
 
-      // Combine data
       return (profiles || []).map((p: any) => {
         const userRole = (roles || []).find((r: any) => r.user_id === p.id);
         const rrConfig = (rrConfigs || []).find((r: any) => r.salesperson_id === p.id);
@@ -227,7 +223,6 @@ export function useAssignSalespersonRole() {
 
   return useMutation({
     mutationFn: async (input: { user_id: string; role: 'vendedor' | 'gerente' | 'marketing' }) => {
-      // First check if user already has a role
       const { data: existingRole } = await (supabase as any)
         .from('user_roles')
         .select('id')
@@ -235,14 +230,12 @@ export function useAssignSalespersonRole() {
         .maybeSingle();
 
       if (existingRole) {
-        // Update existing role
         const { error } = await (supabase as any)
           .from('user_roles')
           .update({ role: input.role })
           .eq('user_id', input.user_id);
         if (error) throw error;
       } else {
-        // Insert new role
         const { error } = await (supabase as any)
           .from('user_roles')
           .insert({ user_id: input.user_id, role: input.role });
@@ -284,6 +277,13 @@ export function useManualLeadAssignment() {
         });
 
       if (assignError) throw assignError;
+
+      // Fire-and-forget WhatsApp notifications (never blocks the mutation)
+      supabase.functions
+        .invoke('notify-lead-assignment', {
+          body: { lead_id: input.lead_id, salesperson_id: input.salesperson_id },
+        })
+        .catch((err: unknown) => console.warn('[LeadAssignment] Notification error:', err));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lead-assignments'] });
@@ -334,7 +334,6 @@ export function useCreateUser() {
         throw new Error(data.error || 'Erro ao criar usuário');
       }
 
-      // If should add to round robin
       if (input.add_to_round_robin && input.role === 'vendedor' && data.user?.id) {
         await (supabase as any)
           .from('round_robin_config')

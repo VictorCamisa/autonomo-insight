@@ -121,6 +121,13 @@ const AgentTestsPage = lazy(() => import("@/components/ai-agents/pages/AgentTest
 const AgentStageConfigPage = lazy(() => import("@/components/ai-agents/pages/AgentStageConfigPage").then(m => ({ default: m.AgentStageConfigPage })));
 const AgentFollowUpPage = lazy(() => import("@/components/ai-agents/pages/AgentFollowUpPage"));
 
+// Repescagem module
+const RepescagemLayout = lazy(() => import("@/components/repescagem/RepescagemLayout").then(m => ({ default: m.RepescagemLayout })));
+const RepescagemDashboard = lazy(() => import("@/components/repescagem/RepescagemDashboard"));
+const RepescagemCampanhas = lazy(() => import("@/components/repescagem/RepescagemCampanhas"));
+const RepescagemHistorico = lazy(() => import("@/components/repescagem/RepescagemHistorico"));
+const RepescagemLeads = lazy(() => import("@/components/repescagem/RepescagemLeads"));
+
 // Optimized QueryClient with better caching
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -180,6 +187,20 @@ const App = () => (
                     <Route path="contatos" element={<Leads />} />
                     
                     <Route path="analytics" element={<CRMAnalytics />} />
+                  </Route>
+
+                  {/* Repescagem Module */}
+                  <Route path="/repescagem" element={
+                    <ProtectedRoute requiredModule="crm">
+                      <Suspense fallback={<PageLoader />}>
+                        <RepescagemLayout />
+                      </Suspense>
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<RepescagemDashboard />} />
+                    <Route path="campanhas" element={<RepescagemCampanhas />} />
+                    <Route path="leads" element={<RepescagemLeads />} />
+                    <Route path="historico" element={<RepescagemHistorico />} />
                   </Route>
                   
                   <Route path="/estoque" element={

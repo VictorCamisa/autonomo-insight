@@ -190,11 +190,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
-
-    // Keep LOVABLE_API_KEY for summary generation (flash model)
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const AI_MODEL = Deno.env.get("AI_MODEL") || "google/gemini-3-flash-preview";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

@@ -261,7 +261,19 @@ export default function CRMHome() {
         )}
 
         <QualificationLevelSelector />
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setRepescagemOpen(true)}
+          className="ml-auto gap-2 border-primary/30 hover:bg-primary/10 hover:text-primary"
+        >
+          <Sparkles className="h-4 w-4 text-primary" />
+          Repescagem IA
+        </Button>
       </div>
+
+      <RepescagemQuickPanel open={repescagemOpen} onOpenChange={setRepescagemOpen} />
 
       {/* Active filters summary */}
       {(periodFilter !== 'all' || responseFilter !== 'all' || searchQuery) && (

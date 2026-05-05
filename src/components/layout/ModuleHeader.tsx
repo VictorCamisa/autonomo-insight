@@ -15,32 +15,32 @@ interface ModuleHeaderProps {
   description: string;
   basePath: string;
   navItems: SubNavItem[];
+  actions?: React.ReactNode;
 }
 
-export function ModuleHeader({ icon: Icon, title, description, basePath, navItems }: ModuleHeaderProps) {
+export function ModuleHeader({ icon: Icon, title, description, basePath, navItems, actions }: ModuleHeaderProps) {
   const location = useLocation();
 
   return (
     <div className="border-b bg-card mb-6">
-      {/* Module Title */}
       <div className="px-4 py-4 flex items-center gap-3">
         <div className="p-2 rounded-lg bg-primary/10">
           <Icon className="h-6 w-6 text-primary" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-semibold">{title}</h1>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
+        {actions && <div className="ml-auto">{actions}</div>}
       </div>
-      
-      {/* Sub Navigation */}
+
       <ScrollArea className="w-full">
         <nav className="flex items-center gap-1 px-4 pb-3">
           {navItems.map((item) => {
-            const isActive = item.path === basePath 
+            const isActive = item.path === basePath
               ? location.pathname === basePath
               : location.pathname === item.path;
-            
+
             return (
               <NavLink
                 key={item.path}
@@ -48,8 +48,8 @@ export function ModuleHeader({ icon: Icon, title, description, basePath, navItem
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap',
                   'hover:bg-accent hover:text-accent-foreground',
-                  isActive 
-                    ? 'bg-primary text-primary-foreground' 
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground'
                 )}
               >

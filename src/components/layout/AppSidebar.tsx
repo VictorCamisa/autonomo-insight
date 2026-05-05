@@ -20,6 +20,7 @@ import {
   Settings,
   MessageSquare,
   Bot,
+  Sparkles,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -59,6 +60,7 @@ export function AppSidebar() {
       items: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
         { label: 'CRM', href: '/crm', icon: Target, requiredModule: 'crm' },
+        { label: 'Repescagem', href: '/repescagem', icon: Sparkles, requiredModule: 'crm' },
         { label: 'Estoque', href: '/estoque', icon: Car, requiredModule: 'estoque' },
         { label: 'Vendas', href: '/vendas', icon: ShoppingCart, requiredModule: 'vendas' },
       ],

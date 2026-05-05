@@ -58,6 +58,7 @@ export default function CRMHome() {
   const [searchQuery, setSearchQuery] = useState('');
   const [periodFilter, setPeriodFilter] = useState<string>('all');
   const [responseFilter, setResponseFilter] = useState<string>('all');
+  const [repescagemOpen, setRepescagemOpen] = useState(false);
 
   const isManager = role === 'gerente';
 

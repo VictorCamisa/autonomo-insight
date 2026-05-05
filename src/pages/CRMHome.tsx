@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { UserCircle, User2, Pencil, Trash2, Search, Filter, CalendarDays } from 'lucide-react';
+import { UserCircle, User2, Pencil, Trash2, Search, Filter, CalendarDays, Sparkles } from 'lucide-react';
+import { RepescagemQuickPanel } from '@/components/repescagem/RepescagemQuickPanel';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +58,7 @@ export default function CRMHome() {
   const [searchQuery, setSearchQuery] = useState('');
   const [periodFilter, setPeriodFilter] = useState<string>('all');
   const [responseFilter, setResponseFilter] = useState<string>('all');
+  const [repescagemOpen, setRepescagemOpen] = useState(false);
 
   const isManager = role === 'gerente';
 
@@ -259,7 +261,19 @@ export default function CRMHome() {
         )}
 
         <QualificationLevelSelector />
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setRepescagemOpen(true)}
+          className="ml-auto gap-2 border-primary/30 hover:bg-primary/10 hover:text-primary"
+        >
+          <Sparkles className="h-4 w-4 text-primary" />
+          Repescagem IA
+        </Button>
       </div>
+
+      <RepescagemQuickPanel open={repescagemOpen} onOpenChange={setRepescagemOpen} />
 
       {/* Active filters summary */}
       {(periodFilter !== 'all' || responseFilter !== 'all' || searchQuery) && (

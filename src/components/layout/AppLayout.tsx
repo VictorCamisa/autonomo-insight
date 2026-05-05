@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { AppHeader } from './AppHeader';
 import { AppSidebar } from './AppSidebar';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { SidebarProvider } from '@/contexts/SidebarContext';
 
 export default function AppLayout() {
@@ -25,22 +24,20 @@ export default function AppLayout() {
   }
 
   return (
-    <TooltipProvider>
-      <SidebarProvider>
-        <div className="flex h-screen w-full overflow-hidden bg-background">
-          <div className="hidden lg:flex">
-            <AppSidebar />
-          </div>
-          <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
-            <AppHeader />
-            <main className="flex-1 overflow-y-auto overflow-x-hidden">
-              <div className="px-4 py-5 sm:px-6 lg:px-8 lg:py-6 max-w-[1400px] mx-auto w-full">
-                <Outlet />
-              </div>
-            </main>
-          </div>
+    <SidebarProvider>
+      <div className="flex h-screen w-full overflow-hidden bg-background">
+        <div className="hidden lg:flex">
+          <AppSidebar />
         </div>
-      </SidebarProvider>
-    </TooltipProvider>
+        <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
+          <AppHeader />
+          <main className="flex-1 overflow-y-auto overflow-x-hidden">
+            <div className="px-4 py-5 sm:px-6 lg:px-8 lg:py-6 max-w-[1400px] mx-auto w-full">
+              <Outlet />
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }

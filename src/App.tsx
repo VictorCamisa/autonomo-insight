@@ -48,6 +48,11 @@ const FinancialLayout = lazy(() => import("@/components/financial/FinancialLayou
 const MarketingLayout = lazy(() => import("@/components/marketing/MarketingLayout"));
 const WhatsAppLayout = lazy(() => import("@/components/whatsapp/WhatsAppLayout").then(m => ({ default: m.WhatsAppLayout })));
 
+// Lazy load Gestão Comercial
+const GestaoComercialLayout = lazy(() => import("@/components/gestao-comercial/GestaoComercialLayout").then(m => ({ default: m.GestaoComercialLayout })));
+const GestaoComercialOverview = lazy(() => import("@/components/gestao-comercial/GestaoComercialOverview").then(m => ({ default: m.GestaoComercialOverview })));
+const GestaoComercialRoundRobin = lazy(() => import("@/components/gestao-comercial/RoundRobinPage").then(m => ({ default: m.RoundRobinPage })));
+
 // Lazy load Marketing pages
 const MarketingCockpit = lazy(() => import("@/components/marketing/MarketingCockpit").then(m => ({ default: m.MarketingCockpit })));
 const MarketingDashboard = lazy(() => import("@/components/marketing/MarketingDashboard"));
@@ -66,7 +71,6 @@ const CommissionDashboard = lazy(() => import("@/components/commissions/Commissi
 const CommissionRulesPage = lazy(() => import("@/components/commissions/CommissionRulesPage").then(m => ({ default: m.CommissionRulesPage })));
 const CommissionGoalsPage = lazy(() => import("@/components/commissions/CommissionGoalsPage").then(m => ({ default: m.CommissionGoalsPage })));
 const CommissionRankingPage = lazy(() => import("@/components/commissions/CommissionRankingPage").then(m => ({ default: m.CommissionRankingPage })));
-
 const CommissionHistoryPage = lazy(() => import("@/components/commissions/CommissionHistoryPage").then(m => ({ default: m.CommissionHistoryPage })));
 const CommissionSimulatorPage = lazy(() => import("@/components/commissions/CommissionSimulatorPage").then(m => ({ default: m.CommissionSimulatorPage })));
 
@@ -128,12 +132,11 @@ const RepescagemCampanhas = lazy(() => import("@/components/repescagem/Repescage
 const RepescagemHistorico = lazy(() => import("@/components/repescagem/RepescagemHistorico"));
 const RepescagemLeads = lazy(() => import("@/components/repescagem/RepescagemLeads"));
 
-// Optimized QueryClient with better caching
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 2, // 2 minutes
-      gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+      staleTime: 1000 * 60 * 2,
+      gcTime: 1000 * 60 * 10,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       retry: 1,
@@ -142,7 +145,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Loading fallback component
 const PageLoader = () => (
   <div className="min-h-[400px] flex items-center justify-center">
     <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -185,7 +187,6 @@ const App = () => (
                   }>
                     <Route index element={<CRMHome />} />
                     <Route path="contatos" element={<Leads />} />
-                    
                     <Route path="analytics" element={<CRMAnalytics />} />
                   </Route>
 
@@ -272,7 +273,7 @@ const App = () => (
                     <Route path="alertas" element={<AlertsPage />} />
                   </Route>
                   
-                  {/* Marketing Routes - Simplified */}
+                  {/* Marketing Routes */}
                   <Route path="/marketing" element={
                     <ProtectedRoute requiredModule="marketing">
                       <Suspense fallback={<PageLoader />}>
@@ -281,7 +282,7 @@ const App = () => (
                     </ProtectedRoute>
                   } />
                   
-                  {/* Reports Module with AI */}
+                  {/* Reports Module */}
                   <Route path="/relatorios" element={
                     <ProtectedRoute requiredModule="marketing">
                       <Suspense fallback={<PageLoader />}>
@@ -318,9 +319,27 @@ const App = () => (
                     <Route path="regras" element={<CommissionRulesPage />} />
                     <Route path="metas" element={<CommissionGoalsPage />} />
                     <Route path="ranking" element={<CommissionRankingPage />} />
-                    
                     <Route path="historico" element={<CommissionHistoryPage />} />
                     <Route path="simulador" element={<CommissionSimulatorPage />} />
+                  </Route>
+
+                  {/* Gestão Comercial Routes */}
+                  <Route path="/gestao-comercial" element={
+                    <ProtectedRoute requiredModule="configuracoes">
+                      <Suspense fallback={<PageLoader />}>
+                        <GestaoComercialLayout />
+                      </Suspense>
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<Suspense fallback={<PageLoader />}><GestaoComercialOverview /></Suspense>} />
+                    <Route path="equipe" element={<Suspense fallback={<PageLoader />}><SalesTeamView /></Suspense>} />
+                    <Route path="round-robin" element={<Suspense fallback={<PageLoader />}><GestaoComercialRoundRobin /></Suspense>} />
+                    <Route path="comissoes" element={<Suspense fallback={<PageLoader />}><CommissionDashboard /></Suspense>} />
+                    <Route path="metas" element={<Suspense fallback={<PageLoader />}><CommissionGoalsPage /></Suspense>} />
+                    <Route path="ranking" element={<Suspense fallback={<PageLoader />}><CommissionRankingPage /></Suspense>} />
+                    <Route path="historico" element={<Suspense fallback={<PageLoader />}><CommissionHistoryPage /></Suspense>} />
+                    <Route path="simulador" element={<Suspense fallback={<PageLoader />}><CommissionSimulatorPage /></Suspense>} />
+                    <Route path="metricas" element={<Suspense fallback={<PageLoader />}><SalesMetricsPage /></Suspense>} />
                   </Route>
 
                   {/* Settings */}
@@ -330,7 +349,7 @@ const App = () => (
                     </ProtectedRoute>
                   } />
                   
-                  {/* Knowledge Base - Isolated Access */}
+                  {/* Knowledge Base */}
                   <Route path="/conhecimento" element={
                     <ProtectedRoute requiredModule="configuracoes">
                       <Suspense fallback={<PageLoader />}>
@@ -355,7 +374,7 @@ const App = () => (
                     <Route path="config" element={<WhatsAppConfig />} />
                   </Route>
 
-                  {/* Documentation - Manager only */}
+                  {/* Documentation */}
                   <Route path="/documentacao" element={
                     <ProtectedRoute requiredModule="configuracoes">
                       <Suspense fallback={<PageLoader />}>

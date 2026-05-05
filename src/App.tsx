@@ -188,6 +188,20 @@ const App = () => (
                     
                     <Route path="analytics" element={<CRMAnalytics />} />
                   </Route>
+
+                  {/* Repescagem Module */}
+                  <Route path="/repescagem" element={
+                    <ProtectedRoute requiredModule="crm">
+                      <Suspense fallback={<PageLoader />}>
+                        <RepescagemLayout />
+                      </Suspense>
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<RepescagemDashboard />} />
+                    <Route path="campanhas" element={<RepescagemCampanhas />} />
+                    <Route path="leads" element={<RepescagemLeads />} />
+                    <Route path="historico" element={<RepescagemHistorico />} />
+                  </Route>
                   
                   <Route path="/estoque" element={
                     <ProtectedRoute requiredModule="estoque">

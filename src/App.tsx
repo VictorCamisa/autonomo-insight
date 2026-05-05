@@ -119,6 +119,7 @@ const AgentGuardrailsPage = lazy(() => import("@/components/ai-agents/pages/Agen
 const AgentMonitoringPage = lazy(() => import("@/components/ai-agents/pages/AgentMonitoringPage"));
 const AgentTestsPage = lazy(() => import("@/components/ai-agents/pages/AgentTestsPage"));
 const AgentStageConfigPage = lazy(() => import("@/components/ai-agents/pages/AgentStageConfigPage").then(m => ({ default: m.AgentStageConfigPage })));
+const AgentFollowUpPage = lazy(() => import("@/components/ai-agents/pages/AgentFollowUpPage"));
 
 // Optimized QueryClient with better caching
 const queryClient = new QueryClient({
@@ -360,6 +361,7 @@ const App = () => (
                     <Route path=":agentId/ferramentas" element={<AgentToolsPage />} />
                     <Route path=":agentId/workflows" element={<AgentWorkflowsPage />} />
                     <Route path=":agentId/estagios" element={<AgentStageConfigPage />} />
+                    <Route path=":agentId/repescagem" element={<AgentFollowUpPage />} />
                     <Route path=":agentId/guardrails" element={<AgentGuardrailsPage />} />
                     <Route path=":agentId/monitoramento" element={<AgentMonitoringPage />} />
                     <Route path=":agentId/testes" element={<AgentTestsPage />} />

@@ -27,6 +27,7 @@ const agentNavItems = [
   { path: 'ferramentas', label: 'Ferramentas', icon: Wrench },
   { path: 'workflows', label: 'Workflows', icon: GitBranch },
   { path: 'estagios', label: 'Config. Estágios', icon: GitBranch },
+  { path: 'repescagem', label: 'Repescagem', icon: Bell },
   { path: 'guardrails', label: 'Guardrails', icon: Shield },
   { path: 'monitoramento', label: 'Métricas', icon: BarChart3 },
   { path: 'testes', label: 'Testes', icon: TestTube },

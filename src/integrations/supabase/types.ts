@@ -1460,6 +1460,117 @@ export type Database = {
           },
         ]
       }
+      follow_up_attempts: {
+        Row: {
+          attempt_number: number
+          campaign_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          lead_id: string | null
+          message_content: string | null
+          negotiation_id: string | null
+          scheduled_for: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["follow_up_attempt_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempt_number: number
+          campaign_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          lead_id?: string | null
+          message_content?: string | null
+          negotiation_id?: string | null
+          scheduled_for: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["follow_up_attempt_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempt_number?: number
+          campaign_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          lead_id?: string | null
+          message_content?: string | null
+          negotiation_id?: string | null
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["follow_up_attempt_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_attempts_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_attempts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_attempts_negotiation_id_fkey"
+            columns: ["negotiation_id"]
+            isOneToOne: false
+            referencedRelation: "negotiations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      follow_up_campaigns: {
+        Row: {
+          agent_id: string | null
+          apply_to_statuses: string[]
+          attempts: Json
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          on_exhausted: Database["public"]["Enums"]["follow_up_exhausted_action"]
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          apply_to_statuses?: string[]
+          attempts?: Json
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          on_exhausted?: Database["public"]["Enums"]["follow_up_exhausted_action"]
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          apply_to_statuses?: string[]
+          attempts?: Json
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          on_exhausted?: Database["public"]["Enums"]["follow_up_exhausted_action"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_campaigns_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       follow_up_executions: {
         Row: {
           executed_at: string
@@ -4896,6 +5007,13 @@ export type Database = {
         | "valor_fixo"
         | "escalonada"
         | "mista"
+      follow_up_attempt_status:
+        | "pending"
+        | "sent"
+        | "failed"
+        | "skipped"
+        | "responded"
+      follow_up_exhausted_action: "notify_seller" | "mark_lost" | "mark_only"
       lead_source:
         | "website"
         | "indicacao"
@@ -5089,6 +5207,14 @@ export const Constants = {
         "escalonada",
         "mista",
       ],
+      follow_up_attempt_status: [
+        "pending",
+        "sent",
+        "failed",
+        "skipped",
+        "responded",
+      ],
+      follow_up_exhausted_action: ["notify_seller", "mark_lost", "mark_only"],
       lead_source: [
         "website",
         "indicacao",

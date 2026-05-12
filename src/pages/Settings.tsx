@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { BookOpen, Lightbulb, FileText, MessageCircle } from 'lucide-react';
+import { GoogleTagManagerSettings } from '@/components/settings/GoogleTagManagerSettings';
 
 // ID do Matheus - único administrador
 const ADMIN_USER_ID = '6c6e6c96-41d1-4ccc-a8d7-bbe1d1e62336';
@@ -150,7 +151,8 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="geral">
+        <TabsContent value="geral" className="space-y-4">
+          {isAdmin && <GoogleTagManagerSettings />}
           <Card>
             <CardHeader>
               <CardTitle>Configurações Gerais</CardTitle>

@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { GoogleTagManager } from "@/components/GoogleTagManager";
 
 // Eager load only essential components
 import AppLayout from "@/components/layout/AppLayout";
@@ -159,6 +160,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
+            <GoogleTagManager />
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 {/* Public Website Routes */}
